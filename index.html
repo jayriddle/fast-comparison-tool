@@ -828,6 +828,17 @@
             display: block;
         }
 
+        /* In split/stack views, position controls at bottom of viewport */
+        body.side-by-side .video-controls,
+        body.vertical-stack .video-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 90vw;
+            z-index: 100;
+        }
+
         .video-controls button {
             padding: 8px 16px;
             margin: 0 5px;
@@ -1652,14 +1663,22 @@
         function updateVideoProgress(video) {
             const currentTime = video.currentTime;
             const duration = video.duration;
+
+            // Guard against NaN when video metadata isn't ready yet
+            if (isNaN(duration) || duration === 0) {
+                document.getElementById('videoProgressBar').style.width = '0%';
+                document.getElementById('videoTimecode').textContent = '0:00:00 / 0:00:00';
+                return;
+            }
+
             const progress = (currentTime / duration) * 100;
-            
+
             // Update progress bar
             document.getElementById('videoProgressBar').style.width = progress + '%';
-            
+
             // Get framerate (assume 30fps if not detected)
             const fps = videoFrameRates[video.src] || 30;
-            
+
             if (timecodeMode === 'frames') {
                 // Frame mode: "Frame 462 / 3720"
                 const currentFrame = Math.floor(currentTime * fps);
@@ -1670,17 +1689,17 @@
                 const currentMinutes = Math.floor(currentTime / 60);
                 const currentSeconds = Math.floor(currentTime % 60);
                 const currentFrames = Math.floor((currentTime % 1) * fps);
-                
+
                 const totalMinutes = Math.floor(duration / 60);
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFrames = Math.floor((duration % 1) * fps);
-                
+
                 const currentTC = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
                 const totalTC = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
-                
+
                 document.getElementById('videoTimecode').textContent = `${currentTC} / ${totalTC}`;
             }
-            
+
             // Update waveform playhead
             updateWaveformPlayhead(progress);
         }
@@ -2282,7 +2301,26 @@
                     document.body.classList.remove('side-by-side');
                     document.body.classList.remove('vertical-stack');
                     isSideBySide = false;
-                    
+
+                    // Reset audio mute states and button icons when leaving split view
+                    ['original', 'editA', 'editB'].forEach(slot => {
+                        audioMuteStates[slot] = false;
+                        const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                        const layer = document.getElementById(`layer${slotName}`);
+                        if (layer) {
+                            const video = layer.querySelector('video');
+                            if (video) {
+                                video.muted = false;
+                            }
+                        }
+                        const button = document.getElementById(`audio${slotName}`);
+                        if (button) {
+                            button.classList.remove('muted');
+                            const icon = button.querySelector('.audio-mute-icon');
+                            if (icon) icon.textContent = '🔊';
+                        }
+                    });
+
                     // Hide all layers except current
                     document.querySelectorAll('.overlay-layer').forEach(layer => {
                         layer.classList.remove('active');
