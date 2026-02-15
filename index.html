@@ -242,12 +242,11 @@
         }
 
         .video-progress-container {
-            width: 100%;
-            height: 6px;
+            flex: 1;
+            height: 8px;
             background: rgba(160, 160, 160, 0.3);
             cursor: pointer;
-            margin-bottom: 10px;
-            border-radius: 3px;
+            border-radius: 4px;
             overflow: hidden;
             user-select: none;
         }
@@ -262,68 +261,10 @@
             width: 0%;
         }
 
-        .video-timecode {
-            background: transparent;
-            padding: 0;
-            margin-bottom: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            color: rgb(160, 160, 160);
-            font-family: monospace;
-            text-align: center;
-            cursor: pointer;
-            user-select: none;
-        }
-
         .video-timecode:hover {
             color: #fff;
         }
 
-        .audio-waveform-container {
-            width: 100%;
-            height: 60px;
-            background: rgba(0, 0, 0, 0.7);
-            margin-bottom: 10px;
-            border-radius: 4px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .audio-waveform {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-
-        .audio-source-label {
-            position: absolute;
-            top: 4px;
-            right: 8px;
-            font-size: 11px;
-            color: rgb(160, 160, 160);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-weight: 600;
-            pointer-events: none;
-            z-index: 5;
-        }
-
-        .audio-source-selector {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 8px;
-            font-size: 11px;
-        }
-
-        .audio-source-selector button {
-            padding: 3px 8px;
-            background: #555;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 10px;
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -370,14 +311,11 @@
         .volume-control {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-            font-size: 12px;
-            color: rgb(160, 160, 160);
+            gap: 6px;
         }
 
         .volume-slider {
-            width: 120px;
+            width: 80px;
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
@@ -389,20 +327,41 @@
         .volume-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             background: rgb(160, 160, 160);
             cursor: pointer;
             border-radius: 50%;
         }
 
         .volume-slider::-moz-range-thumb {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             background: rgb(160, 160, 160);
             cursor: pointer;
             border-radius: 50%;
             border: none;
+        }
+
+        .audio-source-selector {
+            display: flex;
+            gap: 4px;
+        }
+
+        .audio-source-selector button {
+            padding: 4px 8px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
         }
 
         .video-controls {
@@ -422,10 +381,6 @@
             display: flex;
         }
 
-        .video-controls-buttons {
-            display: flex;
-            gap: 10px;
-        }
 
         .drop-zone.empty-slot {
             opacity: 0.3;
@@ -818,10 +773,12 @@
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.9);
-            padding: 15px 20px;
+            padding: 8px 16px;
             border-radius: 6px;
             z-index: 10;
             display: none;
+            min-width: 600px;
+            max-width: 90vw;
         }
 
         .video-controls.active {
@@ -839,19 +796,36 @@
             z-index: 100;
         }
 
-        .video-controls button {
-            padding: 8px 16px;
-            margin: 0 5px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
+        .video-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .video-controls button:hover {
-            background: #0056b3;
+        .video-timecode,
+        .video-duration {
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgb(160, 160, 160);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .video-timecode:hover,
+        .video-duration:hover {
+            color: #fff;
+        }
+
+        .volume-icon {
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .volume-icon:hover {
+            opacity: 0.8;
         }
 
         .identical-warning {
@@ -1092,7 +1066,7 @@
                 </div>
                 
                 <div class="controls-hint" id="controlsHint">
-                    <span><kbd>←</kbd> <kbd>→</kbd> Switch | <kbd>Space</kbd> Play/Pause | <kbd>R</kbd> Restart | <kbd>S</kbd> Split | <kbd>F</kbd> Fullscreen | <kbd>+</kbd> <kbd>-</kbd> Zoom</span>
+                    <span><kbd>←</kbd> <kbd>→</kbd> Switch | <kbd>Space</kbd> Play/Pause | <kbd>R</kbd> Restart | <kbd>M</kbd> Mute | <kbd>S</kbd> Split | <kbd>F</kbd> Fullscreen | <kbd>+</kbd> <kbd>-</kbd> Zoom</span>
                     <span class="zoom-level-display" id="zoomLevelDisplay">1.0×</span>
                 </div>
 
@@ -1105,38 +1079,30 @@
                 </div>
 
                 <div class="video-controls" id="videoControls">
-                    <div class="video-timecode" id="videoTimecode" onclick="toggleTimecodeMode()" title="Click to toggle time/frame display">0:00 / 0:00</div>
-                    <div class="audio-source-selector" id="audioSourceSelector">
-                        <span style="color: #999;">Audio:</span>
-                        <button onclick="selectAudioSource('original')" id="audioOriginal" class="active" title="Click to select/solo this audio">
-                            <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('original')">🔊</span>
-                            Original
-                        </button>
-                        <button onclick="selectAudioSource('editA')" id="audioEditA" title="Click to select/solo this audio">
-                            <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editA')">🔊</span>
-                            Edit A
-                        </button>
-                        <button onclick="selectAudioSource('editB')" id="audioEditB" title="Click to select/solo this audio">
-                            <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editB')">🔊</span>
-                            Edit B
-                        </button>
-                    </div>
-                    <div class="audio-waveform-container" id="waveformContainer">
-                        <canvas class="audio-waveform" id="audioWaveform"></canvas>
-                        <div class="audio-source-label" id="audioSourceLabel">ORIGINAL</div>
-                    </div>
-                    <div class="volume-control">
-                        <span>🔊</span>
-                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" oninput="setVolume(this.value)">
-                        <span id="volumeLabel">100%</span>
-                    </div>
-                    <div class="video-progress-container" id="videoProgressContainer">
-                        <div class="video-progress-bar" id="videoProgressBar"></div>
-                    </div>
-                    <div class="video-controls-buttons">
-                        <button onclick="togglePlayPause()">▶️ Play/Pause</button>
-                        <button onclick="restartAllVideos()">⏮️ Restart</button>
-                        <button onclick="toggleMute()" id="muteBtn">🔊 Mute</button>
+                    <div class="video-controls-row">
+                        <span class="video-timecode" id="videoTimecode" onclick="toggleTimecodeMode()" title="Click to toggle time/frame display">0:00:00</span>
+                        <div class="video-progress-container" id="videoProgressContainer">
+                            <div class="video-progress-bar" id="videoProgressBar"></div>
+                        </div>
+                        <span class="video-duration" id="videoDuration">0:00:00</span>
+                        <div class="volume-control">
+                            <span class="volume-icon" onclick="toggleMute()" id="muteBtn" title="Click to mute/unmute">🔊</span>
+                            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" oninput="setVolume(this.value)">
+                        </div>
+                        <div class="audio-source-selector" id="audioSourceSelector">
+                            <button onclick="selectAudioSource('original')" id="audioOriginal" class="active" title="Click to select audio source">
+                                <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('original')">🔊</span>
+                                O
+                            </button>
+                            <button onclick="selectAudioSource('editA')" id="audioEditA" title="Click to select audio source">
+                                <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editA')">🔊</span>
+                                A
+                            </button>
+                            <button onclick="selectAudioSource('editB')" id="audioEditB" title="Click to select audio source">
+                                <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editB')">🔊</span>
+                                B
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1640,16 +1606,8 @@
             document.getElementById('audioEditA').classList.toggle('active', source === 'editA');
             document.getElementById('audioEditB').classList.toggle('active', source === 'editB');
             
-            // Update label
-            const labels = {
-                'original': 'ORIGINAL',
-                'editA': 'EDIT A',
-                'editB': 'EDIT B'
-            };
-            document.getElementById('audioSourceLabel').textContent = labels[source];
-            
-            // Restart waveform drawing for new source
-            startWaveformDrawing();
+            // Waveform drawing removed in compact redesign
+            // startWaveformDrawing();
         }
 
         function setVolume(value) {
@@ -1657,7 +1615,7 @@
             document.querySelectorAll('.overlay-layer video').forEach(v => {
                 v.volume = volume;
             });
-            document.getElementById('volumeLabel').textContent = value + '%';
+            // Volume label removed in compact redesign
         }
 
         function updateVideoProgress(video) {
@@ -1667,7 +1625,8 @@
             // Guard against NaN when video metadata isn't ready yet
             if (isNaN(duration) || duration === 0) {
                 document.getElementById('videoProgressBar').style.width = '0%';
-                document.getElementById('videoTimecode').textContent = '0:00:00 / 0:00:00';
+                document.getElementById('videoTimecode').textContent = '0:00:00';
+                document.getElementById('videoDuration').textContent = '0:00:00';
                 return;
             }
 
@@ -1680,12 +1639,13 @@
             const fps = videoFrameRates[video.src] || 30;
 
             if (timecodeMode === 'frames') {
-                // Frame mode: "Frame 462 / 3720"
+                // Frame mode: "Frame 462" and "3720"
                 const currentFrame = Math.floor(currentTime * fps);
                 const totalFrames = Math.floor(duration * fps);
-                document.getElementById('videoTimecode').textContent = `Frame ${currentFrame} / ${totalFrames}`;
+                document.getElementById('videoTimecode').textContent = `Frame ${currentFrame}`;
+                document.getElementById('videoDuration').textContent = `${totalFrames}`;
             } else {
-                // Time mode: "0:15:22 / 2:35:18" (min:sec:frame)
+                // Time mode: "0:15:22" and "2:35:18" (min:sec:frame)
                 const currentMinutes = Math.floor(currentTime / 60);
                 const currentSeconds = Math.floor(currentTime % 60);
                 const currentFrames = Math.floor((currentTime % 1) * fps);
@@ -1697,7 +1657,8 @@
                 const currentTC = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
                 const totalTC = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
 
-                document.getElementById('videoTimecode').textContent = `${currentTC} / ${totalTC}`;
+                document.getElementById('videoTimecode').textContent = currentTC;
+                document.getElementById('videoDuration').textContent = totalTC;
             }
 
             // Update waveform playhead
@@ -2672,12 +2633,12 @@
             saveState(); // Save state before muting
             isMuted = !isMuted;
             const btn = document.getElementById('muteBtn');
-            
+
             getAllVideos().forEach(v => {
                 v.muted = isMuted;
             });
-            
-            btn.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+
+            btn.textContent = isMuted ? '🔇' : '🔊';
         }
 
         // Keyboard navigation
@@ -2752,6 +2713,10 @@
                 // R key restarts from beginning
                 e.preventDefault();
                 restartAllVideos();
+            } else if (e.key === 'm' || e.key === 'M') {
+                // M key toggles mute
+                e.preventDefault();
+                toggleMute();
             } else if (e.key === 's' || e.key === 'S') {
                 // S key cycles through view modes: overlay -> horizontal -> vertical -> overlay
                 e.preventDefault();
