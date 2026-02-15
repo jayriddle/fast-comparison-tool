@@ -1516,11 +1516,24 @@
 
         function selectAudioSource(source) {
             currentAudioSource = source;
-            
+
             // Update button states
             document.getElementById('audioOriginal').classList.toggle('active', source === 'original');
             document.getElementById('audioEditA').classList.toggle('active', source === 'editA');
             document.getElementById('audioEditB').classList.toggle('active', source === 'editB');
+
+            // Mute all videos except the selected source
+            ['original', 'editA', 'editB'].forEach(slot => {
+                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                const layer = document.getElementById(`layer${slotName}`);
+                if (layer) {
+                    const video = layer.querySelector('video');
+                    if (video) {
+                        // Mute if not the selected source OR if individually muted
+                        video.muted = (slot !== source) || audioMuteStates[slot];
+                    }
+                }
+            });
         }
 
         function setVolume(value) {
