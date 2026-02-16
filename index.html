@@ -139,10 +139,7 @@
             justify-content: center;
         }
 
-        /* Hide drop zones once comparison view is active */
-        .comparison-view.active ~ .drop-zones {
-            display: none;
-        }
+        /* Drop zones will be hidden via JavaScript when files are loaded */
 
         .drop-zones.quick-load-left {
             flex-direction: row;
@@ -581,65 +578,63 @@
             z-index: 10;
             color: rgb(160, 160, 160);
             font-family: monospace;
-            display: none;
+            display: block; /* Always show in all modes */
         }
 
-        body.side-by-side .split-zoom-indicator,
-        body.vertical-stack .split-zoom-indicator {
-            display: block;
-        }
-
-        /* Asset info bar styling */
+        /* Asset info bar styling - base (for overlay mode) */
         .asset-info-bar {
-            display: none; /* Hidden in overlay mode */
-        }
-
-        /* Horizontal split: info bar on top */
-        body.side-by-side .asset-info-bar {
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 30px;
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            padding: 8px 12px;
             background: rgba(0, 0, 0, 0.9);
             z-index: 10;
-            font-size: 12px;
+            font-size: 11px;
             color: #a0a0a0;
+            border-radius: 3px;
             pointer-events: none;
         }
 
-        body.side-by-side .asset-info-bar .asset-name {
+        .asset-info-bar .asset-name {
             font-weight: bold;
             color: #ffffff;
         }
 
+        /* Horizontal split: info bar on top */
+        body.side-by-side .asset-info-bar {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 0 10px;
+            font-size: 12px;
+            border-radius: 0;
+        }
+
         /* Vertical stack: info bar on left */
         body.vertical-stack .asset-info-bar {
-            position: absolute;
             top: 0;
             left: 0;
             bottom: 0;
             width: 120px;
-            display: flex !important;
             flex-direction: column;
             justify-content: center;
             align-items: flex-start;
             gap: 8px;
             padding: 10px;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 10;
             font-size: 11px;
-            color: #a0a0a0;
-            pointer-events: none;
+            border-radius: 0;
         }
 
         body.vertical-stack .asset-info-bar .asset-name {
-            font-weight: bold;
-            color: #ffffff;
             font-size: 13px;
         }
 
@@ -2107,6 +2102,9 @@
                 document.getElementById('videoControls').classList.remove('active');
                 document.getElementById('controlsHint').classList.remove('fade');
 
+                // Show drop zones again
+                document.querySelector('.drop-zones').style.display = 'flex';
+
                 // Clear drop zones
                 ['Original', 'EditA', 'EditB'].forEach(slot => {
                     const dropZone = document.getElementById(`drop${slot}`);
@@ -2115,10 +2113,26 @@
                     dropZone.querySelector('.drop-zone-text').textContent = '-';
                     document.getElementById(`res${slot}`).textContent = '-';
                     document.getElementById(`aspect${slot}`).textContent = '-';
-                    
+
                     const layer = document.getElementById(`layer${slot}`);
-                    layer.innerHTML = '';
+                    // Remove only media elements, preserve info bars and zoom indicators
+                    const oldMedia = layer.querySelectorAll('video, img');
+                    oldMedia.forEach(el => el.remove());
                     layer.classList.remove('active');
+
+                    // Reset info bar text
+                    const infoBar = layer.querySelector('.asset-info-bar');
+                    if (infoBar) {
+                        infoBar.querySelector('.asset-resolution').textContent = '-';
+                        infoBar.querySelector('.asset-aspect').textContent = '-';
+                        infoBar.querySelector('.asset-duration').textContent = '-';
+                    }
+
+                    // Reset zoom indicator
+                    const zoomIndicator = layer.querySelector('.split-zoom-indicator');
+                    if (zoomIndicator) {
+                        zoomIndicator.textContent = '1.0×';
+                    }
                 });
 
                 // Reset file inputs
@@ -2368,10 +2382,13 @@
                 
                 // Hide quick start popup if showing
                 document.getElementById('quickStartPopup').classList.remove('show');
-                
+
                 document.getElementById('comparisonView').classList.add('active');
                 console.log('comparisonView activated');
-                
+
+                // Hide drop zones when files are loaded
+                document.querySelector('.drop-zones').style.display = 'none';
+
                 document.getElementById('resetBtn').style.display = 'block';
                 
                 // Show view mode buttons
