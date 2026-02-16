@@ -2312,8 +2312,11 @@
                         }
                     });
                     setupLayerDragAndDrop();
+
+                    // Ensure only the current audio source plays
+                    selectAudioSource(currentAudioSource);
                 }
-                
+
                 // Set layout mode
                 layoutMode = mode;
                 if (mode === 'vertical') {
@@ -2323,7 +2326,7 @@
                     document.body.classList.remove('vertical-stack');
                     document.body.classList.add('side-by-side');
                 }
-                
+
                 // Update zoom indicators after layout change
                 setTimeout(updateSplitViewZoomIndicators, 100);
             }
