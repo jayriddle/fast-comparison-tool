@@ -512,6 +512,16 @@
             display: flex;
         }
 
+        /* In overlay mode, only show zoom indicator for active layer */
+        body:not(.side-by-side):not(.vertical-stack) .overlay-layer:not(.active) .split-zoom-indicator {
+            display: none;
+        }
+
+        /* Ensure active layer zoom indicator is visible in overlay mode */
+        body:not(.side-by-side):not(.vertical-stack) .overlay-layer.active .split-zoom-indicator {
+            display: block;
+        }
+
         body.side-by-side .overlay-layer {
             position: relative;
             width: 50%;
