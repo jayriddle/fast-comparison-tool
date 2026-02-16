@@ -785,20 +785,6 @@
             user-select: none;
         }
 
-        .reset-btn {
-            padding: 6px 12px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 500;
-        }
-
-        .reset-btn:hover {
-            background: #c82333;
-        }
 
         .video-controls {
             position: absolute;
@@ -964,13 +950,13 @@
     <div class="container">
         <div class="header">
             <div style="position: relative;">
-                <span style="font-size: 16px; font-weight: 600;">⚡ Fast Media Comparison</span>
-                <button class="quick-start-btn" onclick="toggleQuickStart()">❓ Quick Start</button>
+                <span style="font-size: 16px; font-weight: 600;">Fast Media Comparison</span>
+                <button class="quick-start-btn" onclick="toggleQuickStart()">Quick Start</button>
                 
                 <!-- Quick Start Popup -->
                 <div class="quick-start-popup" id="quickStartPopup">
                     <button class="quick-start-close" onclick="toggleQuickStart()">Close</button>
-                    <h2 style="margin-top: 0; color: rgb(160, 160, 160);">⚡ Quick Start Guide</h2>
+                    <h2 style="margin-top: 0; color: rgb(160, 160, 160);">Quick Start Guide</h2>
                     <ol style="line-height: 1.8;">
                         <li>Right-click save files from in-house tool in order: <strong>&lt;Original, A, B&gt;</strong></li>
                         <li><strong>Select 2 or 3 files</strong> (Cmd+click) and drag to "Load" or click it
@@ -1020,13 +1006,10 @@
                 </button>
             </div>
             <div>
-                <button class="reset-btn" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
-                    🔄 Reset All
+                <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
+                    Reset All
                     <div class="help-tooltip">Clear all assets and start over</div>
                 </button>
-            </div>
-            <div class="keyboard-hints">
-                <kbd>←</kbd> <kbd>→</kbd> Switch Assets | <kbd>F</kbd> or <kbd>Esc</kbd> Fullscreen
             </div>
         </div>
 
