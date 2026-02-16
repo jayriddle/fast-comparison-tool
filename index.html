@@ -189,6 +189,12 @@
             border-color: #808080;
             border-style: solid;
             background: #1a3a2a;
+            cursor: pointer;
+        }
+
+        .drop-zone.loaded:hover {
+            background: #1a4d2e;
+            transform: scale(1.02);
         }
 
         .drop-zone.active {
@@ -512,7 +518,8 @@
         body.side-by-side .overlay-layer img,
         body.side-by-side .overlay-layer video {
             width: 100%;
-            height: 100%;
+            height: calc(100% - 30px); /* Account for 30px info bar at top */
+            margin-top: 30px;
             object-fit: contain; /* Show full frame by default */
             display: block;
         }
@@ -531,8 +538,6 @@
             vertical-align: top;
             cursor: grab;
             margin-bottom: 10px;
-            border: 2px solid rgb(80, 80, 80);
-            border-radius: 8px;
             overflow: hidden;
         }
 
@@ -545,7 +550,8 @@
 
         body.vertical-stack .overlay-layer img,
         body.vertical-stack .overlay-layer video {
-            width: 100%;
+            width: calc(100% - 120px); /* Account for 120px info bar on left */
+            margin-left: 120px;
             height: 100%;
             object-fit: contain; /* Show full frame by default */
             display: block;
@@ -603,6 +609,60 @@
         body.side-by-side .split-zoom-indicator,
         body.vertical-stack .split-zoom-indicator {
             display: block;
+        }
+
+        /* Asset info bar styling */
+        .asset-info-bar {
+            display: none; /* Hidden in overlay mode */
+        }
+
+        /* Horizontal split: info bar on top */
+        body.side-by-side .asset-info-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+            font-size: 12px;
+            color: #a0a0a0;
+            pointer-events: none;
+        }
+
+        body.side-by-side .asset-info-bar .asset-name {
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        /* Vertical stack: info bar on left */
+        body.vertical-stack .asset-info-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+            font-size: 11px;
+            color: #a0a0a0;
+            pointer-events: none;
+        }
+
+        body.vertical-stack .asset-info-bar .asset-name {
+            font-weight: bold;
+            color: #ffffff;
+            font-size: 13px;
         }
 
         /* Drag and drop styling */
@@ -1041,22 +1101,40 @@
             <div class="overlay-container" id="overlayContainer">
                 <!-- Layout controls for side-by-side mode -->
                 <div class="layout-controls" id="layoutControls">
-                    <button onclick="setLayoutMode('horizontal')" id="horizontalBtn" class="active">Horizontal</button>
-                    <button onclick="setLayoutMode('vertical')" id="verticalBtn">Vertical</button>
+                    <button onclick="setViewMode('horizontal')" id="horizontalBtn" class="active">Horizontal</button>
+                    <button onclick="setViewMode('vertical')" id="verticalBtn">Vertical</button>
                     <span style="color: #999; font-size: 11px; margin: 0 5px;">Drag to reorder</span>
                 </div>
                 
                 <div class="overlay-layer" id="layerOriginal">
                     <div class="stack-label">ORIGINAL</div>
                     <div class="split-zoom-indicator" id="zoomOriginal">1.0×</div>
+                    <div class="asset-info-bar">
+                        <span class="asset-name">ORIGINAL</span>
+                        <span class="asset-resolution">-</span>
+                        <span class="asset-aspect">-</span>
+                        <span class="asset-duration">-</span>
+                    </div>
                 </div>
                 <div class="overlay-layer" id="layerEditA">
                     <div class="stack-label">EDIT A</div>
                     <div class="split-zoom-indicator" id="zoomEditA">1.0×</div>
+                    <div class="asset-info-bar">
+                        <span class="asset-name">EDIT A</span>
+                        <span class="asset-resolution">-</span>
+                        <span class="asset-aspect">-</span>
+                        <span class="asset-duration">-</span>
+                    </div>
                 </div>
                 <div class="overlay-layer" id="layerEditB">
                     <div class="stack-label">EDIT B</div>
                     <div class="split-zoom-indicator" id="zoomEditB">1.0×</div>
+                    <div class="asset-info-bar">
+                        <span class="asset-name">EDIT B</span>
+                        <span class="asset-resolution">-</span>
+                        <span class="asset-aspect">-</span>
+                        <span class="asset-duration">-</span>
+                    </div>
                 </div>
                 
                 <div class="asset-label" id="assetLabel">ORIGINAL</div>
@@ -1326,11 +1404,14 @@
             const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
             const resElement = document.getElementById(`res${slotName}`);
             const aspectElement = document.getElementById(`aspect${slotName}`);
-            
+
+            const resolution = `${width}×${height}`;
+            let aspectRatio = '';
+
             if (resElement) {
-                resElement.textContent = `${width}×${height}`;
+                resElement.textContent = resolution;
             }
-            
+
             if (aspectElement) {
                 const ratio = width / height;
                 const standardRatios = [
@@ -1345,7 +1426,7 @@
                     { value: 21/9, label: '21:9' },
                     { value: 1, label: '1:1' }
                 ];
-                
+
                 // Find closest standard ratio (within 1% tolerance)
                 let match = null;
                 for (const std of standardRatios) {
@@ -1354,23 +1435,62 @@
                         break;
                     }
                 }
-                
+
                 if (match) {
+                    aspectRatio = match;
                     aspectElement.textContent = match;
                 } else {
-                    aspectElement.textContent = `${ratio.toFixed(2)}:1`;
+                    aspectRatio = `${ratio.toFixed(2)}:1`;
+                    aspectElement.textContent = aspectRatio;
                 }
             }
+
+            // Update asset info bar
+            updateAssetInfoBar(slot, { resolution, aspectRatio });
         }
 
         function updateDurationDisplay(slot, duration) {
             const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
             const durationElement = document.getElementById(`duration${slotName}`);
-            
+
+            let durationStr = '';
             if (durationElement && duration) {
                 const minutes = Math.floor(duration / 60);
                 const seconds = Math.floor(duration % 60);
-                durationElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                durationElement.textContent = durationStr;
+            }
+
+            // Update asset info bar
+            if (durationStr) {
+                updateAssetInfoBar(slot, { duration: durationStr });
+            }
+        }
+
+        function updateAssetInfoBar(slot, data) {
+            const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+            const layer = document.getElementById(`layer${slotName}`);
+            if (!layer) return;
+
+            const infoBar = layer.querySelector('.asset-info-bar');
+            if (!infoBar) return;
+
+            // Update resolution
+            if (data.resolution) {
+                const resElement = infoBar.querySelector('.asset-resolution');
+                if (resElement) resElement.textContent = data.resolution;
+            }
+
+            // Update aspect ratio
+            if (data.aspectRatio) {
+                const aspectElement = infoBar.querySelector('.asset-aspect');
+                if (aspectElement) aspectElement.textContent = data.aspectRatio;
+            }
+
+            // Update duration
+            if (data.duration) {
+                const durationElement = infoBar.querySelector('.asset-duration');
+                if (durationElement) durationElement.textContent = data.duration;
             }
         }
 
@@ -2280,7 +2400,18 @@
                     selectAudioSource('editB');
                 }
                 console.log('Audio source selected');
-                
+
+                // Make drop zones clickable to select assets
+                document.getElementById('dropOriginal').onclick = function() {
+                    if (mediaData.original) switchToAsset(0);
+                };
+                document.getElementById('dropEditA').onclick = function() {
+                    if (mediaData.editA) switchToAsset(1);
+                };
+                document.getElementById('dropEditB').onclick = function() {
+                    if (mediaData.editB) switchToAsset(2);
+                };
+
                 // Dim Original box if only 2 files loaded (no original)
                 const originalBox = document.getElementById('dropOriginal');
                 if (!mediaData.original && loadedCount === 2) {
@@ -2354,22 +2485,25 @@
                 layer.addEventListener('drop', function(e) {
                     e.preventDefault();
                     this.classList.remove('drag-over');
-                    
+
                     const draggedId = e.dataTransfer.getData('text/html');
                     const draggedElement = document.getElementById(draggedId);
-                    
+
                     if (draggedElement && draggedElement !== this) {
                         // Swap positions in DOM
                         const container = this.parentNode;
                         const allLayers = Array.from(container.querySelectorAll('.overlay-layer'));
                         const draggedIndex = allLayers.indexOf(draggedElement);
                         const targetIndex = allLayers.indexOf(this);
-                        
+
                         if (draggedIndex < targetIndex) {
                             this.parentNode.insertBefore(draggedElement, this.nextSibling);
                         } else {
                             this.parentNode.insertBefore(draggedElement, this);
                         }
+
+                        // Sync order with drop zones and asset array
+                        syncLayerOrderWithDropZones();
                     }
                 });
             });
@@ -2383,6 +2517,39 @@
                 const newLayer = layer.cloneNode(true);
                 layer.parentNode.replaceChild(newLayer, layer);
             });
+        }
+
+        function syncLayerOrderWithDropZones() {
+            // Get current DOM order of layers
+            const layers = Array.from(document.querySelectorAll('.overlay-layer'));
+            const newOrder = layers.map(layer => {
+                if (layer.id === 'layerOriginal') return 'original';
+                if (layer.id === 'layerEditA') return 'editA';
+                if (layer.id === 'layerEditB') return 'editB';
+            }).filter(x => x);
+
+            // Update assetOrder array
+            assetOrder.length = 0;
+            assetOrder.push(...newOrder);
+
+            // Reorder drop zones to match
+            const dropZonesContainer = document.querySelector('.drop-zones');
+            newOrder.forEach(slot => {
+                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                const dropZone = document.getElementById(`drop${slotName}`);
+                if (dropZone) {
+                    dropZonesContainer.appendChild(dropZone);
+                }
+            });
+
+            // Update currentAssetIndex to match new order
+            const activeLayer = document.querySelector('.overlay-layer.active');
+            if (activeLayer) {
+                const newIndex = layers.indexOf(activeLayer);
+                if (newIndex !== -1) {
+                    currentAssetIndex = newIndex;
+                }
+            }
         }
 
         function captureState() {
