@@ -502,15 +502,14 @@
             object-fit: contain;
         }
 
-        /* In overlay mode, position info bar inside the media, not outside */
-        .overlay-layer:not(.active) .asset-info-bar {
-            display: none; /* Only show for active layer in overlay */
+        /* In overlay mode, only show info bar for active layer */
+        body:not(.side-by-side):not(.vertical-stack) .overlay-layer:not(.active) .asset-info-bar {
+            display: none;
         }
 
-        .overlay-layer.active .asset-info-bar {
-            bottom: auto;
-            top: 0;
-            left: 0;
+        /* Ensure active layer info bar is visible in overlay mode */
+        body:not(.side-by-side):not(.vertical-stack) .overlay-layer.active .asset-info-bar {
+            display: flex;
         }
 
         body.side-by-side .overlay-layer {
@@ -2331,6 +2330,8 @@
 
         // Position info bars and zoom indicators based on actual rendered media bounds
         function positionLabelsAndIndicators() {
+            const inOverlay = !isSideBySide && !document.body.classList.contains('vertical-stack');
+
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2343,7 +2344,22 @@
 
                 if (!media || !infoBar || !zoomIndicator) return;
 
-                // Get the actual rendered bounds of the media element
+                // In overlay mode, use simple top-left positioning
+                if (inOverlay) {
+                    infoBar.style.position = 'absolute';
+                    infoBar.style.left = '10px';
+                    infoBar.style.top = '10px';
+                    infoBar.style.width = 'auto';
+
+                    zoomIndicator.style.position = 'absolute';
+                    zoomIndicator.style.left = 'auto';
+                    zoomIndicator.style.right = '10px';
+                    zoomIndicator.style.top = 'auto';
+                    zoomIndicator.style.bottom = '10px';
+                    return;
+                }
+
+                // For split views: calculate actual media position
                 const mediaRect = media.getBoundingClientRect();
                 const layerRect = layer.getBoundingClientRect();
 
@@ -2351,16 +2367,18 @@
                 const offsetX = mediaRect.left - layerRect.left;
                 const offsetY = mediaRect.top - layerRect.top;
 
-                // Position info bar just above the media
+                // Position info bar just above the media (or at top if would go negative)
                 infoBar.style.position = 'absolute';
                 infoBar.style.left = offsetX + 'px';
-                infoBar.style.top = (offsetY - infoBar.offsetHeight) + 'px';
+                infoBar.style.top = Math.max(0, offsetY - infoBar.offsetHeight) + 'px';
                 infoBar.style.width = 'auto';
 
                 // Position zoom indicator at bottom-right of media
                 zoomIndicator.style.position = 'absolute';
                 zoomIndicator.style.left = (offsetX + mediaRect.width - zoomIndicator.offsetWidth - 5) + 'px';
                 zoomIndicator.style.top = (offsetY + mediaRect.height - zoomIndicator.offsetHeight - 5) + 'px';
+                zoomIndicator.style.right = 'auto';
+                zoomIndicator.style.bottom = 'auto';
             });
         }
 
@@ -2403,6 +2421,9 @@
                     });
                     switchToAsset(currentAssetIndex);
                     removeDragAndDrop();
+
+                    // Reset positioning for overlay mode
+                    setTimeout(positionLabelsAndIndicators, 50);
                 }
             } else {
                 // Enable split view
