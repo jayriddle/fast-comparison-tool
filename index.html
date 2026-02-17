@@ -486,20 +486,42 @@
         /* Media container wraps the actual image/video for proper positioning */
         .media-container {
             position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: grid;
+            place-items: center;
             max-width: 100%;
             max-height: 100%;
-            height: 100%;
         }
 
-        .media-container img,
-        .media-container video {
+        /* video-wrapper fills its grid cell so zoom/info can overlap it */
+        .media-container .video-wrapper {
+            grid-area: 1 / 1;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* video-wrapper: grid so video and zoom indicator overlap */
+        .video-wrapper {
+            display: grid;
+            place-items: center;
+        }
+
+        .video-wrapper img,
+        .video-wrapper video {
             display: block;
             max-width: 100%;
             max-height: 100%;
-            object-fit: contain;
+            width: auto;
+            height: auto;
+            grid-area: 1 / 1;
+        }
+
+        .video-wrapper .split-zoom-indicator {
+            grid-area: 1 / 1;
+        }
+
+        /* info bar overlaps the video in the grid (sits at same grid cell) */
+        .video-wrapper .asset-info-bar {
+            grid-area: 1 / 1;
         }
 
         /* In overlay mode, only show info bar for active layer */
@@ -530,9 +552,41 @@
             cursor: grab;
         }
 
+        /* Horizontal split: media-container fills the layer */
         body.side-by-side .media-container {
             width: 100%;
             height: 100%;
+            position: relative;
+        }
+
+        /* Horizontal split: video-wrapper is sized by JS to match actual rendered video bounds */
+        body.side-by-side .media-container .video-wrapper {
+            grid-area: unset;
+            display: block !important;
+            position: absolute; /* JS will set top/left/width/height */
+        }
+
+        /* Horizontal split: info bar absolutely positioned at top of actual video */
+        body.side-by-side .video-wrapper .asset-info-bar {
+            grid-area: unset;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: auto;
+            align-self: unset;
+            justify-self: unset;
+        }
+
+        /* Horizontal split: zoom indicator absolutely positioned at bottom-right of actual video */
+        body.side-by-side .video-wrapper .split-zoom-indicator {
+            grid-area: unset;
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            align-self: unset;
+            justify-self: unset;
+            margin: 0;
         }
 
         body.side-by-side .overlay-container {
@@ -540,16 +594,10 @@
             overflow-x: auto;
         }
 
-        /* Info bars positioned by JavaScript to attach to actual media */
+        /* Info bars visible in split modes */
         body.side-by-side .asset-info-bar,
         body.vertical-stack .asset-info-bar {
             display: flex;
-        }
-
-        body.side-by-side .media-container img,
-        body.side-by-side .media-container video {
-            width: 100%;
-            height: 100%;
         }
 
         body.side-by-side .overlay-layer.active {
@@ -563,7 +611,7 @@
 
         /* Make videos same size in horizontal split */
         body.side-by-side .overlay-layer {
-            height: calc(100vh - 180px); /* Account for drop zones (160px) + padding */
+            height: calc(100vh - 90px); /* Account for header (~41px) + controls hint (~40px) + small buffer */
         }
 
         body.side-by-side .overlay-container {
@@ -575,9 +623,10 @@
 
         body.side-by-side .media-container img,
         body.side-by-side .media-container video {
+            /* Fill the media-container; object-fit:contain letterboxes within it */
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Show full frame by default */
+            object-fit: contain;
             display: block;
         }
 
@@ -590,8 +639,10 @@
         body.vertical-stack .overlay-layer {
             position: relative !important;
             width: 100%;
-            height: calc((100vh - 200px) / 3); /* Divide remaining space by 3, accounting for drop zones and margins */
-            display: block !important;
+            height: calc((100vh - 120px) / 3); /* Fixed height: 90px header/controls + 30px margins */
+            display: flex !important;
+            align-items: center;
+            justify-content: flex-start;
             vertical-align: top;
             cursor: grab;
             margin-bottom: 10px;
@@ -608,15 +659,54 @@
         body.vertical-stack .media-container {
             width: 100%;
             height: 100%;
+            display: flex !important;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 0;
         }
 
+        /* video-wrapper in vertical mode: flex row — info bar on left, video on right */
+        body.vertical-stack .media-container .video-wrapper {
+            grid-area: unset;
+            flex: 0 0 auto;
+            min-width: 0;
+            height: calc((100vh - 120px) / 3);
+            max-height: calc((100vh - 120px) / 3);
+            overflow: hidden;
+            display: flex !important;
+            flex-direction: row;
+            align-items: center;
+            position: relative;
+        }
+
+        /* In vertical mode, info bar is a flex child on the LEFT of the video */
+        body.vertical-stack .video-wrapper .asset-info-bar {
+            grid-area: unset;
+            position: static;
+            align-self: center;
+            flex-shrink: 0;
+            order: -1; /* Always render before the video element */
+        }
 
         body.vertical-stack .media-container img,
         body.vertical-stack .media-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* Show full frame by default */
+            width: auto;
+            height: calc((100vh - 120px) / 3);
+            max-height: calc((100vh - 120px) / 3);
+            max-width: 100vw; /* Prevent overflowing the viewport */
             display: block;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        /* Zoom indicator: absolute within video-wrapper in vertical mode */
+        body.vertical-stack .video-wrapper .split-zoom-indicator {
+            grid-area: unset;
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            align-self: unset;
+            justify-self: unset;
         }
 
         body.vertical-stack.fit-cover .media-container img,
@@ -626,9 +716,9 @@
 
         /* Zoom level indicator - overlays bottom right corner of media */
         .split-zoom-indicator {
-            position: absolute;
-            bottom: 5px;
-            right: 5px;
+            align-self: end;
+            justify-self: end;
+            margin: 5px;
             background: rgba(0, 0, 0, 0.85);
             padding: 4px 8px;
             font-size: 12px;
@@ -641,11 +731,10 @@
             display: block; /* Always show in all modes */
         }
 
-        /* Asset info bar styling - base (for overlay mode) */
+        /* Asset info bar styling - base (for overlay and horizontal modes) */
         .asset-info-bar {
-            position: absolute;
-            bottom: 100%; /* Position just above the media */
-            left: 0;
+            align-self: start;
+            justify-self: start;
             display: flex;
             flex-direction: row;
             align-items: center;
@@ -655,7 +744,7 @@
             z-index: 10;
             font-size: 11px;
             color: #a0a0a0;
-            border-radius: 3px 3px 0 0;
+            border-radius: 3px;
             pointer-events: none;
             white-space: nowrap;
         }
@@ -687,7 +776,13 @@
             color: #28a745;
         }
 
-
+        /* Vertical stack mode - info bar on left side */
+        body.vertical-stack .asset-info-bar {
+            flex-direction: column !important;
+            writing-mode: horizontal-tb;
+            padding: 8px 10px;
+            margin-right: 6px;
+        }
 
         /* Drag and drop styling */
         .overlay-layer.dragging {
@@ -1397,27 +1492,62 @@
                 } else {
                     const img = document.createElement('img');
                     img.src = dataUrl;
-                    img.addEventListener('load', function() {
+                    img.addEventListener('load', async function() {
+                        // Wait for image to be fully decoded before getting dimensions
+                        try {
+                            await img.decode();
+                        } catch (e) {
+                            console.warn('Image decode error:', e);
+                        }
+
                         updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
                         // Update zoom indicators and position labels
                         setTimeout(() => {
                             updateSplitViewZoomIndicators();
                             positionLabelsToMedia();
-                        }, 50);
+                        }, 100); // Increased timeout to ensure layout is stable
                     });
                     mediaContainer.appendChild(img);
                 }
 
-                // Move info bar and zoom indicator into media container
-                const infoBar = layer.querySelector('.asset-info-bar');
-                const zoomIndicator = layer.querySelector('.split-zoom-indicator');
+                // Find or create info bar and zoom indicator, then add to media container
+                let infoBar = layer.querySelector('.asset-info-bar');
+                let zoomIndicator = layer.querySelector('.split-zoom-indicator');
 
-                if (infoBar) {
-                    mediaContainer.appendChild(infoBar);
+                // If they don't exist (shouldn't happen but safety check), create them
+                if (!infoBar) {
+                    infoBar = document.createElement('div');
+                    infoBar.className = 'asset-info-bar';
+                    const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
+                    infoBar.innerHTML = `
+                        <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-resolution">-</span>
+                        <span class="asset-aspect">-</span>
+                        <span class="asset-duration">-</span>
+                    `;
                 }
-                if (zoomIndicator) {
-                    mediaContainer.appendChild(zoomIndicator);
+
+                if (!zoomIndicator) {
+                    zoomIndicator = document.createElement('div');
+                    zoomIndicator.className = 'split-zoom-indicator';
+                    zoomIndicator.id = `zoom${slot.charAt(0).toUpperCase() + slot.slice(1)}`;
+                    zoomIndicator.textContent = '1.0×';
                 }
+
+                // Wrap the video/img + info bar + zoom indicator together
+                const videoWrapper = document.createElement('div');
+                videoWrapper.className = 'video-wrapper';
+
+                // Move the media element into the wrapper
+                const mediaEl = mediaContainer.querySelector('img, video');
+                if (mediaEl) videoWrapper.appendChild(mediaEl);
+
+                // Info bar goes inside the wrapper (overlays video in horizontal/overlay mode,
+                // or sits as left flex-item in vertical mode via CSS)
+                videoWrapper.appendChild(infoBar);
+                videoWrapper.appendChild(zoomIndicator);
+
+                mediaContainer.appendChild(videoWrapper);
 
                 layer.appendChild(mediaContainer);
 
@@ -2017,8 +2147,14 @@
                     media.style.imageRendering = '';
                     media.style.width = '';
                     media.style.height = '';
-                    media.style.maxWidth = '100%';
-                    media.style.maxHeight = '100%';
+                    // Don't override maxWidth/maxHeight in split modes (CSS handles those)
+                    if (!isSideBySide && !document.body.classList.contains('vertical-stack')) {
+                        media.style.maxWidth = '100%';
+                        media.style.maxHeight = '100%';
+                    } else {
+                        media.style.maxWidth = '';
+                        media.style.maxHeight = '';
+                    }
                     media.style.transform = '';
                     media.style.objectFit = '';
                 });
@@ -2334,10 +2470,10 @@
         // Update zoom indicators when window resizes
         window.addEventListener('resize', updateSplitViewZoomIndicators);
 
-        // Position info bars and zoom indicators attached to actual rendered media
+        // Position video-wrapper to match actual rendered video bounds (accounting for object-fit letterboxing)
         function positionLabelsToMedia() {
-            const inSideBySide = document.body.classList.contains('side-by-side');
-            const inVerticalStack = document.body.classList.contains('vertical-stack');
+            // Only needed in horizontal split — vertical and overlay use CSS
+            if (!isSideBySide) return;
 
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
@@ -2346,75 +2482,44 @@
                 const layer = document.getElementById(`layer${slotName}`);
                 const mediaContainer = layer.querySelector('.media-container');
                 const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
-                const infoBar = layer.querySelector('.asset-info-bar');
-                const zoomIndicator = layer.querySelector('.split-zoom-indicator');
+                const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
 
-                if (!media || !infoBar || !zoomIndicator) return;
-
-                // Get the media element bounds
-                const mediaRect = media.getBoundingClientRect();
-                const layerRect = layer.getBoundingClientRect();
-
-                // Skip if media not yet rendered
-                if (mediaRect.width === 0 || mediaRect.height === 0) return;
+                if (!media || !videoWrapper) return;
 
                 // Get natural dimensions
                 const naturalWidth = media.naturalWidth || media.videoWidth || 0;
                 const naturalHeight = media.naturalHeight || media.videoHeight || 0;
-
                 if (naturalWidth === 0 || naturalHeight === 0) return;
 
-                // Calculate actual rendered dimensions accounting for object-fit: contain
+                // Get the media element's rendered container bounds
+                const containerW = mediaContainer.offsetWidth;
+                const containerH = mediaContainer.offsetHeight;
+                if (containerW === 0 || containerH === 0) return;
+
+                // Calculate actual rendered content bounds within object-fit: contain
                 const mediaAspect = naturalWidth / naturalHeight;
-                const containerAspect = mediaRect.width / mediaRect.height;
+                const containerAspect = containerW / containerH;
 
-                let renderedWidth, renderedHeight, offsetX, offsetY;
-
+                let renderedW, renderedH, offsetX, offsetY;
                 if (containerAspect > mediaAspect) {
-                    // Container is wider - image is limited by height
-                    renderedHeight = mediaRect.height;
-                    renderedWidth = renderedHeight * mediaAspect;
-                    offsetX = (mediaRect.width - renderedWidth) / 2;
+                    // Container wider than content — pillarboxed (black bars on left/right)
+                    renderedH = containerH;
+                    renderedW = renderedH * mediaAspect;
+                    offsetX = (containerW - renderedW) / 2;
                     offsetY = 0;
                 } else {
-                    // Container is taller - image is limited by width
-                    renderedWidth = mediaRect.width;
-                    renderedHeight = renderedWidth / mediaAspect;
+                    // Container taller than content — letterboxed (black bars top/bottom)
+                    renderedW = containerW;
+                    renderedH = renderedW / mediaAspect;
                     offsetX = 0;
-                    offsetY = (mediaRect.height - renderedHeight) / 2;
+                    offsetY = (containerH - renderedH) / 2;
                 }
 
-                // Calculate absolute position of rendered image
-                const mediaOffsetX = (mediaRect.left - layerRect.left) + offsetX;
-                const mediaOffsetY = (mediaRect.top - layerRect.top) + offsetY;
-
-                // Position info bar based on mode
-                infoBar.style.position = 'absolute';
-
-                if (inVerticalStack) {
-                    // Vertical stack: info bar to the left of the media
-                    infoBar.style.left = Math.max(0, mediaOffsetX - infoBar.offsetWidth) + 'px';
-                    infoBar.style.top = (mediaOffsetY + mediaRect.height / 2 - infoBar.offsetHeight / 2) + 'px';
-                    infoBar.style.right = '';
-                    infoBar.style.bottom = '';
-                    infoBar.style.flexDirection = 'column';
-                    infoBar.style.alignItems = 'flex-start';
-                } else {
-                    // Overlay and horizontal: info bar at top-left of media
-                    infoBar.style.left = mediaOffsetX + 'px';
-                    infoBar.style.top = mediaOffsetY + 'px';
-                    infoBar.style.right = '';
-                    infoBar.style.bottom = '';
-                    infoBar.style.flexDirection = 'row';
-                    infoBar.style.alignItems = 'center';
-                }
-
-                // Position zoom indicator at bottom-right of rendered image
-                zoomIndicator.style.position = 'absolute';
-                zoomIndicator.style.left = (mediaOffsetX + renderedWidth - zoomIndicator.offsetWidth - 5) + 'px';
-                zoomIndicator.style.top = (mediaOffsetY + renderedHeight - zoomIndicator.offsetHeight - 5) + 'px';
-                zoomIndicator.style.right = '';
-                zoomIndicator.style.bottom = '';
+                // Size and position the video-wrapper to match the actual content area
+                videoWrapper.style.width = Math.round(renderedW) + 'px';
+                videoWrapper.style.height = Math.round(renderedH) + 'px';
+                videoWrapper.style.top = Math.round(offsetY) + 'px';
+                videoWrapper.style.left = Math.round(offsetX) + 'px';
             });
         }
 
