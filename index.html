@@ -450,10 +450,12 @@
             position: relative;
             background: #000;
             display: none;
+            min-height: 0; /* Allow flex child to shrink below content size */
         }
 
         .comparison-view.active {
-            display: block;
+            display: flex;
+            flex-direction: column;
         }
 
         .overlay-container {
@@ -470,7 +472,8 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            /* Leave room for the fixed controls-hint bar at the bottom (~40px) */
+            height: calc(100% - 40px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -488,21 +491,31 @@
             position: relative;
             display: grid;
             place-items: center;
-            max-width: 100%;
-            max-height: 100%;
+            /* Explicit 1fr tracks so the grid doesn't auto-expand beyond its own size */
+            grid-template-rows: 1fr;
+            grid-template-columns: 1fr;
+            /* Fill the overlay-layer so percentage max-width/max-height on children resolve */
+            width: 100%;
+            height: 100%;
         }
 
         /* video-wrapper fills its grid cell so zoom/info can overlap it */
         .media-container .video-wrapper {
             grid-area: 1 / 1;
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
+            /* Prevent grid item from expanding the track beyond media-container bounds */
+            min-width: 0;
+            min-height: 0;
         }
 
         /* video-wrapper: grid so video and zoom indicator overlap */
         .video-wrapper {
             display: grid;
             place-items: center;
+            /* Also needs explicit tracks so it doesn't expand beyond its own size */
+            grid-template-rows: 1fr;
+            grid-template-columns: 1fr;
         }
 
         .video-wrapper img,
@@ -513,6 +526,8 @@
             width: auto;
             height: auto;
             grid-area: 1 / 1;
+            min-width: 0;
+            min-height: 0;
         }
 
         .video-wrapper .split-zoom-indicator {
@@ -905,6 +920,11 @@
         body.fullscreen .comparison-view {
             display: block;
             padding-top: 80px; /* Space for drop zones */
+        }
+
+        body.fullscreen .comparison-view.active {
+            display: flex;
+            flex-direction: column;
         }
 
         body.fullscreen .overlay-layer img {
@@ -2536,6 +2556,14 @@
                     document.body.classList.remove('side-by-side');
                     document.body.classList.remove('vertical-stack');
                     isSideBySide = false;
+
+                    // Clear inline styles set by positionLabelsToMedia() so CSS takes over in overlay mode
+                    document.querySelectorAll('.video-wrapper').forEach(vw => {
+                        vw.style.width = '';
+                        vw.style.height = '';
+                        vw.style.top = '';
+                        vw.style.left = '';
+                    });
 
                     // Reset audio mute states and button icons when leaving split view
                     ['original', 'editA', 'editB'].forEach(slot => {
