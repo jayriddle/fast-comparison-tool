@@ -2377,7 +2377,10 @@
                     console.log('Switching to Edit B (index 2)');
                     switchToAsset(2); // Start with Edit B
                 }
-                
+
+                // Default to horizontal split so all loaded assets are immediately visible
+                setViewMode('horizontal');
+
                 // Show video controls if any videos
                 console.log('Checking for video controls, hasVideos =', hasVideos);
                 if (hasVideos) {
