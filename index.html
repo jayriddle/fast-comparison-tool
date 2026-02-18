@@ -405,7 +405,9 @@
         }
 
         body.side-by-side .overlay-layer.active,
-        body.side-by-side .overlay-layer:not(.active) {
+        body.side-by-side .overlay-layer:not(.active),
+        body.vertical-stack .overlay-layer.active,
+        body.vertical-stack .overlay-layer:not(.active) {
             opacity: 1;
             pointer-events: auto;
         }
@@ -2209,11 +2211,13 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar above the video in all modes
+                // Position the info bar above the video in all modes.
+                // Use top:offsetY (not bottom) so the bar is always inside the container
+                // and never clipped by overflow:hidden when offsetY is 0.
                 if (infoBar) {
                     infoBar.style.left = Math.round(offsetX) + 'px';
-                    infoBar.style.top = '';
-                    infoBar.style.bottom = Math.round(containerH - offsetY) + 'px';
+                    infoBar.style.top = Math.round(offsetY) + 'px';
+                    infoBar.style.bottom = '';
                     infoBar.style.right = '';
                     infoBar.style.width = Math.round(renderedW) + 'px';
                     infoBar.style.height = '';
