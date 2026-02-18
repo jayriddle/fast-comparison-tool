@@ -597,27 +597,29 @@
 
         .shortcuts-list {
             margin: 0;
-            padding: 10px 14px;
+            padding: 8px 14px;
             overflow-y: auto;
             flex: 1;
-            display: grid;
-            grid-template-columns: auto 1fr;
-            align-items: center;
-            gap: 2px 12px;
         }
 
-        .shortcuts-list dt {
+        .shortcut-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 3px 0;
+        }
+
+        .shortcut-key {
+            flex-shrink: 0;
+            min-width: 70px;
             color: #ccc;
             font-size: 14px;
             white-space: nowrap;
-            margin: 0;
-            padding: 0;
         }
 
-        .shortcuts-list dd {
+        .shortcut-desc {
             color: #888;
             font-size: 14px;
-            margin: 0;
         }
 
         .shortcuts-list kbd {
@@ -2854,17 +2856,17 @@
             <span>Keyboard Shortcuts</span>
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
-        <dl class="shortcuts-list">
-            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Switch asset</dd>
-            <dt><kbd>Space</kbd></dt><dd>Play / Pause</dd>
-            <dt><kbd>R</kbd></dt><dd>Restart</dd>
-            <dt><kbd>M</kbd></dt><dd>Mute</dd>
-            <dt><kbd>S</kbd></dt><dd>Cycle split mode</dd>
-            <dt><kbd>F</kbd></dt><dd>Fullscreen</dd>
-            <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>Zoom in / out</dd>
-            <dt><kbd>L</kbd></dt><dd>Load files</dd>
-            <dt><kbd>K</kbd></dt><dd>Toggle this panel</dd>
-        </dl>
+        <div class="shortcuts-list">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Fullscreen</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
+        </div>
     </div>
 
 </body>
