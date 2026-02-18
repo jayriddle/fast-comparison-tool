@@ -490,8 +490,9 @@
             color: #ffffff;
         }
 
-        /* Active asset indicator - highlight in overlay mode only */
+        /* Active asset indicator - show and highlight in overlay mode only */
         body:not(.side-by-side):not(.vertical-stack) .overlay-layer.active .asset-info-bar {
+            display: flex;
             border: 2px solid #007bff;
             background: rgba(0, 123, 255, 0.2);
         }
@@ -952,7 +953,6 @@
         let timecodeMode = 'time'; // 'time' or 'frames'
         let videoFrameRates = {}; // Store framerate for each video
         let splitViewFitMode = 'contain'; // 'contain' (fit, no crop - default) or 'cover' (fill, crop)
-        
         // Undo/Redo state management
         let undoStack = [];
         let redoStack = [];
@@ -961,6 +961,14 @@
         // New zoom levels
         const zoomLevels = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8];
         let currentZoomIndex = 2; // Start at 1.0 (index 2)
+
+        // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
+        // so normalization always runs after all loaded slots have reported their dimensions.
+        let _positionDebounceTimer = null;
+        function positionLabelsToMediaDebounced() {
+            clearTimeout(_positionDebounceTimer);
+            _positionDebounceTimer = setTimeout(positionLabelsToMedia, 150);
+        }
 
         // Setup drag and drop — listen on the whole page
         function setupDragAndDrop() {
@@ -1068,6 +1076,7 @@
 
                     video.addEventListener('loadedmetadata', function() {
                         console.log(`${slot} loadedmetadata event fired`);
+                        if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
                         updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
                         updateDurationDisplay(slot, video.duration);
 
@@ -1076,8 +1085,9 @@
                         // Setup video handlers
                         setupVideoHandlers(video, slot);
 
-                        // Position labels to media after video loads
-                        setTimeout(positionLabelsToMedia, 50);
+                        // Position labels after video loads — debounced so all slots
+                        // are measured together once rapid successive loads settle.
+                        positionLabelsToMediaDebounced();
 
                         console.log(`Video ${slot} fully loaded and ready`);
                     });
@@ -1097,12 +1107,11 @@
                             console.warn('Image decode error:', e);
                         }
 
+                        if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
                         updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
-                        // Update zoom indicators and position labels
-                        setTimeout(() => {
-                            updateSplitViewZoomIndicators();
-                            positionLabelsToMedia();
-                        }, 100); // Increased timeout to ensure layout is stable
+                        updateSplitViewZoomIndicators();
+                        // Debounced so all slots are measured together once rapid successive loads settle.
+                        positionLabelsToMediaDebounced();
                     });
                     mediaContainer.appendChild(img);
                 }
@@ -1522,19 +1531,17 @@
                             identicalPairs.push(`${labels[slot1]} = ${labels[slot2]}`);
                         }
                         
-                        // Check for aspect ratio mismatch (tolerance of 0.5%)
-                        if (aspectRatios[slot1] && aspectRatios[slot2]) {
-                            const ratio1 = aspectRatios[slot1].ratio;
-                            const ratio2 = aspectRatios[slot2].ratio;
-                            const difference = Math.abs(ratio1 - ratio2) / ratio1 * 100;
-                            
-                            if (difference > 0.5) {
-                                const type = ratio1 > ratio2 ? 'stretched vertically' : 'stretched horizontally';
-                                distortionWarnings.push(
-                                    `${labels[slot1]} (${aspectRatios[slot1].formatted}) vs ${labels[slot2]} (${aspectRatios[slot2].formatted}) - ${difference.toFixed(1)}% aspect ratio difference`
-                                );
-                            }
-                        }
+                        // Aspect ratio mismatch check (muted for now — will revisit)
+                        // if (aspectRatios[slot1] && aspectRatios[slot2]) {
+                        //     const ratio1 = aspectRatios[slot1].ratio;
+                        //     const ratio2 = aspectRatios[slot2].ratio;
+                        //     const difference = Math.abs(ratio1 - ratio2) / ratio1 * 100;
+                        //     if (difference > 0.5) {
+                        //         distortionWarnings.push(
+                        //             `${labels[slot1]} (${aspectRatios[slot1].formatted}) vs ${labels[slot2]} (${aspectRatios[slot2].formatted}) - ${difference.toFixed(1)}% aspect ratio difference`
+                        //         );
+                        //     }
+                        // }
                     }
                 }
             }
@@ -1600,6 +1607,9 @@
                 } else {
                     console.error(`Layer layer${layerName} not found!`);
                 }
+
+                // Recompute normalization with all currently-loaded dimensions
+                positionLabelsToMedia();
             }
 
             // Check if current asset is video and update progress if so
@@ -2021,7 +2031,72 @@
         //   - Overlay/Horizontal: above the video-wrapper (top edge)
         //   - Vertical: to the left of the video-wrapper
         function positionLabelsToMedia() {
-            ['original', 'editA', 'editB'].forEach(slot => {
+            const slots = ['original', 'editA', 'editB'];
+            const isVertical = document.body.classList.contains('vertical-stack');
+            const isOverlay = !isSideBySide && !isVertical;
+
+            // In overlay mode, normalize assets to display at the same screen footprint:
+            //   Portrait (w < h): normalize to the same contain-fit WIDTH
+            //   Landscape (w >= h): normalize to the same contain-fit HEIGHT
+            // Reference = smallest value in that dimension across loaded slots of that orientation.
+            // All others scale down to match, so stepping through assets feels like the same image size.
+            const normalizeScales = {}; // slot → multiplier (≤ 1) to apply to contain-fit renderedW/H
+            if (isOverlay) {
+                // Pass 1: compute each slot's contain-fit rendered width and height
+                const fitDims = {}; // slot → { fw, fh, portrait }
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
+                    const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const cw = mediaContainer.offsetWidth;
+                    const ch = mediaContainer.offsetHeight;
+                    if (!cw || !ch) return;
+                    const aspect = nw / nh;
+                    const containerAspect = cw / ch;
+                    let fw, fh;
+                    if (containerAspect > aspect) { fh = ch; fw = fh * aspect; }
+                    else { fw = cw; fh = fw / aspect; }
+                    fitDims[slot] = { fw, fh, portrait: nw < nh };
+                });
+
+                // Pass 2: find the minimum contain-fit width (portraits) and height (landscapes),
+                // capped at the minimum native dimension so we never scale any asset above 1.0×.
+                let minPortraitW = Infinity, minLandscapeH = Infinity;
+                slots.forEach(slot => {
+                    const d = fitDims[slot];
+                    if (!d) return;
+                    const media = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`)
+                        ?.querySelector('img, video');
+                    const nw = media ? (media.naturalWidth || media.videoWidth || 0) : 0;
+                    const nh = media ? (media.naturalHeight || media.videoHeight || 0) : 0;
+                    if (d.portrait) {
+                        // Cap at native width so no asset exceeds 1.0× zoom
+                        minPortraitW = Math.min(minPortraitW, d.fw, nw);
+                    } else {
+                        // Cap at native height so no asset exceeds 1.0× zoom
+                        minLandscapeH = Math.min(minLandscapeH, d.fh, nh);
+                    }
+                });
+
+                // Pass 3: scale each slot so its reference dimension matches the capped minimum
+                slots.forEach(slot => {
+                    const d = fitDims[slot];
+                    if (!d) { normalizeScales[slot] = 1; return; }
+                    if (d.portrait) {
+                        normalizeScales[slot] = minPortraitW < Infinity ? minPortraitW / d.fw : 1;
+                    } else {
+                        normalizeScales[slot] = minLandscapeH < Infinity ? minLandscapeH / d.fh : 1;
+                    }
+                });
+            }
+
+            slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
                 const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2060,13 +2135,30 @@
                     offsetY = (containerH - renderedH) / 2;
                 }
 
-                const isVertical = document.body.classList.contains('vertical-stack');
+                // In overlay mode, scale down to the smallest asset's rendered area so all
+                // assets occupy the same physical screen footprint.
+                if (isOverlay && normalizeScales[slot] !== undefined) {
+                    const scale = normalizeScales[slot];
+                    renderedW = renderedW * scale;
+                    renderedH = renderedH * scale;
+                    offsetX = (containerW - renderedW) / 2;
+                    offsetY = (containerH - renderedH) / 2;
+                }
 
                 // Size and position the video-wrapper to exactly cover the rendered media pixels
                 videoWrapper.style.width = Math.round(renderedW) + 'px';
                 videoWrapper.style.height = Math.round(renderedH) + 'px';
                 videoWrapper.style.top = Math.round(offsetY) + 'px';
                 videoWrapper.style.left = Math.round(offsetX) + 'px';
+                videoWrapper.style.transform = '';
+                videoWrapper.style.transformOrigin = '';
+
+                // Update zoom indicator to reflect actual displayed size
+                const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
+                if (zoomIndicator) {
+                    const actualZoom = renderedW / naturalWidth;
+                    zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
+                }
 
                 // Position the info bar
                 if (infoBar) {
@@ -2206,7 +2298,7 @@
             const horizontalBtn = document.getElementById('horizontalViewBtn');
             const verticalBtn = document.getElementById('verticalViewBtn');
             const splitFitBtn = document.getElementById('splitFitToggle');
-            
+
             if (activeMode === 'overlay') {
                 // In overlay mode, show split options, hide fit toggle
                 overlayBtn.style.display = 'none';
@@ -2249,7 +2341,7 @@
 
                 document.getElementById('resetBtn').style.display = 'block';
 
-                // Show view mode buttons
+                // Show view mode buttons (initial state is overlay mode)
                 document.getElementById('horizontalViewBtn').style.display = 'inline-block';
                 document.getElementById('verticalViewBtn').style.display = 'inline-block';
                 console.log('View mode buttons shown');
