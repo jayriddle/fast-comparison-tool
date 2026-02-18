@@ -2326,7 +2326,18 @@
                     const td = tripartiteLayout[slot];
                     const tw = Math.round(td.rw);
                     const th = Math.round(td.rh);
-                    const ty = Math.round((td.ch - td.rh) / 2);
+                    // Original: vertically centered in its full-height cell.
+                    // EditA: bottom-aligned in its cell (image sits at the A/B boundary).
+                    // EditB: top-aligned in its cell (image sits at the A/B boundary).
+                    // This places A and B adjacent at their shared edge, matching Original's midpoint.
+                    let ty;
+                    if (slot === 'original') {
+                        ty = Math.round((td.ch - td.rh) / 2);
+                    } else if (slot === 'editA') {
+                        ty = Math.round(td.ch - td.rh); // flush bottom
+                    } else {
+                        ty = 0; // flush top
+                    }
                     // Original: flush right; A/B: flush left
                     const tx = slot === 'original'
                         ? Math.round(td.cw - td.rw)
@@ -2349,11 +2360,18 @@
                     if (infoBar) {
                         const ibH = infoBar.offsetHeight || 28;
                         infoBar.style.left = tx + 'px';
-                        infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
-                        infoBar.style.bottom = '';
-                        infoBar.style.right = '';
                         infoBar.style.width = tw + 'px';
                         infoBar.style.height = '';
+                        infoBar.style.right = '';
+                        if (slot === 'editB') {
+                            // EditB is flush-top so there's no room above — place bar below image
+                            infoBar.style.top = Math.round(ty + th) + 'px';
+                            infoBar.style.bottom = '';
+                        } else {
+                            // Original and EditA: bar above the image
+                            infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
+                            infoBar.style.bottom = '';
+                        }
                     }
                     return; // skip the standard positioning below
                 }
