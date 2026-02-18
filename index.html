@@ -490,8 +490,9 @@
             color: #ffffff;
         }
 
-        /* Active asset indicator - highlight in overlay mode only */
+        /* Active asset indicator - show and highlight in overlay mode only */
         body:not(.side-by-side):not(.vertical-stack) .overlay-layer.active .asset-info-bar {
+            display: flex;
             border: 2px solid #007bff;
             background: rgba(0, 123, 255, 0.2);
         }
@@ -952,8 +953,6 @@
         let timecodeMode = 'time'; // 'time' or 'frames'
         let videoFrameRates = {}; // Store framerate for each video
         let splitViewFitMode = 'contain'; // 'contain' (fit, no crop - default) or 'cover' (fill, crop)
-        const normalizeMode = true; // Always normalize: scale all assets to the same display size in overlay mode
-        
         // Undo/Redo state management
         let undoStack = [];
         let redoStack = [];
@@ -962,6 +961,14 @@
         // New zoom levels
         const zoomLevels = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8];
         let currentZoomIndex = 2; // Start at 1.0 (index 2)
+
+        // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
+        // so normalization always runs after all loaded slots have reported their dimensions.
+        let _positionDebounceTimer = null;
+        function positionLabelsToMediaDebounced() {
+            clearTimeout(_positionDebounceTimer);
+            _positionDebounceTimer = setTimeout(positionLabelsToMedia, 150);
+        }
 
         // Setup drag and drop — listen on the whole page
         function setupDragAndDrop() {
@@ -1078,8 +1085,9 @@
                         // Setup video handlers
                         setupVideoHandlers(video, slot);
 
-                        // Position labels to media after video loads
-                        setTimeout(positionLabelsToMedia, 50);
+                        // Position labels after video loads — debounced so all slots
+                        // are measured together once rapid successive loads settle.
+                        positionLabelsToMediaDebounced();
 
                         console.log(`Video ${slot} fully loaded and ready`);
                     });
@@ -1101,11 +1109,9 @@
 
                         if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
                         updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
-                        // Update zoom indicators and position labels
-                        setTimeout(() => {
-                            updateSplitViewZoomIndicators();
-                            positionLabelsToMedia();
-                        }, 100); // Increased timeout to ensure layout is stable
+                        updateSplitViewZoomIndicators();
+                        // Debounced so all slots are measured together once rapid successive loads settle.
+                        positionLabelsToMediaDebounced();
                     });
                     mediaContainer.appendChild(img);
                 }
@@ -1525,19 +1531,17 @@
                             identicalPairs.push(`${labels[slot1]} = ${labels[slot2]}`);
                         }
                         
-                        // Check for aspect ratio mismatch (tolerance of 0.5%)
-                        if (aspectRatios[slot1] && aspectRatios[slot2]) {
-                            const ratio1 = aspectRatios[slot1].ratio;
-                            const ratio2 = aspectRatios[slot2].ratio;
-                            const difference = Math.abs(ratio1 - ratio2) / ratio1 * 100;
-                            
-                            if (difference > 0.5) {
-                                const type = ratio1 > ratio2 ? 'stretched vertically' : 'stretched horizontally';
-                                distortionWarnings.push(
-                                    `${labels[slot1]} (${aspectRatios[slot1].formatted}) vs ${labels[slot2]} (${aspectRatios[slot2].formatted}) - ${difference.toFixed(1)}% aspect ratio difference`
-                                );
-                            }
-                        }
+                        // Aspect ratio mismatch check (muted for now — will revisit)
+                        // if (aspectRatios[slot1] && aspectRatios[slot2]) {
+                        //     const ratio1 = aspectRatios[slot1].ratio;
+                        //     const ratio2 = aspectRatios[slot2].ratio;
+                        //     const difference = Math.abs(ratio1 - ratio2) / ratio1 * 100;
+                        //     if (difference > 0.5) {
+                        //         distortionWarnings.push(
+                        //             `${labels[slot1]} (${aspectRatios[slot1].formatted}) vs ${labels[slot2]} (${aspectRatios[slot2].formatted}) - ${difference.toFixed(1)}% aspect ratio difference`
+                        //         );
+                        //     }
+                        // }
                     }
                 }
             }
@@ -1603,6 +1607,9 @@
                 } else {
                     console.error(`Layer layer${layerName} not found!`);
                 }
+
+                // Recompute normalization with all currently-loaded dimensions
+                positionLabelsToMedia();
             }
 
             // Check if current asset is video and update progress if so
@@ -2015,24 +2022,6 @@
         // Update zoom indicators when window resizes
         window.addEventListener('resize', updateSplitViewZoomIndicators);
 
-        // Returns a scale factor per slot so all assets appear at the same display size.
-        // Uses the smallest asset as the reference (scale=1); larger assets are scaled down.
-        function computeNormalizeScales() {
-            const scales = { original: 1, editA: 1, editB: 1 };
-            if (!normalizeMode) return scales;
-
-            // Collect natural widths for loaded slots
-            const widths = Object.entries(mediaData)
-                .filter(([, d]) => d && d.w)
-                .map(([slot, d]) => ({ slot, w: d.w }));
-
-            if (widths.length < 2) return scales;
-
-            const minW = Math.min(...widths.map(e => e.w));
-            widths.forEach(({ slot, w }) => { scales[slot] = minW / w; });
-            return scales;
-        }
-
         // Positions the video-wrapper and info bar to exactly match the rendered media bounds.
         // Works in all modes: overlay, horizontal split, and vertical split.
         // The video-wrapper is JS-sized to the exact rendered video pixels so that the
@@ -2042,8 +2031,46 @@
         //   - Overlay/Horizontal: above the video-wrapper (top edge)
         //   - Vertical: to the left of the video-wrapper
         function positionLabelsToMedia() {
-            const normalizeScales = computeNormalizeScales();
-            ['original', 'editA', 'editB'].forEach(slot => {
+            const slots = ['original', 'editA', 'editB'];
+            const isVertical = document.body.classList.contains('vertical-stack');
+            const isOverlay = !isSideBySide && !isVertical;
+
+            // In overlay mode, normalize all assets to display at the same zoom level
+            // (screen pixels per source pixel). The reference is the most zoomed-out asset —
+            // the one with the smallest fitScale = min(containerW/nW, containerH/nH).
+            // All other assets scale down to match it, so they all show at the same px/px ratio.
+            const normalizeScales = {}; // slot → multiplier (≤ 1) to apply to contain-fit renderedW/H
+            if (isOverlay) {
+                // Pass 1: compute each slot's contain-fit pixel scale (screen px per source px)
+                const fitScales = {};
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
+                    const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const cw = mediaContainer.offsetWidth;
+                    const ch = mediaContainer.offsetHeight;
+                    if (!cw || !ch) return;
+                    fitScales[slot] = Math.min(cw / nw, ch / nh);
+                });
+
+                // Pass 2: find the minimum fitScale — the most zoomed-out (highest-res) asset.
+                // Scale all other slots down to match it so every asset displays at the same
+                // screen-pixels-per-source-pixel ratio.
+                const minFitScale = Object.values(fitScales).reduce((a, b) => Math.min(a, b), Infinity);
+                slots.forEach(slot => {
+                    normalizeScales[slot] = (fitScales[slot] !== undefined)
+                        ? minFitScale / fitScales[slot]  // always ≤ 1
+                        : 1;
+                });
+            }
+
+            slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
                 const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2082,18 +2109,30 @@
                     offsetY = (containerH - renderedH) / 2;
                 }
 
-                const isVertical = document.body.classList.contains('vertical-stack');
-
-                // Apply normalize scale in overlay mode only (split modes each fill their own panel)
-                const scale = (!isSideBySide && !isVertical) ? (normalizeScales[slot] || 1) : 1;
+                // In overlay mode, scale down to the smallest asset's rendered area so all
+                // assets occupy the same physical screen footprint.
+                if (isOverlay && normalizeScales[slot] !== undefined) {
+                    const scale = normalizeScales[slot];
+                    renderedW = renderedW * scale;
+                    renderedH = renderedH * scale;
+                    offsetX = (containerW - renderedW) / 2;
+                    offsetY = (containerH - renderedH) / 2;
+                }
 
                 // Size and position the video-wrapper to exactly cover the rendered media pixels
                 videoWrapper.style.width = Math.round(renderedW) + 'px';
                 videoWrapper.style.height = Math.round(renderedH) + 'px';
                 videoWrapper.style.top = Math.round(offsetY) + 'px';
                 videoWrapper.style.left = Math.round(offsetX) + 'px';
-                videoWrapper.style.transform = scale !== 1 ? `scale(${scale})` : '';
-                videoWrapper.style.transformOrigin = scale !== 1 ? 'center center' : '';
+                videoWrapper.style.transform = '';
+                videoWrapper.style.transformOrigin = '';
+
+                // Update zoom indicator to reflect actual displayed size
+                const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
+                if (zoomIndicator) {
+                    const actualZoom = renderedW / naturalWidth;
+                    zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
+                }
 
                 // Position the info bar
                 if (infoBar) {
