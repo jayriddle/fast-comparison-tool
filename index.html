@@ -2035,14 +2035,15 @@
             const isVertical = document.body.classList.contains('vertical-stack');
             const isOverlay = !isSideBySide && !isVertical;
 
-            // In overlay mode, normalize all assets to display at the same zoom level
-            // (screen pixels per source pixel). The reference is the most zoomed-out asset —
-            // the one with the smallest fitScale = min(containerW/nW, containerH/nH).
-            // All other assets scale down to match it, so they all show at the same px/px ratio.
+            // In overlay mode, normalize assets to display at the same screen footprint:
+            //   Portrait (w < h): normalize to the same contain-fit WIDTH
+            //   Landscape (w >= h): normalize to the same contain-fit HEIGHT
+            // Reference = smallest value in that dimension across loaded slots of that orientation.
+            // All others scale down to match, so stepping through assets feels like the same image size.
             const normalizeScales = {}; // slot → multiplier (≤ 1) to apply to contain-fit renderedW/H
             if (isOverlay) {
-                // Pass 1: compute each slot's contain-fit pixel scale (screen px per source px)
-                const fitScales = {};
+                // Pass 1: compute each slot's contain-fit rendered width and height
+                const fitDims = {}; // slot → { fw, fh, portrait }
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2056,17 +2057,30 @@
                     const cw = mediaContainer.offsetWidth;
                     const ch = mediaContainer.offsetHeight;
                     if (!cw || !ch) return;
-                    fitScales[slot] = Math.min(cw / nw, ch / nh);
+                    const aspect = nw / nh;
+                    const containerAspect = cw / ch;
+                    let fw, fh;
+                    if (containerAspect > aspect) { fh = ch; fw = fh * aspect; }
+                    else { fw = cw; fh = fw / aspect; }
+                    fitDims[slot] = { fw, fh, portrait: nw < nh };
                 });
 
-                // Pass 2: find the minimum fitScale — the most zoomed-out (highest-res) asset.
-                // Scale all other slots down to match it so every asset displays at the same
-                // screen-pixels-per-source-pixel ratio.
-                const minFitScale = Object.values(fitScales).reduce((a, b) => Math.min(a, b), Infinity);
+                // Pass 2: find the minimum contain-fit width (portraits) and height (landscapes)
+                let minPortraitW = Infinity, minLandscapeH = Infinity;
+                Object.values(fitDims).forEach(({ fw, fh, portrait }) => {
+                    if (portrait) minPortraitW = Math.min(minPortraitW, fw);
+                    else          minLandscapeH = Math.min(minLandscapeH, fh);
+                });
+
+                // Pass 3: scale each slot so its reference dimension matches the minimum
                 slots.forEach(slot => {
-                    normalizeScales[slot] = (fitScales[slot] !== undefined)
-                        ? minFitScale / fitScales[slot]  // always ≤ 1
-                        : 1;
+                    const d = fitDims[slot];
+                    if (!d) { normalizeScales[slot] = 1; return; }
+                    if (d.portrait) {
+                        normalizeScales[slot] = minPortraitW < Infinity ? minPortraitW / d.fw : 1;
+                    } else {
+                        normalizeScales[slot] = minLandscapeH < Infinity ? minLandscapeH / d.fh : 1;
+                    }
                 });
             }
 
