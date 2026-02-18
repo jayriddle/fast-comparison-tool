@@ -2226,9 +2226,11 @@
                         infoBar.style.width = ibW + 'px';
                         infoBar.style.height = Math.round(renderedH) + 'px';
                     } else {
-                        // Above the image; top:offsetY keeps the bar inside the container
+                        // Above the image: position bar so its bottom edge aligns with the image top.
+                        // Clamp to 0 so it never goes above the container boundary.
+                        const ibH = infoBar.offsetHeight || 28;
                         infoBar.style.left = Math.round(offsetX) + 'px';
-                        infoBar.style.top = Math.round(offsetY) + 'px';
+                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
                         infoBar.style.bottom = '';
                         infoBar.style.right = '';
                         infoBar.style.width = Math.round(renderedW) + 'px';
