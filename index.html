@@ -2229,13 +2229,14 @@
                 });
             }
 
-            // In tripartite mode, compute a shared zoom level so all three assets display
-            // at the same size. Each slot has a different cell size (Original = full height left,
-            // A/B = half height right), so we compute each slot's contain-fit zoom independently,
-            // then take the minimum. All slots then render at that zoom.
-            const tripartiteZoom = {}; // slot → { zoom, rw, rh } at shared zoom
+            // In tripartite mode, compute a shared rendered HEIGHT so all three assets
+            // appear the same size. Each slot's contain-fit height is computed independently
+            // (Original has a tall cell; A/B have half-height cells), then we take the minimum.
+            // Width follows each asset's own aspect ratio at that shared height, clamped to
+            // the cell width so nothing overflows. Original is flush-right, A/B flush-left.
+            const tripartiteLayout = {}; // slot → { rw, rh, cw, ch, sharedZoom }
             if (isTripartite) {
-                let minZoom = Infinity;
+                let minH = Infinity;
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2249,18 +2250,19 @@
                     const cw = mediaContainer.offsetWidth;
                     const ch = mediaContainer.offsetHeight;
                     if (!cw || !ch) { anySkipped = true; return; }
-                    // Contain-fit zoom: largest scale that fits nw×nh inside cw×ch
-                    const zoom = Math.min(cw / nw, ch / nh);
-                    tripartiteZoom[slot] = { zoom, nw, nh, cw, ch };
-                    minZoom = Math.min(minZoom, zoom);
+                    // Contain-fit rendered height: height if fitted into this cell
+                    const fitH = Math.min(ch, cw * nh / nw);
+                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitH };
+                    minH = Math.min(minH, fitH);
                 });
-                // Apply the shared minimum zoom to each slot's rendered dimensions
+                // Each slot renders at the shared minH; width = minH * aspect, clamped to cell width
                 slots.forEach(slot => {
-                    const d = tripartiteZoom[slot];
+                    const d = tripartiteLayout[slot];
                     if (!d) return;
-                    d.rw = d.nw * minZoom;
-                    d.rh = d.nh * minZoom;
-                    d.sharedZoom = minZoom;
+                    const aspect = d.nw / d.nh;
+                    d.rh = minH;
+                    d.rw = Math.min(d.cw, minH * aspect);
+                    d.sharedZoom = d.rh / d.nh;
                 });
             }
 
@@ -2317,8 +2319,8 @@
                 // Original is flush-right in its cell; EditA/EditB are flush-left in theirs.
                 // All three are vertically centered. This makes right-edge of Original meet
                 // the left-edge of A/B at the column midpoint, with the whole group centered.
-                if (isTripartite && tripartiteZoom[slot]) {
-                    const td = tripartiteZoom[slot];
+                if (isTripartite && tripartiteLayout[slot]) {
+                    const td = tripartiteLayout[slot];
                     const tw = Math.round(td.rw);
                     const th = Math.round(td.rh);
                     const ty = Math.round((td.ch - td.rh) / 2);
