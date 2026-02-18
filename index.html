@@ -600,27 +600,30 @@
             padding: 10px 14px;
             overflow-y: auto;
             flex: 1;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            gap: 6px 12px;
         }
 
         .shortcuts-list dt {
-            color: #aaa;
-            font-size: 12px;
-            margin-top: 8px;
-            margin-bottom: 1px;
+            color: #ccc;
+            font-size: 14px;
+            white-space: nowrap;
         }
 
         .shortcuts-list dd {
-            color: #666;
-            font-size: 11px;
-            margin: 0 0 0 4px;
+            color: #888;
+            font-size: 14px;
+            margin: 0;
         }
 
         .shortcuts-list kbd {
             background: #333;
-            padding: 2px 6px;
+            padding: 2px 7px;
             border-radius: 3px;
             font-family: monospace;
-            font-size: 11px;
+            font-size: 13px;
             color: #bbb;
             margin: 0 1px;
             border: 1px solid #444;
