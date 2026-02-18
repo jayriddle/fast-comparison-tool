@@ -345,8 +345,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            /* Leave room for the fixed controls-hint bar at the bottom (~40px) */
-            height: calc(100% - 40px);
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -413,7 +412,7 @@
 
         /* Horizontal split: layer height */
         body.side-by-side .overlay-layer {
-            height: calc(100vh - 90px);
+            height: calc(100vh - 50px);
         }
 
         body.side-by-side .overlay-container {
@@ -429,7 +428,7 @@
         body.vertical-stack .overlay-layer {
             position: relative !important;
             width: 100%;
-            height: calc((100vh - 120px) / 3);
+            height: calc((100vh - 80px) / 3);
             display: block;
             cursor: grab;
             margin-bottom: 10px;
@@ -543,37 +542,95 @@
             height: auto;
         }
 
-        .controls-hint {
+        /* Keyboard shortcuts slide-in panel */
+        .shortcuts-panel {
             position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.85);
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #999;
-            z-index: 100;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            width: 240px;
+            background: #1a1a1a;
+            border-left: 1px solid #333;
+            z-index: 200;
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .shortcuts-panel.open {
+            transform: translateX(0);
+        }
+
+        .shortcuts-panel-header {
             display: flex;
             align-items: center;
-            gap: 15px;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: #222;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
         }
 
-        .controls-hint.fade {
-            opacity: 1;
+        .shortcuts-panel-header span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #ccc;
         }
 
-        .zoom-level-display {
-            display: none; /* Hidden - redundant with per-asset zoom indicators */
+        .shortcuts-panel-header button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 4px;
+            line-height: 1;
+            border-radius: 3px;
         }
 
-        .controls-hint kbd {
+        .shortcuts-panel-header button:hover {
             background: #333;
-            padding: 2px 6px;
+            color: #ccc;
+        }
+
+        .shortcuts-list {
+            margin: 0;
+            padding: 8px 14px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .shortcut-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 0;
+        }
+
+        .shortcut-key {
+            flex-shrink: 0;
+            min-width: 70px;
+            color: #ccc;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .shortcut-desc {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .shortcuts-list kbd {
+            background: #333;
+            padding: 2px 7px;
             border-radius: 3px;
             font-family: monospace;
-            color: rgb(160, 160, 160);
-            margin: 0 2px;
+            font-size: 13px;
+            color: #bbb;
+            margin: 0 1px;
+            border: 1px solid #444;
         }
 
         body.fullscreen {
@@ -806,6 +863,7 @@
                         <li>Press <kbd>F</kbd> for fullscreen, use <kbd>←</kbd> <kbd>→</kbd> to compare</li>
                         <li>Press <kbd>+</kbd> <kbd>-</kbd> to zoom in/out</li>
                         <li>Press <kbd>Space</kbd> to play/pause videos</li>
+                        <li>Press <kbd>K</kbd> to see all keyboard shortcuts</li>
                     </ol>
                     <p style="margin-top: 15px; font-size: 11px; color: #999;">
                         <em>Tip: Files are automatically sorted by modification time. Arrow keys skip empty slots.</em>
@@ -888,11 +946,6 @@
                     ⚠️ Identical Assets Detected
                 </div>
                 
-                <div class="controls-hint" id="controlsHint">
-                    <span><kbd>←</kbd> <kbd>→</kbd> Switch | <kbd>Space</kbd> Play/Pause | <kbd>R</kbd> Restart | <kbd>M</kbd> Mute | <kbd>S</kbd> Split | <kbd>F</kbd> Fullscreen | <kbd>+</kbd> <kbd>-</kbd> Zoom | <kbd>L</kbd> Load</span>
-                    <span class="zoom-level-display" id="zoomLevelDisplay">1.0×</span>
-                </div>
-
                 <div class="zoom-indicator" id="zoomIndicator">
                     2.0×
                 </div>
@@ -1864,7 +1917,6 @@
                 document.getElementById('comparisonView').classList.remove('active');
                 document.getElementById('resetBtn').style.display = 'none';
                 document.getElementById('videoControls').classList.remove('active');
-                document.getElementById('controlsHint').classList.remove('fade');
 
                 // Clear layers
                 ['Original', 'EditA', 'EditB'].forEach(slot => {
@@ -2670,6 +2722,13 @@
                 return;
             }
 
+            // K key toggles shortcuts panel — works at any time
+            if (e.key === 'k' || e.key === 'K') {
+                e.preventDefault();
+                toggleShortcutsPanel();
+                return;
+            }
+
             // Only work if comparison view is active
             if (!document.getElementById('comparisonView').classList.contains('active')) {
                 return;
@@ -2754,6 +2813,10 @@
             }
         });
 
+        function toggleShortcutsPanel() {
+            document.getElementById('shortcutsPanel').classList.toggle('open');
+        }
+
         function toggleInstructions() {
             const content = document.getElementById('instructionsContent');
             const icon = document.getElementById('toggleIcon');
@@ -2787,5 +2850,24 @@
             }
         }
     </script>
+
+    <div class="shortcuts-panel" id="shortcutsPanel">
+        <div class="shortcuts-panel-header">
+            <span>Keyboard Shortcuts</span>
+            <button onclick="toggleShortcutsPanel()">✕</button>
+        </div>
+        <div class="shortcuts-list">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Fullscreen</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
+        </div>
+    </div>
+
 </body>
 </html>
