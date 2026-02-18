@@ -892,10 +892,6 @@
                     Fit (No Crop)
                     <div class="help-tooltip">Toggle between fit (no crop) and fill (crop) in split view</div>
                 </button>
-                <button class="position-toggle" onclick="toggleDistortion()" id="distortionToggle" data-help="Toggle between showing actual distortion vs preserving aspect ratios">
-                    Show Distortion
-                    <div class="help-tooltip">Toggle between showing actual distortion vs preserving aspect ratios</div>
-                </button>
             </div>
             <div>
                 <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
@@ -1001,7 +997,7 @@
         let panStartY = 0;
         let panOffsetX = 0;
         let panOffsetY = 0;
-        let showDistortion = false;
+
         let zoomLevel = 1; // Default 1x zoom (actual size/fit)
         let timecodeMode = 'time'; // 'time' or 'frames'
         let videoFrameRates = {}; // Store framerate for each video
@@ -1545,7 +1541,7 @@
 
         function checkForIdenticalAssets() {
             const identicalPairs = [];
-            const distortionWarnings = [];
+
             const slots = ['original', 'editA', 'editB'];
             const labels = {
                 'original': 'Original',
@@ -1604,9 +1600,7 @@
             if (identicalPairs.length > 0) {
                 warnings.push(`Identical: ${identicalPairs.join(', ')}`);
             }
-            if (distortionWarnings.length > 0) {
-                warnings.push(`Aspect Ratio Mismatch: ${distortionWarnings.join('; ')}`);
-            }
+
             
             // Show warning if any issues found
             const warningEl = document.getElementById('identicalWarning');
@@ -1822,8 +1816,7 @@
                     media.style.height = (maxHeight * zoomLevel) + 'px';
                     media.style.maxWidth = 'none';
                     media.style.maxHeight = 'none';
-                    // Use object-fit based on distortion toggle
-                    media.style.objectFit = showDistortion ? 'fill' : 'contain';
+                    media.style.objectFit = 'contain';
                 });
             }
             
@@ -2558,7 +2551,7 @@
                 zoomLevel: zoomLevel,
                 panOffsetX: panOffsetX,
                 panOffsetY: panOffsetY,
-                showDistortion: showDistortion,
+
                 timecodeMode: timecodeMode,
                 isMuted: isMuted,
                 layerOrder: Array.from(document.querySelectorAll('.overlay-layer')).map(l => l.id),
@@ -2625,7 +2618,7 @@
             zoomLevel = state.zoomLevel;
             panOffsetX = state.panOffsetX;
             panOffsetY = state.panOffsetY;
-            showDistortion = state.showDistortion;
+
             timecodeMode = state.timecodeMode;
             isMuted = state.isMuted;
             
@@ -2804,13 +2797,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             setupDragAndDrop();
             
-            // Restore distortion preference
-            const savedDistortion = localStorage.getItem('showDistortion');
-            if (savedDistortion === 'true') {
-                showDistortion = true;
-                const distortionToggle = document.getElementById('distortionToggle');
-                distortionToggle.textContent = 'Preserve Aspect';
-            }
         });
 
         function toggleShortcutsPanel() {
@@ -2830,25 +2816,6 @@
             }
         }
 
-        function toggleDistortion() {
-            showDistortion = !showDistortion;
-            const toggleBtn = document.getElementById('distortionToggle');
-            
-            if (showDistortion) {
-                toggleBtn.textContent = 'Preserve Aspect';
-                localStorage.setItem('showDistortion', 'true');
-            } else {
-                toggleBtn.textContent = 'Show Distortion';
-                localStorage.setItem('showDistortion', 'false');
-            }
-            
-            // If in fullscreen, update the object-fit immediately
-            if (isFullscreen) {
-                document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
-                    media.style.objectFit = showDistortion ? 'fill' : 'contain';
-                });
-            }
-        }
     </script>
 
     <div class="shortcuts-panel" id="shortcutsPanel">
