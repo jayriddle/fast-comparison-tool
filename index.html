@@ -2146,6 +2146,7 @@
             let anySkipped = false; // tracks if any slot had zero-dimension container (needs retry)
             const slots = ['original', 'editA', 'editB'];
             const isVertical = document.body.classList.contains('vertical-stack');
+            const isTripartite = document.body.classList.contains('tripartite');
             const isOverlay = !isSideBySide && !isVertical;
 
             // In overlay mode, normalize assets to display at the same screen footprint:
@@ -2258,13 +2259,23 @@
                     offsetY = (containerH - renderedH) / 2;
                 }
 
-                // Size and position the video-wrapper to exactly cover the rendered media pixels.
-                // Hide during the write so the browser never paints an intermediate state.
+                // Size and position the video-wrapper.
+                // In tripartite mode: fill the full grid cell so the image is centered within
+                // the wide left column (or the half-height right cells) via CSS object-fit: contain.
+                // In all other modes: shrink the wrapper to the exact contain-fit pixel bounds so
+                // the zoom indicator always sits at the actual content corner, not the letterbox area.
                 videoWrapper.style.opacity = '0';
-                videoWrapper.style.width = Math.round(renderedW) + 'px';
-                videoWrapper.style.height = Math.round(renderedH) + 'px';
-                videoWrapper.style.top = Math.round(offsetY) + 'px';
-                videoWrapper.style.left = Math.round(offsetX) + 'px';
+                if (isTripartite) {
+                    videoWrapper.style.width = '100%';
+                    videoWrapper.style.height = '100%';
+                    videoWrapper.style.top = '0';
+                    videoWrapper.style.left = '0';
+                } else {
+                    videoWrapper.style.width = Math.round(renderedW) + 'px';
+                    videoWrapper.style.height = Math.round(renderedH) + 'px';
+                    videoWrapper.style.top = Math.round(offsetY) + 'px';
+                    videoWrapper.style.left = Math.round(offsetX) + 'px';
+                }
                 videoWrapper.style.transform = '';
                 videoWrapper.style.transformOrigin = '';
                 videoWrapper.style.opacity = '';
@@ -2288,6 +2299,15 @@
                         infoBar.style.right = '';
                         infoBar.style.width = ibW + 'px';
                         infoBar.style.height = Math.round(renderedH) + 'px';
+                    } else if (isTripartite) {
+                        // Above the actual image content within the cell
+                        const ibH = infoBar.offsetHeight || 28;
+                        infoBar.style.left = Math.round(offsetX) + 'px';
+                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
+                        infoBar.style.bottom = '';
+                        infoBar.style.right = '';
+                        infoBar.style.width = Math.round(renderedW) + 'px';
+                        infoBar.style.height = '';
                     } else {
                         // Above the image: position bar so its bottom edge aligns with the image top.
                         // Clamp to 0 so it never goes above the container boundary.
