@@ -405,7 +405,9 @@
         }
 
         body.side-by-side .overlay-layer.active,
-        body.side-by-side .overlay-layer:not(.active) {
+        body.side-by-side .overlay-layer:not(.active),
+        body.vertical-stack .overlay-layer.active,
+        body.vertical-stack .overlay-layer:not(.active) {
             opacity: 1;
             pointer-events: auto;
         }
@@ -512,11 +514,13 @@
             color: #28a745;
         }
 
-        /* Vertical mode info bar: column layout to fit the narrow left-side strip */
+        /* Vertical mode info bar: column layout, fixed width, left of the image */
         body.vertical-stack .asset-info-bar {
             flex-direction: column;
             padding: 8px 10px;
             justify-content: center;
+            width: 120px;
+            box-sizing: border-box;
         }
 
         /* Drag and drop styling */
@@ -2075,7 +2079,8 @@
         // The info bar is positioned:
         //   - Overlay/Horizontal: above the video-wrapper (top edge)
         //   - Vertical: to the left of the video-wrapper
-        function positionLabelsToMedia() {
+        function positionLabelsToMedia(retriesLeft = 5) {
+            let anySkipped = false; // tracks if any slot had zero-dimension container (needs retry)
             const slots = ['original', 'editA', 'editB'];
             const isVertical = document.body.classList.contains('vertical-stack');
             const isOverlay = !isSideBySide && !isVertical;
@@ -2101,7 +2106,7 @@
                     if (!nw || !nh) return;
                     const cw = mediaContainer.offsetWidth;
                     const ch = mediaContainer.offsetHeight;
-                    if (!cw || !ch) return;
+                    if (!cw || !ch) { anySkipped = true; return; }
                     const aspect = nw / nh;
                     const containerAspect = cw / ch;
                     let fw, fh;
@@ -2161,7 +2166,7 @@
                 // Get the container bounds
                 const containerW = mediaContainer.offsetWidth;
                 const containerH = mediaContainer.offsetHeight;
-                if (containerW === 0 || containerH === 0) return;
+                if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
                 // Calculate the rendered content bounds within object-fit: contain
                 const mediaAspect = naturalWidth / naturalHeight;
@@ -2190,13 +2195,16 @@
                     offsetY = (containerH - renderedH) / 2;
                 }
 
-                // Size and position the video-wrapper to exactly cover the rendered media pixels
+                // Size and position the video-wrapper to exactly cover the rendered media pixels.
+                // Hide during the write so the browser never paints an intermediate state.
+                videoWrapper.style.opacity = '0';
                 videoWrapper.style.width = Math.round(renderedW) + 'px';
                 videoWrapper.style.height = Math.round(renderedH) + 'px';
                 videoWrapper.style.top = Math.round(offsetY) + 'px';
                 videoWrapper.style.left = Math.round(offsetX) + 'px';
                 videoWrapper.style.transform = '';
                 videoWrapper.style.transformOrigin = '';
+                videoWrapper.style.opacity = '';
 
                 // Update zoom indicator to reflect actual displayed size
                 const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
@@ -2205,37 +2213,38 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar
+                // Position the info bar: left of the image in vertical mode, above in all others.
                 if (infoBar) {
                     if (isVertical) {
-                        // Left of the video: right-align to the video-wrapper's left edge.
-                        // Set height first so the bar has dimensions, then read offsetWidth.
+                        // Fixed 120px wide bar to the left of the image, JS-positioned synchronously
+                        const ibW = 120;
+                        const gap = 6;
+                        infoBar.style.left = Math.round(offsetX - ibW - gap) + 'px';
                         infoBar.style.top = Math.round(offsetY) + 'px';
-                        infoBar.style.height = Math.round(renderedH) + 'px';
                         infoBar.style.bottom = '';
                         infoBar.style.right = '';
-                        infoBar.style.width = '';
-                        // Snap left in a rAF so the browser has painted the bar's width
-                        const snapLeft = (ib, ox) => {
-                            const ibW = ib.offsetWidth;
-                            if (ibW > 0) {
-                                ib.style.left = Math.round(ox - ibW - 6) + 'px';
-                            } else {
-                                requestAnimationFrame(() => snapLeft(ib, ox));
-                            }
-                        };
-                        snapLeft(infoBar, offsetX);
+                        infoBar.style.width = ibW + 'px';
+                        infoBar.style.height = Math.round(renderedH) + 'px';
                     } else {
-                        // Above the video: aligned to the video-wrapper's top edge
+                        // Above the image: position bar so its bottom edge aligns with the image top.
+                        // Clamp to 0 so it never goes above the container boundary.
+                        const ibH = infoBar.offsetHeight || 28;
                         infoBar.style.left = Math.round(offsetX) + 'px';
-                        infoBar.style.top = '';
-                        infoBar.style.bottom = Math.round(containerH - offsetY) + 'px';
+                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
+                        infoBar.style.bottom = '';
                         infoBar.style.right = '';
                         infoBar.style.width = Math.round(renderedW) + 'px';
                         infoBar.style.height = '';
                     }
                 }
             });
+
+            // If any loaded slot had a zero-dimension container (layout not yet committed),
+            // retry after the next paint so those slots get positioned correctly.
+            // Cap retries to avoid infinite loops if a container is permanently zero.
+            if (anySkipped && retriesLeft > 0) {
+                requestAnimationFrame(() => positionLabelsToMedia(retriesLeft - 1));
+            }
         }
 
         // Call positioning on resize
@@ -2288,8 +2297,13 @@
                     switchToAsset(currentAssetIndex);
                     removeDragAndDrop();
 
-                    // Position labels after switching to overlay
-                    setTimeout(positionLabelsToMedia, 100);
+                    // Two nested rAFs ensure CSS class removal reflow is complete
+                    // before positionLabelsToMedia() reads container dimensions.
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            positionLabelsToMedia();
+                        });
+                    });
                 }
             } else {
                 // Enable split view
@@ -2327,11 +2341,16 @@
                     document.body.classList.add('side-by-side');
                 }
 
-                // Position labels and update zoom indicators after layout change
-                setTimeout(() => {
-                    updateSplitViewZoomIndicators();
-                    positionLabelsToMedia();
-                }, 100);
+                // Two nested rAFs guarantee a full layout pass with the new body class
+                // applied before we read offsetWidth/offsetHeight to compute positions.
+                // Opacity is managed per-slot inside positionLabelsToMedia() to avoid
+                // race conditions when setViewMode() is called in rapid succession.
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        updateSplitViewZoomIndicators();
+                        positionLabelsToMedia();
+                    });
+                });
             }
 
             // Update button visibility and active states
