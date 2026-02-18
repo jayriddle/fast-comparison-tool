@@ -514,11 +514,13 @@
             color: #28a745;
         }
 
-        /* Vertical mode info bar: column layout to fit the narrow left-side strip */
+        /* Vertical mode info bar: column layout, fixed width, left of the image */
         body.vertical-stack .asset-info-bar {
             flex-direction: column;
             padding: 8px 10px;
             justify-content: center;
+            width: 120px;
+            box-sizing: border-box;
         }
 
         /* Drag and drop styling */
@@ -2211,16 +2213,27 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar above the video in all modes.
-                // Use top:offsetY (not bottom) so the bar is always inside the container
-                // and never clipped by overflow:hidden when offsetY is 0.
+                // Position the info bar: left of the image in vertical mode, above in all others.
                 if (infoBar) {
-                    infoBar.style.left = Math.round(offsetX) + 'px';
-                    infoBar.style.top = Math.round(offsetY) + 'px';
-                    infoBar.style.bottom = '';
-                    infoBar.style.right = '';
-                    infoBar.style.width = Math.round(renderedW) + 'px';
-                    infoBar.style.height = '';
+                    if (isVertical) {
+                        // Fixed 120px wide bar to the left of the image, JS-positioned synchronously
+                        const ibW = 120;
+                        const gap = 6;
+                        infoBar.style.left = Math.round(offsetX - ibW - gap) + 'px';
+                        infoBar.style.top = Math.round(offsetY) + 'px';
+                        infoBar.style.bottom = '';
+                        infoBar.style.right = '';
+                        infoBar.style.width = ibW + 'px';
+                        infoBar.style.height = Math.round(renderedH) + 'px';
+                    } else {
+                        // Above the image; top:offsetY keeps the bar inside the container
+                        infoBar.style.left = Math.round(offsetX) + 'px';
+                        infoBar.style.top = Math.round(offsetY) + 'px';
+                        infoBar.style.bottom = '';
+                        infoBar.style.right = '';
+                        infoBar.style.width = Math.round(renderedW) + 'px';
+                        infoBar.style.height = '';
+                    }
                 }
             });
 
