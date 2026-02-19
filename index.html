@@ -856,6 +856,23 @@
             transition: none;
         }
 
+        /* Inspect + overlay mode: center the scaled media via flex on media-container.
+           video-wrapper goes static so it flows and is centered by the flex parent.
+           Info bar is hidden — it can't be meaningfully positioned while panning/zooming. */
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .media-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .video-wrapper {
+            position: static;
+        }
+
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .asset-info-bar {
+            display: none;
+        }
+
         .pan-hint {
             position: absolute;
             bottom: 60px;
@@ -1883,11 +1900,8 @@
                     media.style.objectFit = '';
                 });
 
-                // Restore video-wrapper position so positionLabelsToMedia() works correctly
-                document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
-                    vw.style.position = '';
-                });
-                // Re-run label positioning so overlay mode info bar is placed correctly
+                // Re-run label positioning so info bar and wrapper are placed correctly
+                // (CSS removes the fullscreen flex overrides once body.fullscreen is gone)
                 requestAnimationFrame(() => positionLabelsToMedia());
                 
                 // Reset pan state and zoom
@@ -1925,20 +1939,10 @@
             });
             
             if (isFullscreen) {
-                // In inspect mode the video-wrapper's JS-positioned top/left/width/height
-                // (set by positionLabelsToMedia) would pin the image off-center.
-                // Clear those so the overlay-layer's flexbox centering takes over.
-                if (!isSideBySide) {
-                    document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
-                        vw.style.top = '';
-                        vw.style.left = '';
-                        vw.style.width = '';
-                        vw.style.height = '';
-                        vw.style.position = 'static';
-                    });
-                }
-
-                // Apply zoom scaling to all images based on largest dimensions
+                // Apply zoom scaling to all images based on largest dimensions.
+                // In overlay mode, CSS (body.fullscreen:not(.side-by-side)...) makes
+                // media-container a flex centering container and video-wrapper position:static,
+                // so the scaled media is automatically centered without JS wrapper manipulation.
                 document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
                     media.style.imageRendering = 'pixelated';
                     // All assets display at zoom level × the largest asset's size
