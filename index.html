@@ -593,14 +593,16 @@
 
         /* Active audio indicator for split views - shows which audio is playing */
         body.side-by-side .overlay-layer.active-audio .asset-info-bar,
-        body.vertical-stack .overlay-layer.active-audio .asset-info-bar {
-            border: 2px solid #28a745;
-            box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
+        body.vertical-stack .overlay-layer.active-audio .asset-info-bar,
+        body.tripartite .overlay-layer.active-audio .asset-info-bar {
+            background: rgba(60, 60, 60, 0.95);
+            color: #e0e0e0;
         }
 
         body.side-by-side .overlay-layer.active-audio .asset-info-bar .asset-name,
-        body.vertical-stack .overlay-layer.active-audio .asset-info-bar .asset-name {
-            color: #28a745;
+        body.vertical-stack .overlay-layer.active-audio .asset-info-bar .asset-name,
+        body.tripartite .overlay-layer.active-audio .asset-info-bar .asset-name {
+            color: #ffffff;
         }
 
         /* Drag and drop styling */
