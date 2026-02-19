@@ -1122,6 +1122,10 @@
         const INFO_BAR_H = 30;     // px reserved for the asset info bar in overlay mode
         let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
 
+        // Per-layer drag handler references — stored so we can removeEventListener
+        // cleanly without cloning DOM nodes (cloning destroys freshly-loaded media).
+        const dragHandlers = new WeakMap();
+
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
         let _positionDebounceTimer = null;
@@ -2936,66 +2940,82 @@
 
         function setupLayerDragAndDrop() {
             const layers = document.querySelectorAll('.overlay-layer');
-            
+
             layers.forEach(layer => {
                 if (!layer.querySelector('img, video')) return; // Skip empty layers
-                
+
+                // Remove any existing handlers first (idempotent)
+                _removeDragListeners(layer);
+
                 layer.draggable = true;
-                
-                layer.addEventListener('dragstart', function(e) {
-                    this.classList.add('dragging');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/html', this.id);
-                });
-                
-                layer.addEventListener('dragend', function(e) {
-                    this.classList.remove('dragging');
-                });
-                
-                layer.addEventListener('dragover', function(e) {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    this.classList.add('drag-over');
-                });
-                
-                layer.addEventListener('dragleave', function(e) {
-                    this.classList.remove('drag-over');
-                });
-                
-                layer.addEventListener('drop', function(e) {
-                    e.preventDefault();
-                    this.classList.remove('drag-over');
 
-                    const draggedId = e.dataTransfer.getData('text/html');
-                    const draggedElement = document.getElementById(draggedId);
+                // Build named handler functions so they can be removed later without
+                // cloning the DOM node (cloning destroys freshly-loaded media elements).
+                const handlers = {
+                    dragstart(e) {
+                        layer.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/html', layer.id);
+                    },
+                    dragend(e) {
+                        layer.classList.remove('dragging');
+                    },
+                    dragover(e) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        layer.classList.add('drag-over');
+                    },
+                    dragleave(e) {
+                        layer.classList.remove('drag-over');
+                    },
+                    drop(e) {
+                        e.preventDefault();
+                        layer.classList.remove('drag-over');
 
-                    if (draggedElement && draggedElement !== this) {
-                        // Swap positions in DOM
-                        const container = this.parentNode;
-                        const allLayers = Array.from(container.querySelectorAll('.overlay-layer'));
-                        const draggedIndex = allLayers.indexOf(draggedElement);
-                        const targetIndex = allLayers.indexOf(this);
+                        const draggedId = e.dataTransfer.getData('text/html');
+                        const draggedElement = document.getElementById(draggedId);
 
-                        if (draggedIndex < targetIndex) {
-                            this.parentNode.insertBefore(draggedElement, this.nextSibling);
-                        } else {
-                            this.parentNode.insertBefore(draggedElement, this);
+                        if (draggedElement && draggedElement !== layer) {
+                            const container = layer.parentNode;
+                            const allLayers = Array.from(container.querySelectorAll('.overlay-layer'));
+                            const draggedIndex = allLayers.indexOf(draggedElement);
+                            const targetIndex = allLayers.indexOf(layer);
+
+                            if (draggedIndex < targetIndex) {
+                                layer.parentNode.insertBefore(draggedElement, layer.nextSibling);
+                            } else {
+                                layer.parentNode.insertBefore(draggedElement, layer);
+                            }
+
+                            syncLayerOrderWithDropZones();
                         }
-
-                        // Sync order with drop zones and asset array
-                        syncLayerOrderWithDropZones();
                     }
-                });
+                };
+
+                dragHandlers.set(layer, handlers);
+                layer.addEventListener('dragstart', handlers.dragstart);
+                layer.addEventListener('dragend',   handlers.dragend);
+                layer.addEventListener('dragover',  handlers.dragover);
+                layer.addEventListener('dragleave', handlers.dragleave);
+                layer.addEventListener('drop',      handlers.drop);
             });
         }
 
+        function _removeDragListeners(layer) {
+            const handlers = dragHandlers.get(layer);
+            if (!handlers) return;
+            layer.removeEventListener('dragstart', handlers.dragstart);
+            layer.removeEventListener('dragend',   handlers.dragend);
+            layer.removeEventListener('dragover',  handlers.dragover);
+            layer.removeEventListener('dragleave', handlers.dragleave);
+            layer.removeEventListener('drop',      handlers.drop);
+            dragHandlers.delete(layer);
+        }
+
         function removeDragAndDrop() {
-            const layers = document.querySelectorAll('.overlay-layer');
-            layers.forEach(layer => {
+            document.querySelectorAll('.overlay-layer').forEach(layer => {
                 layer.draggable = false;
-                // Remove all event listeners by cloning and replacing
-                const newLayer = layer.cloneNode(true);
-                layer.parentNode.replaceChild(newLayer, layer);
+                _removeDragListeners(layer);
             });
         }
 
