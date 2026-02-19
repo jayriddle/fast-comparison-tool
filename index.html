@@ -2208,6 +2208,7 @@
             document.body.classList.remove('tripartite');
             document.body.classList.remove('two-asset');
             isSideBySide = false;
+            viewActivating = false;
             layoutMode = 'horizontal';
 
             // Restore all layers to visible for next load
@@ -2298,6 +2299,7 @@
         }
 
         let isSideBySide = false;
+        let viewActivating = false;    // true while checkAllLoaded() activation is in progress for current load batch
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
         
         function toggleSideBySide() {
@@ -2889,18 +2891,22 @@
                 return;
             }
 
-            // Already activated — subsequent img.load / loadedmetadata events (one per file)
-            // would otherwise re-run switchToAsset + setViewMode destructively.  Just
-            // reposition so the newly-decoded dimensions are reflected.
-            if (document.getElementById('comparisonView').classList.contains('active')) {
-                console.log('checkAllLoaded: view already active, repositioning only');
+            // Idempotency guard: checkAllLoaded() fires once per img.load/loadedmetadata
+            // event, so with 3 images it fires 3 times once all are loaded.  Only the
+            // first call should run the full activation; subsequent calls just reposition
+            // so newly-decoded dimensions are reflected without destructive re-runs of
+            // switchToAsset + setViewMode.
+            // NOTE: we cannot check comparisonView.classList.contains('active') here
+            // because clearAllMedia() removes that class before new files start loading.
+            if (viewActivating) {
+                console.log('checkAllLoaded: activation already in progress, repositioning only');
                 positionLabelsToMediaDebounced();
                 return;
             }
 
-            // First time: full activation
             // Need at least 2 files loaded (Edit A and Edit B minimum)
             if (loadedCount >= 2) {
+                viewActivating = true; // prevent re-entry from subsequent img.load events
                 console.log('2+ files loaded, activating comparison view');
                 
                 // Hide quick start popup if showing
