@@ -2138,6 +2138,28 @@
             fitZoom = 1;
             panOffsetX = 0;
             panOffsetY = 0;
+            isPanning = false;
+
+            // Stop video progress loop — will be restarted if new load includes videos
+            stopProgressUpdateLoop();
+
+            // Reset audio mute state and button UI for all slots
+            ['original', 'editA', 'editB'].forEach(slot => {
+                audioMuteStates[slot] = false;
+                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                const btn = document.getElementById(`audio${slotName}`);
+                if (btn) {
+                    btn.classList.remove('muted');
+                    const icon = btn.querySelector('.audio-mute-icon');
+                    if (icon) icon.textContent = '🔊';
+                }
+            });
+            currentAudioSource = 'original';
+
+            // Discard undo/redo history — stale states from the previous session
+            // are meaningless after a fresh load
+            undoStack = [];
+            redoStack = [];
 
             document.body.classList.remove('fullscreen');
             document.body.classList.remove('side-by-side');
