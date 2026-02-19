@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Media Comparison Tool</title>
+    <title>WarpDiff</title>
     <style>
         * {
             margin: 0;
@@ -856,6 +856,23 @@
             transition: none;
         }
 
+        /* Inspect + overlay mode: center the scaled media via flex on media-container.
+           video-wrapper goes static so it flows and is centered by the flex parent.
+           Info bar is hidden — it can't be meaningfully positioned while panning/zooming. */
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .media-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .video-wrapper {
+            position: static;
+        }
+
+        body.fullscreen:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-layer .asset-info-bar {
+            display: none !important;
+        }
+
         .pan-hint {
             position: absolute;
             bottom: 60px;
@@ -924,7 +941,7 @@
     <div class="container">
         <div class="header">
             <div style="position: relative;">
-                <span style="font-size: 16px; font-weight: 600;">Fast Media Comparison</span>
+                <span style="font-size: 16px; font-weight: 600;">WarpDiff</span>
                 <button class="quick-start-btn" onclick="toggleQuickStart()">Quick Start</button>
                 
                 <!-- Quick Start Popup -->
@@ -972,10 +989,7 @@
                     Tripartite
                     <div class="help-tooltip">Original left, Edits stacked right</div>
                 </button>
-                <button class="position-toggle" onclick="toggleSplitFitMode()" id="splitFitToggle" data-help="Toggle between fit (no crop) and fill (crop) in split view" style="display: none;">
-                    Fit (No Crop)
-                    <div class="help-tooltip">Toggle between fit (no crop) and fill (crop) in split view</div>
-                </button>
+
             </div>
             <div>
                 <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
@@ -1091,9 +1105,12 @@
         let redoStack = [];
         const MAX_UNDO_STATES = 20;
         
-        // New zoom levels
-        const zoomLevels = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8];
-        let currentZoomIndex = 2; // Start at 1.0 (index 2)
+        // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
+        // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
+        const ZOOM_STEP = Math.SQRT2;
+        const ZOOM_MIN = 0.05;  // 5% — effectively a hard floor
+        const ZOOM_MAX = 32;    // 3200% — hard ceiling
+        let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
@@ -1836,9 +1853,33 @@
             
             if (isFullscreen) {
                 document.body.classList.add('fullscreen');
-                // Set zoom to 1x on entering fullscreen (actual size or fit)
-                zoomLevel = 1;
-                currentZoomIndex = 2; // Sync index to 1.0× position in array
+
+                // Find largest native dimensions across all loaded assets
+                let maxNativeW = 0, maxNativeH = 0;
+                ['original', 'editA', 'editB'].forEach(slot => {
+                    if (mediaData[slot]) {
+                        const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
+                        const media = layer.querySelector('img, video');
+                        if (media) {
+                            maxNativeW = Math.max(maxNativeW, media.naturalWidth || media.videoWidth || 0);
+                            maxNativeH = Math.max(maxNativeH, media.naturalHeight || media.videoHeight || 0);
+                        }
+                    }
+                });
+
+                // Fit largest asset to viewport. Use window.innerWidth/Height — always the
+                // true CSS viewport size regardless of content overflow. Header is
+                // position:absolute in fullscreen so subtract its height visually.
+                const HEADER_OVERLAP = 50;
+                const viewW = window.innerWidth;
+                const viewH = window.innerHeight - HEADER_OVERLAP;
+                fitZoom = (maxNativeW > 0 && maxNativeH > 0)
+                    ? Math.min(viewW / maxNativeW, viewH / maxNativeH)
+                    : 1;
+
+                zoomLevel = fitZoom;
+                panOffsetX = 0;
+                panOffsetY = 0;
                 applyZoom();
                 setupPanHandlers();
             } else {
@@ -1859,15 +1900,16 @@
                     media.style.transform = '';
                     media.style.objectFit = '';
                 });
+
+                // Re-run label positioning so info bar and wrapper are placed correctly
+                // (CSS removes the fullscreen flex overrides once body.fullscreen is gone)
+                requestAnimationFrame(() => positionLabelsToMedia());
                 
                 // Reset pan state and zoom
                 panOffsetX = 0;
                 panOffsetY = 0;
                 zoomLevel = 1;
-                
-                // Update zoom display
-                document.getElementById('zoomLevelDisplay').textContent = '1.0×';
-                
+
                 // Remove pan handlers
                 const container = document.getElementById('overlayContainer');
                 container.removeEventListener('mousedown', handlePanStart);
@@ -1897,53 +1939,85 @@
             });
             
             if (isFullscreen) {
-                // Apply zoom scaling to all images based on largest dimensions
+                const scaledW = Math.round(maxWidth * zoomLevel);
+                const scaledH = Math.round(maxHeight * zoomLevel);
+
+                // Size every video-wrapper to the scaled canvas dimensions.
+                // In overlay mode: CSS makes wrapper position:static and media-container a
+                //   flex centering container, so clearing top/left lets flex center it.
+                // In split modes: wrapper is absolute-positioned inside each cell; sizing
+                //   it to scaledW×scaledH makes all cells render at identical zoom.
+                // Clear info bar inline styles so CSS display:none applies in overlay mode.
+                document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
+                    vw.style.top = isSideBySide ? vw.style.top : '';
+                    vw.style.left = isSideBySide ? vw.style.left : '';
+                    vw.style.width = scaledW + 'px';
+                    vw.style.height = scaledH + 'px';
+                });
+                if (!isSideBySide) {
+                    document.querySelectorAll('.overlay-layer .asset-info-bar').forEach(bar => {
+                        bar.style.top = '';
+                        bar.style.left = '';
+                        bar.style.width = '';
+                        bar.style.height = '';
+                        bar.style.bottom = '';
+                        bar.style.right = '';
+                    });
+                }
+
+                // img/video fills its wrapper 100%×100% — wrapper is sized above.
                 document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
                     media.style.imageRendering = 'pixelated';
-                    // All assets display at zoom level × the largest asset's size
-                    media.style.width = (maxWidth * zoomLevel) + 'px';
-                    media.style.height = (maxHeight * zoomLevel) + 'px';
+                    media.style.width = '100%';
+                    media.style.height = '100%';
                     media.style.maxWidth = 'none';
                     media.style.maxHeight = 'none';
                     media.style.objectFit = 'contain';
                 });
             }
             
-            // Update both zoom indicators
-            const zoomText = zoomLevel.toFixed(1) + '×';
+            // Show 'Fit' when at the fit-to-viewport baseline, otherwise format the level.
+            const atFit = isFullscreen && Math.abs(zoomLevel - fitZoom) < 0.001;
+            const zoomText = atFit ? 'Fit' : zoomLevel.toFixed(2) + '×';
             document.getElementById('zoomIndicator').textContent = zoomText;
-            document.getElementById('zoomLevelDisplay').textContent = zoomText;
         }
 
         function zoomIn() {
             if (!isFullscreen) return;
-            currentZoomIndex = Math.min(currentZoomIndex + 1, zoomLevels.length - 1);
-            zoomLevel = zoomLevels[currentZoomIndex];
+            zoomLevel = Math.min(zoomLevel * ZOOM_STEP, ZOOM_MAX);
             applyZoom();
-            
+
             // Reapply pan offset to active image
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
                 const img = activeLayer.querySelector('img, video');
-                if (img) {
-                    img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-                }
+                if (img) img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
             }
         }
 
         function zoomOut() {
             if (!isFullscreen) return;
-            currentZoomIndex = Math.max(currentZoomIndex - 1, 0);
-            zoomLevel = zoomLevels[currentZoomIndex];
+            zoomLevel = Math.max(zoomLevel / ZOOM_STEP, ZOOM_MIN);
             applyZoom();
-            
+
             // Reapply pan offset to active image
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
                 const img = activeLayer.querySelector('img, video');
-                if (img) {
-                    img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-                }
+                if (img) img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+            }
+        }
+
+        function resetFitZoom() {
+            if (!isFullscreen) return;
+            zoomLevel = fitZoom;
+            panOffsetX = 0;
+            panOffsetY = 0;
+            applyZoom();
+            const activeLayer = document.querySelector('.overlay-layer.active');
+            if (activeLayer) {
+                const img = activeLayer.querySelector('img, video');
+                if (img) img.style.transform = '';
             }
         }
 
@@ -2119,20 +2193,6 @@
                 });
                 switchToAsset(currentAssetIndex);
                 removeDragAndDrop();
-            }
-        }
-
-        function toggleSplitFitMode() {
-            saveState();
-            
-            if (splitViewFitMode === 'contain') {
-                splitViewFitMode = 'cover';
-                document.body.classList.add('fit-cover');
-                document.getElementById('splitFitToggle').textContent = 'Fill (Crop)';
-            } else {
-                splitViewFitMode = 'contain';
-                document.body.classList.remove('fit-cover');
-                document.getElementById('splitFitToggle').textContent = 'Fit (No Crop)';
             }
         }
 
@@ -2599,7 +2659,6 @@
             const horizontalBtn = document.getElementById('horizontalViewBtn');
             const verticalBtn = document.getElementById('verticalViewBtn');
             const tripartiteBtn = document.getElementById('tripartiteViewBtn');
-            const splitFitBtn = document.getElementById('splitFitToggle');
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
             const allThree = loadedCount === 3;
             // 2-asset mode has auto-picked layout; hide H/V buttons so user can't manually cycle
@@ -2612,14 +2671,12 @@
                 horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
-                splitFitBtn.style.display = 'none';
             } else {
-                // In split mode: show overlay btn + mode-appropriate split buttons + fit toggle
+                // In split mode: show overlay btn + mode-appropriate split buttons
                 overlayBtn.style.display = 'inline-block';
                 horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
-                splitFitBtn.style.display = 'inline-block';
 
                 // Reset all highlight styles
                 overlayBtn.style.background = '';
@@ -2828,6 +2885,7 @@
                 isSideBySide: isSideBySide,
                 layoutMode: layoutMode,
                 zoomLevel: zoomLevel,
+                fitZoom: fitZoom,
                 panOffsetX: panOffsetX,
                 panOffsetY: panOffsetY,
 
@@ -2895,6 +2953,7 @@
             // Restore basic state
             currentAssetIndex = state.currentAssetIndex;
             zoomLevel = state.zoomLevel;
+            fitZoom = (state.fitZoom !== undefined) ? state.fitZoom : 1;
             panOffsetX = state.panOffsetX;
             panOffsetY = state.panOffsetY;
 
@@ -2951,7 +3010,8 @@
             
             // Update UI
             document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
-            document.getElementById('zoomLevelDisplay').textContent = zoomLevel.toFixed(1) + '×';
+            const _atFit = isFullscreen && Math.abs(zoomLevel - fitZoom) < 0.001;
+            document.getElementById('zoomIndicator').textContent = _atFit ? 'Fit' : zoomLevel.toFixed(2) + '×';
             
             console.log('State restored');
         }
@@ -3030,6 +3090,9 @@
                 if (mediaData[assetOrder[nextIndex]]) {
                     switchToAsset(nextIndex);
                 }
+            } else if (e.key === 'i' || e.key === 'I') {
+                e.preventDefault();
+                toggleFullscreen();
             } else if (e.key === 'f' || e.key === 'F' || e.key === 'Escape') {
                 e.preventDefault();
                 toggleFullscreen();
@@ -3047,6 +3110,9 @@
                     toggleFullscreen();
                 }
                 zoomOut();
+            } else if (e.key === '0') {
+                e.preventDefault();
+                resetFitZoom();
             } else if (e.key === ' ') {
                 // Spacebar toggles play/pause for videos
                 e.preventDefault();
@@ -3059,6 +3125,17 @@
                 // M key toggles mute
                 e.preventDefault();
                 toggleMute();
+            } else if (e.key === 'o' || e.key === 'O') {
+                // O key toggles overlay <-> split (tripartite for 3 assets, auto-layout for 2)
+                e.preventDefault();
+                const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
+                if (isSideBySide) {
+                    setViewMode('overlay');
+                } else if (allThreeLoaded) {
+                    setViewMode('tripartite');
+                } else {
+                    setViewMode(layoutMode);
+                }
             } else if (e.key === 's' || e.key === 'S') {
                 // S key cycles through view modes depending on asset count
                 e.preventDefault();
@@ -3116,9 +3193,11 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay / split</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Fullscreen</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>I</kbd></span><span class="shortcut-desc">Inspect mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset to fit</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
         </div>
