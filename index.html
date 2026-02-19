@@ -1939,10 +1939,30 @@
             });
             
             if (isFullscreen) {
+                // In overlay inspect mode, clear the video-wrapper's JS-set inline
+                // top/left/width/height so CSS flex-centering on media-container takes over.
+                // Also clear info bar inline styles so CSS display:none applies cleanly.
+                if (!isSideBySide) {
+                    document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
+                        vw.style.top = '';
+                        vw.style.left = '';
+                        vw.style.width = '';
+                        vw.style.height = '';
+                    });
+                    document.querySelectorAll('.overlay-layer .asset-info-bar').forEach(bar => {
+                        bar.style.top = '';
+                        bar.style.left = '';
+                        bar.style.width = '';
+                        bar.style.height = '';
+                        bar.style.bottom = '';
+                        bar.style.right = '';
+                    });
+                }
+
                 // Apply zoom scaling to all images based on largest dimensions.
-                // In overlay mode, CSS (body.fullscreen:not(.side-by-side)...) makes
-                // media-container a flex centering container and video-wrapper position:static,
-                // so the scaled media is automatically centered without JS wrapper manipulation.
+                // CSS (body.fullscreen:not(.side-by-side)...) makes media-container a flex
+                // centering container and video-wrapper position:static, so the scaled media
+                // is centered automatically once the wrapper's inline size is cleared.
                 document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
                     media.style.imageRendering = 'pixelated';
                     // All assets display at zoom level × the largest asset's size
