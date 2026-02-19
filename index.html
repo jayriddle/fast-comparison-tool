@@ -2244,14 +2244,15 @@
                 });
             }
 
-            // In tripartite mode, compute a shared rendered HEIGHT so all three assets
-            // appear the same size. Each slot's contain-fit height is computed independently
-            // (Original has a tall cell; A/B have half-height cells), then we take the minimum.
-            // Width follows each asset's own aspect ratio at that shared height, clamped to
-            // the cell width so nothing overflows. Original is flush-right, A/B flush-left.
+            // In tripartite mode, compute a shared rendered dimension so all three assets
+            // appear the same size. Mirrors overlay normalization: portrait assets (nw < nh)
+            // share rendered WIDTH (same as minPortraitW in overlay); landscape assets share
+            // rendered HEIGHT (same as minLandscapeH in overlay).
+            // Original is flush-right; A/B are flush-left at the A/B boundary.
             const tripartiteLayout = {}; // slot → { rw, rh, cw, ch, sharedZoom }
             if (isTripartite) {
-                let minH = Infinity;
+                let minW = Infinity, minH = Infinity;
+                let widthConstrained = false; // true = portrait assets → share width; false → share height
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2268,19 +2269,30 @@
                     const cw = layer.offsetWidth;
                     const ch = layer.offsetHeight;
                     if (!cw || !ch) { anySkipped = true; return; }
-                    // Contain-fit rendered height: tallest the image can be without overflowing cell
+                    // Mirror overlay mode: portrait = nw < nh → width is the shared dimension
+                    if (nw < nh) widthConstrained = true;
+                    // Contain-fit rendered size within own cell
+                    const fitW = Math.min(cw, Math.floor(ch * nw / nh));
                     const fitH = Math.min(ch, Math.floor(cw * nh / nw));
-                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitH };
+                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitW, fitH };
+                    minW = Math.min(minW, fitW);
                     minH = Math.min(minH, fitH);
                 });
-                // All slots render at the shared minH (same physical pixels tall = same apparent size).
-                // Width follows each slot's aspect ratio, clamped to cell width.
+                // Apply shared dimension: same width (portrait) or same height (landscape)
                 slots.forEach(slot => {
                     const d = tripartiteLayout[slot];
                     if (!d) return;
-                    d.rh = minH;
-                    d.rw = Math.min(d.cw, Math.round(minH * d.nw / d.nh));
-                    d.sharedZoom = minH / d.nh;
+                    if (widthConstrained) {
+                        // Portrait: share width, height follows aspect ratio, clamped to cell height
+                        d.rw = minW;
+                        d.rh = Math.min(d.ch, Math.round(minW * d.nh / d.nw));
+                        d.sharedZoom = d.rw / d.nw;
+                    } else {
+                        // Landscape: share height, width follows aspect ratio, clamped to cell width
+                        d.rh = minH;
+                        d.rw = Math.min(d.cw, Math.round(minH * d.nw / d.nh));
+                        d.sharedZoom = d.rh / d.nh;
+                    }
                 });
             }
 
