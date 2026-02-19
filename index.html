@@ -1096,6 +1096,7 @@
         let currentAssetIndex = 0;
         let isFullscreen = false;
         let hasVideos = false;
+        let isMuted = false;
         let isPanning = false;
         let panStartX = 0;
         let panStartY = 0;
@@ -1116,6 +1117,8 @@
         const ZOOM_STEP = Math.SQRT2;
         const ZOOM_MIN = 0.05;  // 5% — effectively a hard floor
         const ZOOM_MAX = 32;    // 3200% — hard ceiling
+        const HEADER_OVERLAP = 50; // px reserved for the header bar in inspect mode
+        const INFO_BAR_H = 30;     // px reserved for the asset info bar in overlay mode
         let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
@@ -1717,7 +1720,7 @@
             // Show warning if any issues found
             const warningEl = document.getElementById('identicalWarning');
             if (warnings.length > 0) {
-                warningEl.innerHTML = `⚠️ ${warnings.join(' | ')}`;
+                warningEl.textContent = `⚠️ ${warnings.join(' | ')}`;
                 warningEl.classList.add('show');
                 
                 // Auto-hide after 15 seconds (longer since there may be more info)
@@ -1889,7 +1892,6 @@
                 // Fit largest asset to viewport. Use window.innerWidth/Height — always the
                 // true CSS viewport size regardless of content overflow. Header is
                 // position:absolute in fullscreen so subtract its height visually.
-                const HEADER_OVERLAP = 50;
                 const viewW = window.innerWidth;
                 const viewH = window.innerHeight - HEADER_OVERLAP;
                 fitZoom = (maxNativeW > 0 && maxNativeH > 0)
@@ -1995,7 +1997,6 @@
                     // Center wrapper in the area below the header using position:fixed so
                     // it escapes any parent clipping (tripartite grid cells have overflow:hidden).
                     // HEADER_OVERLAP matches the value used when computing fitZoom.
-                    const HEADER_OVERLAP = 50;
                     const availH = window.innerHeight - HEADER_OVERLAP;
                     const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
                     const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
@@ -2088,7 +2089,11 @@
 
         function setupPanHandlers() {
             const container = document.getElementById('overlayContainer');
-            
+            // Remove first to prevent double-attachment on repeated inspect entries
+            container.removeEventListener('mousedown', handlePanStart);
+            container.removeEventListener('mousemove', handlePanMove);
+            container.removeEventListener('mouseup', handlePanEnd);
+            container.removeEventListener('mouseleave', handlePanEnd);
             container.addEventListener('mousedown', handlePanStart);
             container.addEventListener('mousemove', handlePanMove);
             container.addEventListener('mouseup', handlePanEnd);
@@ -2372,7 +2377,6 @@
                 // Pass 1: compute each slot's contain-fit rendered width and height.
                 // Reserve INFO_BAR_H pixels at the top so the info bar always has room
                 // to float above the image without overlapping it.
-                const INFO_BAR_H = 30; // matches approximate asset-info-bar height
                 const fitDims = {}; // slot → { fw, fh, portrait }
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
@@ -2524,7 +2528,6 @@
                 // assets occupy the same physical screen footprint. Center within the area
                 // below the info bar (INFO_BAR_H reserved at top) so the bar always floats above.
                 if (isOverlay && normalizeScales[slot] !== undefined) {
-                    const INFO_BAR_H = 30;
                     const scale = normalizeScales[slot];
                     renderedW = renderedW * scale;
                     renderedH = renderedH * scale;
@@ -2632,7 +2635,13 @@
         }
 
         // Call positioning on resize
-        window.addEventListener('resize', positionLabelsToMedia);
+        window.addEventListener('resize', () => {
+            if (isFullscreen) {
+                applyZoom(); // refit image to new viewport size in inspect mode
+            } else {
+                positionLabelsToMediaDebounced(); // debounced: expensive 3-pass layout
+            }
+        });
 
         function setViewMode(mode) {
             saveState(); // Save state before changing view
@@ -3135,7 +3144,6 @@
             console.log('State restored');
         }
 
-        let isMuted = false;
         function toggleMute() {
             saveState(); // Save state before muting
             isMuted = !isMuted;
