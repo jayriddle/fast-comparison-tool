@@ -1260,6 +1260,11 @@
                         // Setup video handlers
                         setupVideoHandlers(video, slot);
 
+                        // Dimensions are now available — safe to activate the view.
+                        // checkAllLoaded() is called here (not in reader.onload) so that
+                        // positionLabelsToMedia() always has valid videoWidth/videoHeight.
+                        checkAllLoaded();
+
                         // Position labels after video loads — debounced so all slots
                         // are measured together once rapid successive loads settle.
                         positionLabelsToMediaDebounced();
@@ -1285,6 +1290,12 @@
                         if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
                         updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
                         updateSplitViewZoomIndicators();
+
+                        // Dimensions are now available — safe to activate the view.
+                        // checkAllLoaded() is called here (not in reader.onload) so that
+                        // positionLabelsToMedia() always has valid naturalWidth/naturalHeight.
+                        checkAllLoaded();
+
                         // Debounced so all slots are measured together once rapid successive loads settle.
                         positionLabelsToMediaDebounced();
                     });
@@ -1338,7 +1349,11 @@
 
                 layer.appendChild(mediaContainer);
 
-                checkAllLoaded();
+                // NOTE: checkAllLoaded() is NOT called here. It is called from the
+                // img.load / video.loadedmetadata callbacks instead, after naturalWidth /
+                // videoWidth are available. Calling it here (reader.onload) meant
+                // positionLabelsToMedia() ran before dimensions were known, so every
+                // slot read naturalWidth=0 and the wrappers stayed invisible.
             };
 
             reader.readAsDataURL(file);
