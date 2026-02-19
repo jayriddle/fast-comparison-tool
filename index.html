@@ -972,10 +972,7 @@
                     Tripartite
                     <div class="help-tooltip">Original left, Edits stacked right</div>
                 </button>
-                <button class="position-toggle" onclick="toggleSplitFitMode()" id="splitFitToggle" data-help="Toggle between fit (no crop) and fill (crop) in split view" style="display: none;">
-                    Fit (No Crop)
-                    <div class="help-tooltip">Toggle between fit (no crop) and fill (crop) in split view</div>
-                </button>
+
             </div>
             <div>
                 <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
@@ -2122,20 +2119,6 @@
             }
         }
 
-        function toggleSplitFitMode() {
-            saveState();
-            
-            if (splitViewFitMode === 'contain') {
-                splitViewFitMode = 'cover';
-                document.body.classList.add('fit-cover');
-                document.getElementById('splitFitToggle').textContent = 'Fill (Crop)';
-            } else {
-                splitViewFitMode = 'contain';
-                document.body.classList.remove('fit-cover');
-                document.getElementById('splitFitToggle').textContent = 'Fit (No Crop)';
-            }
-        }
-
         function updateSplitViewZoomIndicators() {
             // Only update in split view modes
             if (!isSideBySide && !document.body.classList.contains('vertical-stack')) {
@@ -2599,7 +2582,6 @@
             const horizontalBtn = document.getElementById('horizontalViewBtn');
             const verticalBtn = document.getElementById('verticalViewBtn');
             const tripartiteBtn = document.getElementById('tripartiteViewBtn');
-            const splitFitBtn = document.getElementById('splitFitToggle');
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
             const allThree = loadedCount === 3;
             // 2-asset mode has auto-picked layout; hide H/V buttons so user can't manually cycle
@@ -2612,14 +2594,12 @@
                 horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
-                splitFitBtn.style.display = 'none';
             } else {
-                // In split mode: show overlay btn + mode-appropriate split buttons + fit toggle
+                // In split mode: show overlay btn + mode-appropriate split buttons
                 overlayBtn.style.display = 'inline-block';
                 horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
-                splitFitBtn.style.display = 'inline-block';
 
                 // Reset all highlight styles
                 overlayBtn.style.background = '';
