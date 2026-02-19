@@ -2149,6 +2149,11 @@
             });
             document.getElementById('comparisonView').classList.remove('active');
             document.getElementById('resetBtn').style.display = 'none';
+            // Hide all view mode buttons — they'll be re-shown when assets load
+            ['overlayViewBtn', 'horizontalViewBtn', 'verticalViewBtn', 'tripartiteViewBtn'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
             document.getElementById('videoControls').classList.remove('active');
 
             // Clear layers
