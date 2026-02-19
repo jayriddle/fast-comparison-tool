@@ -2329,7 +2329,10 @@
             // All others scale down to match, so stepping through assets feels like the same image size.
             const normalizeScales = {}; // slot → multiplier (≤ 1) to apply to contain-fit renderedW/H
             if (isOverlay) {
-                // Pass 1: compute each slot's contain-fit rendered width and height
+                // Pass 1: compute each slot's contain-fit rendered width and height.
+                // Reserve INFO_BAR_H pixels at the top so the info bar always has room
+                // to float above the image without overlapping it.
+                const INFO_BAR_H = 30; // matches approximate asset-info-bar height
                 const fitDims = {}; // slot → { fw, fh, portrait }
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
@@ -2345,9 +2348,12 @@
                     const ch = mediaContainer.offsetHeight;
                     if (!cw || !ch) { anySkipped = true; return; }
                     const aspect = nw / nh;
-                    const containerAspect = cw / ch;
+                    // Subtract INFO_BAR_H from available height so the image never fills
+                    // flush to the top — the bar can always sit above it.
+                    const availH = ch - INFO_BAR_H;
+                    const containerAspect = cw / availH;
                     let fw, fh;
-                    if (containerAspect > aspect) { fh = ch; fw = fh * aspect; }
+                    if (containerAspect > aspect) { fh = availH; fw = fh * aspect; }
                     else { fw = cw; fh = fw / aspect; }
                     fitDims[slot] = { fw, fh, portrait: nw < nh };
                 });
@@ -2475,13 +2481,16 @@
                 }
 
                 // In overlay mode, scale down to the smallest asset's rendered area so all
-                // assets occupy the same physical screen footprint.
+                // assets occupy the same physical screen footprint. Center within the area
+                // below the info bar (INFO_BAR_H reserved at top) so the bar always floats above.
                 if (isOverlay && normalizeScales[slot] !== undefined) {
+                    const INFO_BAR_H = 30;
                     const scale = normalizeScales[slot];
                     renderedW = renderedW * scale;
                     renderedH = renderedH * scale;
                     offsetX = (containerW - renderedW) / 2;
-                    offsetY = (containerH - renderedH) / 2;
+                    const availH = containerH - INFO_BAR_H;
+                    offsetY = INFO_BAR_H + Math.max(0, (availH - renderedH) / 2);
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
@@ -2561,7 +2570,8 @@
                 }
 
                 // Position the info bar above the video in all non-tripartite modes.
-                // Clamp to 0 so it never goes above the container boundary.
+                // In overlay mode, offsetY is always >= INFO_BAR_H so there's always room.
+                // In split modes, clamp to 0 so it never goes above the container boundary.
                 if (infoBar) {
                     const ibH = infoBar.offsetHeight || 28;
                     infoBar.style.left = Math.round(offsetX) + 'px';
