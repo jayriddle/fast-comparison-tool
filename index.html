@@ -11,6 +11,10 @@
             box-sizing: border-box;
         }
 
+        html {
+            overflow: hidden;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: rgb(32, 32, 32);
@@ -2403,18 +2407,6 @@
             const isTripartite = document.body.classList.contains('tripartite');
             const isOverlay = !isSideBySide && !isVertical;
 
-            // In overlay mode all assets use the same fixed anchor point so that stepping
-            // through assets never causes a positional shift.  Each asset is contain-fitted
-            // into (containerW × availH) independently, then centered at the midpoint of
-            // that area.  No cross-asset normalisation is applied — sizes may vary slightly
-            // but the center never moves.
-            // normalizeScales is kept as a no-op map (all 1) so the per-slot application
-            // block below still runs its centering formula uniformly.
-            const normalizeScales = {};
-            if (isOverlay) {
-                slots.forEach(slot => { normalizeScales[slot] = 1; });
-            }
-
             // In tripartite mode, compute a shared rendered dimension so all three assets
             // appear the same size. Portrait assets (nw < nh) share rendered WIDTH;
             // landscape assets share rendered HEIGHT.
@@ -2488,33 +2480,30 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
+                // In overlay mode the info bar occupies INFO_BAR_H px at the top, so the
+                // available area for the image is shorter. Contain-fit into that reduced area
+                // so the image is never taller than the visible space.
+                const fitH = isOverlay ? containerH - INFO_BAR_H : containerH;
+
                 // Calculate the rendered content bounds within object-fit: contain
                 const mediaAspect = naturalWidth / naturalHeight;
-                const containerAspect = containerW / containerH;
+                const containerAspect = containerW / fitH;
 
                 let renderedW, renderedH, offsetX, offsetY;
                 if (containerAspect > mediaAspect) {
-                    renderedH = containerH;
+                    // Container is wider than image — height-constrained
+                    renderedH = fitH;
                     renderedW = renderedH * mediaAspect;
                     offsetX = (containerW - renderedW) / 2;
-                    offsetY = 0;
+                    offsetY = isOverlay ? INFO_BAR_H : 0;
                 } else {
+                    // Container is taller than image — width-constrained
                     renderedW = containerW;
                     renderedH = renderedW / mediaAspect;
                     offsetX = 0;
-                    offsetY = (containerH - renderedH) / 2;
-                }
-
-                // In overlay mode, scale down to the smallest asset's rendered area so all
-                // assets occupy the same physical screen footprint. Center within the area
-                // below the info bar (INFO_BAR_H reserved at top) so the bar always floats above.
-                if (isOverlay && normalizeScales[slot] !== undefined) {
-                    const scale = normalizeScales[slot];
-                    renderedW = renderedW * scale;
-                    renderedH = renderedH * scale;
-                    offsetX = (containerW - renderedW) / 2;
-                    const availH = containerH - INFO_BAR_H;
-                    offsetY = INFO_BAR_H + Math.max(0, (availH - renderedH) / 2);
+                    offsetY = isOverlay
+                        ? INFO_BAR_H + (fitH - renderedH) / 2
+                        : (containerH - renderedH) / 2;
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
@@ -2585,6 +2574,16 @@
                 videoWrapper.style.transform = '';
                 videoWrapper.style.transformOrigin = '';
                 videoWrapper.style.opacity = '';
+
+                // In overlay mode the .overlay-layer img CSS rule sets width:auto which
+                // prevents the image from filling the JS-sized wrapper. Force 100%×100%
+                // so the image scales to exactly the wrapper dimensions.
+                if (isOverlay) {
+                    media.style.width = '100%';
+                    media.style.height = '100%';
+                    media.style.maxWidth = 'none';
+                    media.style.maxHeight = 'none';
+                }
 
                 // Update zoom indicator to reflect actual displayed size
                 const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
