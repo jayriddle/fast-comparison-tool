@@ -3099,9 +3099,16 @@
                 e.preventDefault();
                 toggleMute();
             } else if (e.key === 'o' || e.key === 'O') {
-                // O key goes directly to overlay mode
+                // O key toggles overlay <-> split (tripartite for 3 assets, auto-layout for 2)
                 e.preventDefault();
-                setViewMode('overlay');
+                const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
+                if (isSideBySide) {
+                    setViewMode('overlay');
+                } else if (allThreeLoaded) {
+                    setViewMode('tripartite');
+                } else {
+                    setViewMode(layoutMode);
+                }
             } else if (e.key === 's' || e.key === 'S') {
                 // S key cycles through view modes depending on asset count
                 e.preventDefault();
@@ -3159,7 +3166,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay / split</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>I</kbd></span><span class="shortcut-desc">Inspect mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
