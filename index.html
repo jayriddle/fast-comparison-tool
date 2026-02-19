@@ -2889,6 +2889,16 @@
                 return;
             }
 
+            // Already activated — subsequent img.load / loadedmetadata events (one per file)
+            // would otherwise re-run switchToAsset + setViewMode destructively.  Just
+            // reposition so the newly-decoded dimensions are reflected.
+            if (document.getElementById('comparisonView').classList.contains('active')) {
+                console.log('checkAllLoaded: view already active, repositioning only');
+                positionLabelsToMediaDebounced();
+                return;
+            }
+
+            // First time: full activation
             // Need at least 2 files loaded (Edit A and Edit B minimum)
             if (loadedCount >= 2) {
                 console.log('2+ files loaded, activating comparison view');
