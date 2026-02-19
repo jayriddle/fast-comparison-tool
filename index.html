@@ -2268,20 +2268,19 @@
                     const cw = layer.offsetWidth;
                     const ch = layer.offsetHeight;
                     if (!cw || !ch) { anySkipped = true; return; }
-                    // Contain-fit zoom: largest scale fitting nw×nh inside cw×ch
-                    const zoom = Math.min(cw / nw, ch / nh);
-                    tripartiteLayout[slot] = { nw, nh, cw, ch, zoom };
-                    minH = Math.min(minH, zoom); // reuse minH variable as minZoom
+                    // Contain-fit rendered height: tallest the image can be without overflowing cell
+                    const fitH = Math.min(ch, Math.floor(cw * nh / nw));
+                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitH };
+                    minH = Math.min(minH, fitH);
                 });
-                // All slots render at the shared minimum zoom so they appear the same size.
-                // rw/rh are clamped to cell dimensions as a safety guard.
-                const minZoom = minH; // renamed for clarity below
+                // All slots render at the shared minH (same physical pixels tall = same apparent size).
+                // Width follows each slot's aspect ratio, clamped to cell width.
                 slots.forEach(slot => {
                     const d = tripartiteLayout[slot];
                     if (!d) return;
-                    d.rw = Math.min(d.cw, Math.round(d.nw * minZoom));
-                    d.rh = Math.min(d.ch, Math.round(d.nh * minZoom));
-                    d.sharedZoom = minZoom;
+                    d.rh = minH;
+                    d.rw = Math.min(d.cw, Math.round(minH * d.nw / d.nh));
+                    d.sharedZoom = minH / d.nh;
                 });
             }
 
