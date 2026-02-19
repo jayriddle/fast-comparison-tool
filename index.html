@@ -2458,6 +2458,27 @@
                 });
             }
 
+            // Overlay mode: find the smallest "longest side" across all loaded assets.
+            // All assets are then rendered so their longest side equals that reference
+            // length — the smallest asset shows at 1:1, larger ones scale down to match.
+            let overlayRefLong = 0;
+            if (isOverlay) {
+                let minLong = Infinity;
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const media = layer ? layer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const longest = Math.max(nw, nh);
+                    if (longest < minLong) minLong = longest;
+                });
+                overlayRefLong = minLong === Infinity ? 0 : minLong;
+            }
+
             slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2480,30 +2501,39 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
-                // In overlay mode the info bar occupies INFO_BAR_H px at the top, so the
-                // available area for the image is shorter. Contain-fit into that reduced area
-                // so the image is never taller than the visible space.
+                // INFO_BAR_H px are reserved at the top of the overlay container.
                 const fitH = isOverlay ? containerH - INFO_BAR_H : containerH;
 
-                // Calculate the rendered content bounds within object-fit: contain
-                const mediaAspect = naturalWidth / naturalHeight;
-                const containerAspect = containerW / fitH;
-
                 let renderedW, renderedH, offsetX, offsetY;
-                if (containerAspect > mediaAspect) {
-                    // Container is wider than image — height-constrained
-                    renderedH = fitH;
-                    renderedW = renderedH * mediaAspect;
-                    offsetX = (containerW - renderedW) / 2;
-                    offsetY = isOverlay ? INFO_BAR_H : 0;
+                if (isOverlay && overlayRefLong > 0) {
+                    // Scale each asset so its longest side = overlayRefLong px on screen.
+                    // The asset with the shortest longest-side renders at 1:1 (100% zoom);
+                    // larger assets scale down proportionally so they match that same footprint.
+                    const longestSide = Math.max(naturalWidth, naturalHeight);
+                    const scale = overlayRefLong / longestSide;
+                    const baseW = Math.round(naturalWidth * scale);
+                    const baseH = Math.round(naturalHeight * scale);
+                    // Clamp to viewport in case even the reference asset is larger than the screen
+                    const clampScale = Math.min(1, containerW / baseW, fitH / baseH);
+                    renderedW = Math.round(baseW * clampScale);
+                    renderedH = Math.round(baseH * clampScale);
+                    offsetX = Math.round((containerW - renderedW) / 2);
+                    offsetY = INFO_BAR_H + Math.round((fitH - renderedH) / 2);
                 } else {
-                    // Container is taller than image — width-constrained
-                    renderedW = containerW;
-                    renderedH = renderedW / mediaAspect;
-                    offsetX = 0;
-                    offsetY = isOverlay
-                        ? INFO_BAR_H + (fitH - renderedH) / 2
-                        : (containerH - renderedH) / 2;
+                    // Split modes: contain-fit to fill the available area
+                    const mediaAspect = naturalWidth / naturalHeight;
+                    const containerAspect = containerW / fitH;
+                    if (containerAspect > mediaAspect) {
+                        renderedH = fitH;
+                        renderedW = renderedH * mediaAspect;
+                        offsetX = (containerW - renderedW) / 2;
+                        offsetY = 0;
+                    } else {
+                        renderedW = containerW;
+                        renderedH = renderedW / mediaAspect;
+                        offsetX = 0;
+                        offsetY = (containerH - renderedH) / 2;
+                    }
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
