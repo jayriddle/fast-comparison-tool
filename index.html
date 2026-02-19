@@ -1982,9 +1982,12 @@
                         vw.style.height = scaledH + 'px';
                     });
                 } else {
-                    // Center wrapper in viewport using position:fixed so it escapes any
-                    // parent clipping (tripartite grid cells have overflow:hidden).
-                    const centerTop = Math.max(0, Math.round((window.innerHeight - scaledH) / 2));
+                    // Center wrapper in the area below the header using position:fixed so
+                    // it escapes any parent clipping (tripartite grid cells have overflow:hidden).
+                    // HEADER_OVERLAP matches the value used when computing fitZoom.
+                    const HEADER_OVERLAP = 50;
+                    const availH = window.innerHeight - HEADER_OVERLAP;
+                    const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
                     const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
                     document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
                         vw.style.position = 'fixed';
