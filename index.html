@@ -2486,7 +2486,7 @@
                     // reflect the grid row height correctly.
                     const cw = layer.offsetWidth;
                     const ch = layer.offsetHeight;
-                    if (!cw || !ch) { anySkipped = true; return; }
+                    if (!cw || !ch) { console.log('[DIAG positionLabels] SKIP slot='+slot+' cw='+cw+' ch='+ch+' retriesLeft='+retriesLeft); anySkipped = true; return; }
                     // Mirror overlay mode: portrait = nw < nh → width is the shared dimension
                     if (nw < nh) widthConstrained = true;
                     // Contain-fit rendered size within own cell
@@ -2818,6 +2818,22 @@
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             requestAnimationFrame(() => {
+                                // DIAGNOSTIC: log state at the moment positionLabelsToMedia runs
+                                const cv = document.getElementById('comparisonView');
+                                const oc = document.querySelector('.overlay-container');
+                                console.log('[DIAG rAF3] comparisonView.active:', cv.classList.contains('active'),
+                                    'body.tripartite:', document.body.classList.contains('tripartite'),
+                                    'overlayContainer size:', oc ? oc.offsetWidth + 'x' + oc.offsetHeight : 'null');
+                                ['Original','EditA','EditB'].forEach(s => {
+                                    const l = document.getElementById('layer'+s);
+                                    const mc = l ? l.querySelector('.media-container') : null;
+                                    const img = mc ? mc.querySelector('img,video') : null;
+                                    console.log('[DIAG rAF3] layer'+s+': offsetW='+( l ? l.offsetWidth : 'noLayer')+
+                                        ' offsetH='+(l ? l.offsetHeight : '?')+
+                                        ' mediaContainer='+(mc ? mc.offsetWidth+'x'+mc.offsetHeight : 'null')+
+                                        ' naturalW='+(img ? (img.naturalWidth||img.videoWidth||0) : 'noImg')+
+                                        ' naturalH='+(img ? (img.naturalHeight||img.videoHeight||0) : '?'));
+                                });
                                 updateSplitViewZoomIndicators();
                                 positionLabelsToMedia(10);
                             });
