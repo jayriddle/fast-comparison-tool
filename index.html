@@ -440,6 +440,11 @@
             overflow: hidden;
         }
 
+        /* 2-asset vertical: divide by 2 not 3 */
+        body.vertical-stack.two-asset .overlay-layer {
+            height: calc((100vh - 70px) / 2);
+        }
+
         body.vertical-stack .overlay-container {
             white-space: normal;
             overflow-y: visible;
@@ -477,6 +482,13 @@
             height: 100% !important;
         }
 
+        /* In all split modes the video-wrapper is JS-sized to exact rendered bounds.
+           The media element must fill it 100%. Override the general overlay-layer rule
+           (width:auto; height:auto) which has equal specificity but appears later. */
+        body.side-by-side .overlay-layer img,
+        body.side-by-side .overlay-layer video,
+        body.vertical-stack .overlay-layer img,
+        body.vertical-stack .overlay-layer video,
         body.tripartite .overlay-layer img,
         body.tripartite .overlay-layer video {
             width: 100% !important;
@@ -584,15 +596,6 @@
         body.side-by-side .overlay-layer.active-audio .asset-info-bar .asset-name,
         body.vertical-stack .overlay-layer.active-audio .asset-info-bar .asset-name {
             color: #28a745;
-        }
-
-        /* Vertical mode info bar: column layout, fixed width, left of the image */
-        body.vertical-stack .asset-info-bar {
-            flex-direction: column;
-            padding: 8px 10px;
-            justify-content: center;
-            width: 120px;
-            box-sizing: border-box;
         }
 
         /* Drag and drop styling */
@@ -1132,7 +1135,7 @@
 
         function handleMultipleFiles(files) {
             // Filter for images and videos only
-            const mediaFiles = files.filter(f => 
+            const mediaFiles = files.filter(f =>
                 f.type.startsWith('image/') || f.type.startsWith('video/')
             );
 
@@ -1140,6 +1143,11 @@
                 alert(`Please select 2 or 3 media files.\nYou selected ${mediaFiles.length} media file(s).\n\n2 files = Edit A vs Edit B (no original)\n3 files = Original vs Edit A vs Edit B`);
                 return;
             }
+
+            // Always start from a clean slate so stale state from a previous load
+            // (e.g., a mediaData.original left over from a prior 3-file session) never
+            // bleeds into the new load. This mirrors resetAll() but without the dialog.
+            clearAllMedia();
 
             // Sort by lastModified timestamp (oldest to newest)
             const sortedFiles = mediaFiles.sort((a, b) => a.lastModified - b.lastModified);
@@ -1978,52 +1986,68 @@
             document.getElementById('overlayContainer').classList.remove('panning');
         }
 
+        // Clear all loaded media and reset state — called both by resetAll() and at the
+        // start of handleMultipleFiles() so a fresh load always starts from a clean state.
+        function clearAllMedia() {
+            mediaData.original = null;
+            mediaData.editA = null;
+            mediaData.editB = null;
+            currentAssetIndex = 0;
+            isFullscreen = false;
+            hasVideos = false;
+
+            document.body.classList.remove('fullscreen');
+            document.body.classList.remove('side-by-side');
+            document.body.classList.remove('vertical-stack');
+            document.body.classList.remove('tripartite');
+            document.body.classList.remove('two-asset');
+            isSideBySide = false;
+            layoutMode = 'horizontal';
+
+            // Restore all layers to visible for next load
+            document.querySelectorAll('.overlay-layer').forEach(layer => {
+                layer.style.display = '';
+            });
+            document.getElementById('comparisonView').classList.remove('active');
+            document.getElementById('resetBtn').style.display = 'none';
+            document.getElementById('videoControls').classList.remove('active');
+
+            // Clear layers
+            ['Original', 'EditA', 'EditB'].forEach(slot => {
+                const layer = document.getElementById(`layer${slot}`);
+                // Remove media container
+                const mediaContainer = layer.querySelector('.media-container');
+                if (mediaContainer) {
+                    mediaContainer.remove();
+                }
+                layer.classList.remove('active');
+
+                // Reset info bar text
+                const infoBar = layer.querySelector('.asset-info-bar');
+                if (infoBar) {
+                    infoBar.querySelector('.asset-resolution').textContent = '-';
+                    infoBar.querySelector('.asset-aspect').textContent = '-';
+                    infoBar.querySelector('.asset-duration').textContent = '-';
+                }
+
+                // Reset zoom indicator
+                const zoomIndicator = layer.querySelector('.split-zoom-indicator');
+                if (zoomIndicator) {
+                    zoomIndicator.textContent = '1.0×';
+                }
+            });
+
+            // Restore default asset labels (may have been changed to IMAGE/VIDEO A/B in 2-asset mode)
+            document.querySelector('#layerEditA .asset-name').textContent = 'EDIT A';
+            document.querySelector('#layerEditB .asset-name').textContent = 'EDIT B';
+
+            // Reset file input
+            document.getElementById('multiFileInput').value = '';
+        }
+
         function resetAll() {
             if (confirm('Reset all assets and start over?')) {
-                mediaData.original = null;
-                mediaData.editA = null;
-                mediaData.editB = null;
-                currentAssetIndex = 0;
-                isFullscreen = false;
-                hasVideos = false;
-
-                document.body.classList.remove('fullscreen');
-                document.body.classList.remove('side-by-side');
-                document.body.classList.remove('vertical-stack');
-                document.body.classList.remove('tripartite');
-                isSideBySide = false;
-                layoutMode = 'horizontal';
-                document.getElementById('comparisonView').classList.remove('active');
-                document.getElementById('resetBtn').style.display = 'none';
-                document.getElementById('videoControls').classList.remove('active');
-
-                // Clear layers
-                ['Original', 'EditA', 'EditB'].forEach(slot => {
-                    const layer = document.getElementById(`layer${slot}`);
-                    // Remove media container
-                    const mediaContainer = layer.querySelector('.media-container');
-                    if (mediaContainer) {
-                        mediaContainer.remove();
-                    }
-                    layer.classList.remove('active');
-
-                    // Reset info bar text
-                    const infoBar = layer.querySelector('.asset-info-bar');
-                    if (infoBar) {
-                        infoBar.querySelector('.asset-resolution').textContent = '-';
-                        infoBar.querySelector('.asset-aspect').textContent = '-';
-                        infoBar.querySelector('.asset-duration').textContent = '-';
-                    }
-
-                    // Reset zoom indicator
-                    const zoomIndicator = layer.querySelector('.split-zoom-indicator');
-                    if (zoomIndicator) {
-                        zoomIndicator.textContent = '1.0×';
-                    }
-                });
-
-                // Reset file input
-                document.getElementById('multiFileInput').value = '';
+                clearAllMedia();
             }
         }
 
@@ -2229,14 +2253,15 @@
                 });
             }
 
-            // In tripartite mode, compute a shared rendered HEIGHT so all three assets
-            // appear the same size. Each slot's contain-fit height is computed independently
-            // (Original has a tall cell; A/B have half-height cells), then we take the minimum.
-            // Width follows each asset's own aspect ratio at that shared height, clamped to
-            // the cell width so nothing overflows. Original is flush-right, A/B flush-left.
+            // In tripartite mode, compute a shared rendered dimension so all three assets
+            // appear the same size. Mirrors overlay normalization: portrait assets (nw < nh)
+            // share rendered WIDTH (same as minPortraitW in overlay); landscape assets share
+            // rendered HEIGHT (same as minLandscapeH in overlay).
+            // Original is flush-right; A/B are flush-left at the A/B boundary.
             const tripartiteLayout = {}; // slot → { rw, rh, cw, ch, sharedZoom }
             if (isTripartite) {
-                let minH = Infinity;
+                let minW = Infinity, minH = Infinity;
+                let widthConstrained = false; // true = portrait assets → share width; false → share height
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -2253,19 +2278,30 @@
                     const cw = layer.offsetWidth;
                     const ch = layer.offsetHeight;
                     if (!cw || !ch) { anySkipped = true; return; }
-                    // Contain-fit rendered height: height if fitted into this cell
-                    const fitH = Math.min(ch, cw * nh / nw);
-                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitH };
+                    // Mirror overlay mode: portrait = nw < nh → width is the shared dimension
+                    if (nw < nh) widthConstrained = true;
+                    // Contain-fit rendered size within own cell
+                    const fitW = Math.min(cw, Math.floor(ch * nw / nh));
+                    const fitH = Math.min(ch, Math.floor(cw * nh / nw));
+                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitW, fitH };
+                    minW = Math.min(minW, fitW);
                     minH = Math.min(minH, fitH);
                 });
-                // Each slot renders at the shared minH; width = minH * aspect, clamped to cell width
+                // Apply shared dimension: same width (portrait) or same height (landscape)
                 slots.forEach(slot => {
                     const d = tripartiteLayout[slot];
                     if (!d) return;
-                    const aspect = d.nw / d.nh;
-                    d.rh = minH;
-                    d.rw = Math.min(d.cw, minH * aspect);
-                    d.sharedZoom = d.rh / d.nh;
+                    if (widthConstrained) {
+                        // Portrait: share width, height follows aspect ratio, clamped to cell height
+                        d.rw = minW;
+                        d.rh = Math.min(d.ch, Math.round(minW * d.nh / d.nw));
+                        d.sharedZoom = d.rw / d.nw;
+                    } else {
+                        // Landscape: share height, width follows aspect ratio, clamped to cell width
+                        d.rh = minH;
+                        d.rw = Math.min(d.cw, Math.round(minH * d.nw / d.nh));
+                        d.sharedZoom = d.rh / d.nh;
+                    }
                 });
             }
 
@@ -2364,11 +2400,11 @@
                         infoBar.style.height = '';
                         infoBar.style.right = '';
                         if (slot === 'editB') {
-                            // EditB is flush-top so there's no room above — place bar below image
-                            infoBar.style.top = Math.round(ty + th) + 'px';
+                            // EditB is flush-top; place bar just inside the top of the image
+                            infoBar.style.top = ty + 'px';
                             infoBar.style.bottom = '';
                         } else {
-                            // Original and EditA: bar above the image
+                            // Original and EditA: bar above the image, clamped to 0
                             infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
                             infoBar.style.bottom = '';
                         }
@@ -2394,29 +2430,16 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar: left of the image in vertical mode, above in all others.
+                // Position the info bar above the video in all non-tripartite modes.
+                // Clamp to 0 so it never goes above the container boundary.
                 if (infoBar) {
-                    if (isVertical) {
-                        // Fixed 120px wide bar to the left of the image, JS-positioned synchronously
-                        const ibW = 120;
-                        const gap = 6;
-                        infoBar.style.left = Math.round(offsetX - ibW - gap) + 'px';
-                        infoBar.style.top = Math.round(offsetY) + 'px';
-                        infoBar.style.bottom = '';
-                        infoBar.style.right = '';
-                        infoBar.style.width = ibW + 'px';
-                        infoBar.style.height = Math.round(renderedH) + 'px';
-                    } else {
-                        // Above the image: position bar so its bottom edge aligns with the image top.
-                        // Clamp to 0 so it never goes above the container boundary.
-                        const ibH = infoBar.offsetHeight || 28;
-                        infoBar.style.left = Math.round(offsetX) + 'px';
-                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
-                        infoBar.style.bottom = '';
-                        infoBar.style.right = '';
-                        infoBar.style.width = Math.round(renderedW) + 'px';
-                        infoBar.style.height = '';
-                    }
+                    const ibH = infoBar.offsetHeight || 28;
+                    infoBar.style.left = Math.round(offsetX) + 'px';
+                    infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
+                    infoBar.style.bottom = '';
+                    infoBar.style.right = '';
+                    infoBar.style.width = Math.round(renderedW) + 'px';
+                    infoBar.style.height = '';
                 }
             });
 
@@ -2441,7 +2464,13 @@
                     document.body.classList.remove('side-by-side');
                     document.body.classList.remove('vertical-stack');
                     document.body.classList.remove('tripartite');
+                    document.body.classList.remove('two-asset');
                     isSideBySide = false;
+
+                    // Restore all layers to visible so overlay mode can show them
+                    document.querySelectorAll('.overlay-layer').forEach(layer => {
+                        layer.style.display = '';
+                    });
 
                     // Clear inline styles set by positionLabelsToMedia() so CSS takes over in overlay mode
                     document.querySelectorAll('.video-wrapper').forEach(vw => {
@@ -2517,6 +2546,20 @@
                     if (zi) { zi.style.bottom = ''; zi.style.right = ''; }
                 });
 
+                // Show/hide layers based on whether they have media loaded.
+                // Empty layers must be hidden so they don't take up space in the layout.
+                const loadedSlotCount = Object.values(mediaData).filter(m => m !== null).length;
+                document.querySelectorAll('.overlay-layer').forEach(layer => {
+                    const hasMedia = layer.querySelector('img, video');
+                    layer.style.display = hasMedia ? '' : 'none';
+                });
+                // two-asset class drives /2 height in vertical-stack instead of /3
+                if (loadedSlotCount === 2) {
+                    document.body.classList.add('two-asset');
+                } else {
+                    document.body.classList.remove('two-asset');
+                }
+
                 // Set layout mode
                 layoutMode = mode;
                 if (mode === 'vertical') {
@@ -2557,20 +2600,24 @@
             const verticalBtn = document.getElementById('verticalViewBtn');
             const tripartiteBtn = document.getElementById('tripartiteViewBtn');
             const splitFitBtn = document.getElementById('splitFitToggle');
-            const allThree = Object.values(mediaData).filter(m => m !== null).length === 3;
+            const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
+            const allThree = loadedCount === 3;
+            // 2-asset mode has auto-picked layout; hide H/V buttons so user can't manually cycle
+            const twoAssetAuto = loadedCount === 2 && !mediaData.original;
+            const hideHV = allThree || twoAssetAuto;
 
             if (activeMode === 'overlay') {
-                // In overlay mode: hide overlay btn, show fit/split options appropriate to asset count
+                // In overlay mode: hide overlay btn, show split options appropriate to asset count
                 overlayBtn.style.display = 'none';
-                horizontalBtn.style.display = allThree ? 'none' : 'inline-block';
-                verticalBtn.style.display = allThree ? 'none' : 'inline-block';
+                horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
+                verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
                 splitFitBtn.style.display = 'none';
             } else {
                 // In split mode: show overlay btn + mode-appropriate split buttons + fit toggle
                 overlayBtn.style.display = 'inline-block';
-                horizontalBtn.style.display = allThree ? 'none' : 'inline-block';
-                verticalBtn.style.display = allThree ? 'none' : 'inline-block';
+                horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
+                verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
                 tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
                 splitFitBtn.style.display = 'inline-block';
 
@@ -2641,8 +2688,22 @@
                     switchToAsset(2); // Start with Edit B
                 }
 
-                // Default to tripartite when 3 assets loaded, otherwise horizontal
-                setViewMode(loadedCount === 3 ? 'tripartite' : 'horizontal');
+                // 2-asset mode: relabel assets and auto-pick layout by dominant dimension.
+                // 3-asset mode: always tripartite.
+                if (loadedCount === 2 && !mediaData.original) {
+                    // Relabel: IMAGE A/B or VIDEO A/B (no "EDIT" label when there's no original)
+                    const mediaType = (mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video')
+                        ? 'VIDEO' : 'IMAGE';
+                    document.querySelector('#layerEditA .asset-name').textContent = mediaType + ' A';
+                    document.querySelector('#layerEditB .asset-name').textContent = mediaType + ' B';
+
+                    // Auto-pick layout: landscape → vertical stack, portrait → side-by-side
+                    const sample = mediaData.editA || mediaData.editB;
+                    const isLandscape = (sample.w || 1) >= (sample.h || 1);
+                    setViewMode(isLandscape ? 'vertical' : 'horizontal');
+                } else {
+                    setViewMode(loadedCount === 3 ? 'tripartite' : 'horizontal');
+                }
 
                 // Show video controls if any videos
                 console.log('Checking for video controls, hasVideos =', hasVideos);
@@ -3010,11 +3071,9 @@
                         setViewMode('overlay');
                     }
                 } else {
-                    // 2-asset cycle: overlay -> horizontal -> vertical -> overlay
+                    // 2-asset: toggle overlay <-> the auto-picked split layout
                     if (!isSideBySide) {
-                        setViewMode('horizontal');
-                    } else if (layoutMode === 'horizontal') {
-                        setViewMode('vertical');
+                        setViewMode(layoutMode); // return to auto-picked horizontal or vertical
                     } else {
                         setViewMode('overlay');
                     }
