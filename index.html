@@ -1867,12 +1867,12 @@
                     }
                 });
 
-                // Fit largest asset to viewport (header is position:absolute in fullscreen,
-                // subtract 50px so image clears it visually)
+                // Fit largest asset to viewport. Use window.innerWidth/Height — always the
+                // true CSS viewport size regardless of content overflow. Header is
+                // position:absolute in fullscreen so subtract its height visually.
                 const HEADER_OVERLAP = 50;
-                const container = document.getElementById('overlayContainer');
-                const viewW = container.offsetWidth || window.innerWidth;
-                const viewH = (container.offsetHeight || window.innerHeight) - HEADER_OVERLAP;
+                const viewW = window.innerWidth;
+                const viewH = window.innerHeight - HEADER_OVERLAP;
                 fitZoom = (maxNativeW > 0 && maxNativeH > 0)
                     ? Math.min(viewW / maxNativeW, viewH / maxNativeH)
                     : 1;
