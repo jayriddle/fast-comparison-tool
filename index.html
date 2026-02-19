@@ -2737,15 +2737,26 @@
                     selectAudioSource(currentAudioSource);
                 }
 
-                // Clear any inline styles set by positionLabelsToMedia() so CSS takes over
-                document.querySelectorAll('.video-wrapper').forEach(vw => {
-                    vw.style.width = '';
-                    vw.style.height = '';
-                    vw.style.top = '';
-                    vw.style.left = '';
-                    const zi = vw.querySelector('.split-zoom-indicator');
-                    if (zi) { zi.style.bottom = ''; zi.style.right = ''; }
-                });
+                // Apply body layout class FIRST so the CSS grid/flex is active before
+                // we clear wrapper inline styles and measure offsetWidth. If the class
+                // is added after the clear, positionLabelsToMedia() may read 0-dimension
+                // cells (grid not yet committed) and bail, leaving wrappers invisible.
+                layoutMode = mode;
+                if (mode === 'vertical') {
+                    document.body.classList.remove('side-by-side');
+                    document.body.classList.remove('tripartite');
+                    document.body.classList.add('vertical-stack');
+                } else if (mode === 'tripartite') {
+                    document.body.classList.remove('side-by-side');
+                    document.body.classList.remove('vertical-stack');
+                    document.body.classList.add('tripartite');
+                    removeDragAndDrop();
+                } else {
+                    document.body.classList.remove('vertical-stack');
+                    document.body.classList.remove('tripartite');
+                    document.body.classList.add('side-by-side');
+                    setupLayerDragAndDrop();
+                }
 
                 // Show/hide layers based on whether they have media loaded.
                 // Empty layers must be hidden so they don't take up space in the layout.
@@ -2769,34 +2780,42 @@
                     document.body.classList.remove('two-asset');
                 }
 
-                // Set layout mode
-                layoutMode = mode;
-                if (mode === 'vertical') {
-                    document.body.classList.remove('side-by-side');
-                    document.body.classList.remove('tripartite');
-                    document.body.classList.add('vertical-stack');
-                } else if (mode === 'tripartite') {
-                    document.body.classList.remove('side-by-side');
-                    document.body.classList.remove('vertical-stack');
-                    document.body.classList.add('tripartite');
-                    removeDragAndDrop();
-                } else {
-                    document.body.classList.remove('vertical-stack');
-                    document.body.classList.remove('tripartite');
-                    document.body.classList.add('side-by-side');
-                    setupLayerDragAndDrop();
-                }
-
-                // Two nested rAFs guarantee a full layout pass with the new body class
-                // applied before we read offsetWidth/offsetHeight to compute positions.
-                // Opacity is managed per-slot inside positionLabelsToMedia() to avoid
-                // race conditions when setViewMode() is called in rapid succession.
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        updateSplitViewZoomIndicators();
-                        positionLabelsToMedia();
-                    });
+                // Clear any inline styles set by positionLabelsToMedia() so CSS takes over.
+                // Done AFTER the body class change so the layout is already live.
+                document.querySelectorAll('.video-wrapper').forEach(vw => {
+                    vw.style.width = '';
+                    vw.style.height = '';
+                    vw.style.top = '';
+                    vw.style.left = '';
+                    const zi = vw.querySelector('.split-zoom-indicator');
+                    if (zi) { zi.style.bottom = ''; zi.style.right = ''; }
                 });
+
+                // Tripartite uses a CSS grid whose cell dimensions only stabilise after
+                // a full layout pass. Three nested rAFs (vs two for other modes) give the
+                // browser an extra paint cycle to commit grid row/column sizes before
+                // positionLabelsToMedia() reads offsetWidth/offsetHeight.
+                // Higher retry count (10 vs default 5) handles slower machines or busy
+                // image-decode cycles that delay grid dimension availability.
+                if (mode === 'tripartite') {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                updateSplitViewZoomIndicators();
+                                positionLabelsToMedia(10);
+                            });
+                        });
+                    });
+                } else {
+                    // Two nested rAFs guarantee a full layout pass with the new body class
+                    // applied before we read offsetWidth/offsetHeight to compute positions.
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            updateSplitViewZoomIndicators();
+                            positionLabelsToMedia();
+                        });
+                    });
+                }
             }
 
             // Update button visibility and active states
