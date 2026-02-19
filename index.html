@@ -2435,44 +2435,35 @@
                     let fw, fh;
                     if (containerAspect > aspect) { fh = availH; fw = fh * aspect; }
                     else { fw = cw; fh = fw / aspect; }
-                    fitDims[slot] = { fw, fh, portrait: nw < nh };
+                    fitDims[slot] = { fw, fh };
                 });
 
-                // Pass 2: find the minimum contain-fit width (portraits) and height (landscapes),
-                // capped at the minimum native dimension so we never scale any asset above 1.0×.
-                let minPortraitW = Infinity, minLandscapeH = Infinity;
+                // Pass 2: shared bounding box — smallest contain-fit width AND height across
+                // all assets. Scaling every asset to fit within this box (preserving aspect
+                // ratio) guarantees that all assets share the same center point on screen,
+                // so stepping through assets never causes a positional shift.
+                let sharedW = Infinity, sharedH = Infinity;
                 slots.forEach(slot => {
                     const d = fitDims[slot];
                     if (!d) return;
-                    const media = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`)
-                        ?.querySelector('img, video');
-                    const nw = media ? (media.naturalWidth || media.videoWidth || 0) : 0;
-                    const nh = media ? (media.naturalHeight || media.videoHeight || 0) : 0;
-                    if (d.portrait) {
-                        // Cap at native width so no asset exceeds 1.0× zoom
-                        minPortraitW = Math.min(minPortraitW, d.fw, nw);
-                    } else {
-                        // Cap at native height so no asset exceeds 1.0× zoom
-                        minLandscapeH = Math.min(minLandscapeH, d.fh, nh);
-                    }
+                    sharedW = Math.min(sharedW, d.fw);
+                    sharedH = Math.min(sharedH, d.fh);
                 });
 
-                // Pass 3: scale each slot so its reference dimension matches the capped minimum
+                // Pass 3: scale each slot to fit within the shared bounding box.
+                // Use the more-constraining dimension so the asset never overflows the box.
                 slots.forEach(slot => {
                     const d = fitDims[slot];
                     if (!d) { normalizeScales[slot] = 1; return; }
-                    if (d.portrait) {
-                        normalizeScales[slot] = minPortraitW < Infinity ? minPortraitW / d.fw : 1;
-                    } else {
-                        normalizeScales[slot] = minLandscapeH < Infinity ? minLandscapeH / d.fh : 1;
-                    }
+                    const scaleW = sharedW < Infinity ? sharedW / d.fw : 1;
+                    const scaleH = sharedH < Infinity ? sharedH / d.fh : 1;
+                    normalizeScales[slot] = Math.min(scaleW, scaleH);
                 });
             }
 
             // In tripartite mode, compute a shared rendered dimension so all three assets
-            // appear the same size. Mirrors overlay normalization: portrait assets (nw < nh)
-            // share rendered WIDTH (same as minPortraitW in overlay); landscape assets share
-            // rendered HEIGHT (same as minLandscapeH in overlay).
+            // appear the same size. Portrait assets (nw < nh) share rendered WIDTH;
+            // landscape assets share rendered HEIGHT.
             // Original is flush-right; A/B are flush-left at the A/B boundary.
             const tripartiteLayout = {}; // slot → { rw, rh, cw, ch, sharedZoom }
             if (isTripartite) {
