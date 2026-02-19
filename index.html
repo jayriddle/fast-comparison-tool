@@ -1091,6 +1091,7 @@
         // New zoom levels
         const zoomLevels = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8];
         let currentZoomIndex = 2; // Start at 1.0 (index 2)
+        let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
@@ -1833,9 +1834,34 @@
             
             if (isFullscreen) {
                 document.body.classList.add('fullscreen');
-                // Set zoom to 1x on entering fullscreen (actual size or fit)
-                zoomLevel = 1;
-                currentZoomIndex = 2; // Sync index to 1.0× position in array
+
+                // Find largest native dimensions across all loaded assets
+                let maxNativeW = 0, maxNativeH = 0;
+                ['original', 'editA', 'editB'].forEach(slot => {
+                    if (mediaData[slot]) {
+                        const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
+                        const media = layer.querySelector('img, video');
+                        if (media) {
+                            maxNativeW = Math.max(maxNativeW, media.naturalWidth || media.videoWidth || 0);
+                            maxNativeH = Math.max(maxNativeH, media.naturalHeight || media.videoHeight || 0);
+                        }
+                    }
+                });
+
+                // Fit largest asset to viewport (header is position:absolute in fullscreen,
+                // subtract 50px so image clears it visually)
+                const HEADER_OVERLAP = 50;
+                const container = document.getElementById('overlayContainer');
+                const viewW = container.offsetWidth || window.innerWidth;
+                const viewH = (container.offsetHeight || window.innerHeight) - HEADER_OVERLAP;
+                fitZoom = (maxNativeW > 0 && maxNativeH > 0)
+                    ? Math.min(viewW / maxNativeW, viewH / maxNativeH)
+                    : 1;
+
+                zoomLevel = fitZoom;
+                currentZoomIndex = -1; // sentinel: at fit zoom, not a discrete zoomLevels entry
+                panOffsetX = 0;
+                panOffsetY = 0;
                 applyZoom();
                 setupPanHandlers();
             } else {
@@ -1861,10 +1887,8 @@
                 panOffsetX = 0;
                 panOffsetY = 0;
                 zoomLevel = 1;
-                
-                // Update zoom display
-                document.getElementById('zoomLevelDisplay').textContent = '1.0×';
-                
+                currentZoomIndex = 2; // Sync to 1.0× in zoomLevels array
+
                 // Remove pan handlers
                 const container = document.getElementById('overlayContainer');
                 container.removeEventListener('mousedown', handlePanStart);
@@ -1906,18 +1930,23 @@
                 });
             }
             
-            // Update both zoom indicators
-            const zoomText = zoomLevel.toFixed(1) + '×';
+            // Update zoom indicator ('Fit' at baseline, otherwise discrete level value)
+            const zoomText = (currentZoomIndex === -1) ? 'Fit' : zoomLevel.toFixed(1) + '×';
             document.getElementById('zoomIndicator').textContent = zoomText;
-            document.getElementById('zoomLevelDisplay').textContent = zoomText;
         }
 
         function zoomIn() {
             if (!isFullscreen) return;
-            currentZoomIndex = Math.min(currentZoomIndex + 1, zoomLevels.length - 1);
+            if (currentZoomIndex === -1) {
+                // At fit zoom: snap to first discrete level strictly above fitZoom
+                currentZoomIndex = zoomLevels.findIndex(z => z > fitZoom);
+                if (currentZoomIndex === -1) currentZoomIndex = zoomLevels.length - 1;
+            } else {
+                currentZoomIndex = Math.min(currentZoomIndex + 1, zoomLevels.length - 1);
+            }
             zoomLevel = zoomLevels[currentZoomIndex];
             applyZoom();
-            
+
             // Reapply pan offset to active image
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
@@ -1930,10 +1959,16 @@
 
         function zoomOut() {
             if (!isFullscreen) return;
-            currentZoomIndex = Math.max(currentZoomIndex - 1, 0);
+            if (currentZoomIndex === -1) {
+                // At fit zoom: snap to last discrete level strictly below fitZoom
+                const below = zoomLevels.filter(z => z < fitZoom);
+                currentZoomIndex = below.length > 0 ? zoomLevels.indexOf(below[below.length - 1]) : 0;
+            } else {
+                currentZoomIndex = Math.max(currentZoomIndex - 1, 0);
+            }
             zoomLevel = zoomLevels[currentZoomIndex];
             applyZoom();
-            
+
             // Reapply pan offset to active image
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
@@ -1941,6 +1976,20 @@
                 if (img) {
                     img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
                 }
+            }
+        }
+
+        function resetFitZoom() {
+            if (!isFullscreen) return;
+            zoomLevel = fitZoom;
+            currentZoomIndex = -1;
+            panOffsetX = 0;
+            panOffsetY = 0;
+            applyZoom();
+            const activeLayer = document.querySelector('.overlay-layer.active');
+            if (activeLayer) {
+                const img = activeLayer.querySelector('img, video');
+                if (img) img.style.transform = '';
             }
         }
 
@@ -2808,6 +2857,8 @@
                 isSideBySide: isSideBySide,
                 layoutMode: layoutMode,
                 zoomLevel: zoomLevel,
+                currentZoomIndex: currentZoomIndex,
+                fitZoom: fitZoom,
                 panOffsetX: panOffsetX,
                 panOffsetY: panOffsetY,
 
@@ -2875,6 +2926,8 @@
             // Restore basic state
             currentAssetIndex = state.currentAssetIndex;
             zoomLevel = state.zoomLevel;
+            currentZoomIndex = (state.currentZoomIndex !== undefined) ? state.currentZoomIndex : 2;
+            fitZoom = (state.fitZoom !== undefined) ? state.fitZoom : 1;
             panOffsetX = state.panOffsetX;
             panOffsetY = state.panOffsetY;
 
@@ -2931,7 +2984,7 @@
             
             // Update UI
             document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
-            document.getElementById('zoomLevelDisplay').textContent = zoomLevel.toFixed(1) + '×';
+            document.getElementById('zoomIndicator').textContent = (currentZoomIndex === -1) ? 'Fit' : zoomLevel.toFixed(1) + '×';
             
             console.log('State restored');
         }
@@ -3010,6 +3063,9 @@
                 if (mediaData[assetOrder[nextIndex]]) {
                     switchToAsset(nextIndex);
                 }
+            } else if (e.key === 'i' || e.key === 'I') {
+                e.preventDefault();
+                toggleFullscreen();
             } else if (e.key === 'f' || e.key === 'F' || e.key === 'Escape') {
                 e.preventDefault();
                 toggleFullscreen();
@@ -3027,6 +3083,9 @@
                     toggleFullscreen();
                 }
                 zoomOut();
+            } else if (e.key === '0') {
+                e.preventDefault();
+                resetFitZoom();
             } else if (e.key === ' ') {
                 // Spacebar toggles play/pause for videos
                 e.preventDefault();
@@ -3102,8 +3161,9 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Fullscreen</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>I</kbd></span><span class="shortcut-desc">Inspect mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset to fit</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
         </div>
