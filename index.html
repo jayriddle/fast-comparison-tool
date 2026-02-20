@@ -2567,10 +2567,15 @@
                     if (!cw || !ch) { anySkipped = true; return; }
                     // Mirror overlay mode: portrait = nw < nh → width is the shared dimension
                     if (nw < nh) widthConstrained = true;
-                    // Contain-fit rendered size within own cell
-                    const fitW = Math.min(cw, Math.floor(ch * nw / nh));
-                    const fitH = Math.min(ch, Math.floor(cw * nh / nw));
-                    tripartiteLayout[slot] = { nw, nh, cw, ch, fitW, fitH };
+                    // EditB is flush-top; reserve space for its info bar so the image
+                    // is sized to fit below the bar rather than behind it.
+                    const ibEl = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    const ibH = (slot === 'editB' && ibEl) ? (ibEl.offsetHeight || 28) : 0;
+                    const availH = ch - ibH;
+                    // Contain-fit rendered size within available cell height
+                    const fitW = Math.min(cw, Math.floor(availH * nw / nh));
+                    const fitH = Math.min(availH, Math.floor(cw * nh / nw));
+                    tripartiteLayout[slot] = { nw, nh, cw, ch, ibH, fitW, fitH };
                     minW = Math.min(minW, fitW);
                     minH = Math.min(minH, fitH);
                 });
@@ -2788,7 +2793,7 @@
                     } else if (slot === 'editA') {
                         ty = Math.round(td.ch - td.rh); // flush bottom
                     } else {
-                        ty = 0; // flush top
+                        ty = td.ibH || 0; // flush top, below the info bar
                     }
                     // Original: flush right with 8px gap; A/B: flush left with 8px gap.
                     // 16px total between the centre column edges, matching compare mode.
@@ -2817,15 +2822,9 @@
                         infoBar.style.width = tw + 'px';
                         infoBar.style.height = '';
                         infoBar.style.right = '';
-                        if (slot === 'editB') {
-                            // EditB is flush-top; place bar just inside the top of the image
-                            infoBar.style.top = ty + 'px';
-                            infoBar.style.bottom = '';
-                        } else {
-                            // Original and EditA: bar above the image, clamped to 0
-                            infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
-                            infoBar.style.bottom = '';
-                        }
+                        // Place bar above the video-wrapper for all slots, clamped to 0.
+                        infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
+                        infoBar.style.bottom = '';
                     }
                     return; // skip the standard positioning below
                 }
