@@ -58,6 +58,10 @@
             background: #666;
         }
 
+        .position-toggle:focus {
+            outline: none;
+        }
+
         .help-tooltip {
             position: absolute;
             bottom: 100%;
@@ -938,7 +942,7 @@
                 </div>
             </div>
             <div>
-                <button class="position-toggle" onclick="document.getElementById('multiFileInput').click()" id="loadBtn" data-help="Load 2–3 files to compare (or press L)">
+                <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 2–3 files to compare (or press L)">
                     Load
                     <div class="help-tooltip">Select 2–3 files to compare (auto-sorts by save time). Shortcut: L</div>
                 </button>
