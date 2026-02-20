@@ -852,6 +852,31 @@
             display: flex;
             align-items: center;
             gap: 2px;
+            position: relative; /* anchor the sliding underline */
+        }
+
+        /* Mode buttons slide as a group when overlay activates */
+        .mode-core {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Asset group slides in from right when overlay activates */
+        .asset-group {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            margin-left: -2px; /* eat the strip's flex gap so band butts against OVERLAY pill */
+            transform: translateX(12px);
+            opacity: 0;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.5s ease;
+        }
+        .asset-group.visible {
+            transform: translateX(0);
+            opacity: 1;
         }
 
         .mode-btn, .asset-btn {
@@ -878,19 +903,53 @@
             color: #000;
         }
 
-        /* Asset sub-items: dim tint shows they belong to OVERLAY but are subordinate */
+        /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
         .asset-btn {
             background: rgba(160, 160, 160, 0.15);
-            transition: background 0.15s, color 0.15s, border-bottom-color 0.15s;
+            transition: background 0.15s, color 0.15s;
+            border-radius: 0;
+            color: #777;
         }
 
-        /* Active asset: underline in OVERLAY's active color instead of filled pill */
+        /* First asset button: square left edge to seamlessly join the OVERLAY pill */
+        .asset-btn.first-asset {
+            border-radius: 0;
+        }
+
+        /* Last asset button: round the right end */
+        .asset-btn.last-asset {
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* Asset separators (·) share the dim tint so the band reads as one continuous strip */
+        .strip-sep.asset-sep {
+            background: rgba(160, 160, 160, 0.15);
+            color: #555;
+            padding: 4px 1px;
+            margin: 0;
+        }
+
+        /* Active asset: slightly lighter text; underline is a separate sliding element */
         .asset-btn.active {
             background: rgba(160, 160, 160, 0.15);
             color: #ccc;
-            border-bottom: 2px solid rgb(160, 160, 160);
-            border-radius: 4px 4px 0 0;
-            padding-bottom: 2px;
+        }
+
+        /* Sliding underline bar — positioned absolutely over the active asset button */
+        #assetUnderline {
+            position: absolute;
+            bottom: 0;
+            height: 2px;
+            background: rgb(160, 160, 160);
+            border-radius: 1px;
+            pointer-events: none;
+            transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                        width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.15s ease;
+            opacity: 0;
+        }
+        #assetUnderline.visible {
+            opacity: 1;
         }
 
         .strip-sep {
@@ -1786,8 +1845,8 @@
             // to reposition the newly active layer's wrapper with the current pan offset.
             applyZoom();
 
-            // Refresh asset strip highlight in header
-            updateAssetStrip();
+            // Refresh active highlight and slide the underline to the new asset button
+            refreshAssetButtons();
         }
 
         // Setup video scrubbing with drag support
@@ -2771,12 +2830,16 @@
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
             const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
 
+            // Wrap mode buttons in a flex group so they slide together
+            const modeCore = document.createElement('div');
+            modeCore.className = 'mode-core';
+
             modes.forEach(([mode, label], i) => {
                 if (i > 0) {
                     const sep = document.createElement('span');
                     sep.className = 'strip-sep';
                     sep.textContent = '/';
-                    strip.appendChild(sep);
+                    modeCore.appendChild(sep);
                 }
                 const btn = document.createElement('button');
                 btn.className = 'mode-btn' + (mode === normalised ? ' active' : '');
@@ -2785,36 +2848,114 @@
                     if (mode === 'compare') setViewMode(layoutMode); // use auto-picked H/V
                     else setViewMode(mode);
                 };
-                strip.appendChild(btn);
+                modeCore.appendChild(btn);
             });
+            strip.appendChild(modeCore);
 
-            // When overlay is active, append asset buttons inline immediately after OVERLAY
-            // so they read as sub-navigation belonging to it
+            // When overlay is active, build the asset group and animate it sliding in
             if (normalised === 'overlay') {
                 const loaded = assetOrder.filter(slot => mediaData[slot]);
-                loaded.forEach((slot) => {
+
+                const assetGroup = document.createElement('div');
+                assetGroup.className = 'asset-group'; // starts offset + invisible; .visible triggers transition
+
+                loaded.forEach((slot, i) => {
                     const sep = document.createElement('span');
-                    sep.className = 'strip-sep';
+                    // asset-sep shares the dim tint so the band reads as one continuous strip
+                    sep.className = 'strip-sep asset-sep';
                     sep.textContent = '·';
-                    strip.appendChild(sep);
+                    assetGroup.appendChild(sep);
 
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
                     const nameEl = document.querySelector(`#layer${slotName} .asset-name`);
                     const label = nameEl ? nameEl.textContent : slotName;
                     const btn = document.createElement('button');
                     const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
-                    btn.className = 'asset-btn' + (isActive ? ' active' : '');
+                    // first-asset: negative margin eats the flex gap to butt against OVERLAY pill
+                    // last-asset: rounded right end caps the tint band
+                    const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
+                    btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
                     btn.textContent = label;
                     btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
-                    strip.appendChild(btn);
+                    assetGroup.appendChild(btn);
                 });
+                strip.appendChild(assetGroup);
+
+                // Create (or reuse) the sliding underline bar
+                let underline = document.getElementById('assetUnderline');
+                if (!underline) {
+                    underline = document.createElement('div');
+                    underline.id = 'assetUnderline';
+                    strip.appendChild(underline);
+                } else {
+                    strip.appendChild(underline);
+                }
+
+                // Trigger slide-in on next frame (must be after layout)
+                requestAnimationFrame(() => {
+                    assetGroup.classList.add('visible');
+                    // Snap underline to position instantly (no slide on first appearance),
+                    // then re-enable transition for subsequent switches
+                    if (underline) {
+                        underline.style.transition = 'none';
+                        positionAssetUnderline();
+                        // Re-enable transition after placement (double rAF ensures paint happened)
+                        requestAnimationFrame(() => {
+                            underline.style.transition = '';
+                        });
+                    }
+                });
+            } else {
+                // Hide underline when not in overlay mode
+                const underline = document.getElementById('assetUnderline');
+                if (underline) underline.classList.remove('visible');
             }
+        }
+
+        // Moves the sliding underline to sit beneath the currently active asset button.
+        // Called after DOM layout so offsetLeft/offsetWidth are accurate.
+        function positionAssetUnderline() {
+            const strip = document.getElementById('modeStrip');
+            const underline = document.getElementById('assetUnderline');
+            if (!strip || !underline) return;
+
+            const activeBtn = strip.querySelector('.asset-btn.active');
+            if (!activeBtn) { underline.classList.remove('visible'); return; }
+
+            const stripRect = strip.getBoundingClientRect();
+            const btnRect = activeBtn.getBoundingClientRect();
+            const left = btnRect.left - stripRect.left;
+            const width = btnRect.width;
+
+            underline.style.left = left + 'px';
+            underline.style.width = width + 'px';
+            underline.classList.add('visible');
         }
 
         // Asset buttons are now inlined into the mode strip when overlay is active.
         // This function is kept as a no-op so existing call sites don't break.
         function updateAssetStrip() {
             document.getElementById('assetStrip').style.display = 'none';
+        }
+
+        // Updates the active class on inline asset buttons without rebuilding the strip,
+        // then slides the underline to the newly active button.
+        function refreshAssetButtons() {
+            const strip = document.getElementById('modeStrip');
+            if (!strip) return;
+            const assetBtns = strip.querySelectorAll('.asset-btn');
+            if (!assetBtns.length) return;
+
+            // Re-sync .active class based on current assetOrder / currentAssetIndex
+            const loaded = assetOrder.filter(slot => mediaData[slot]);
+            assetBtns.forEach((btn, i) => {
+                const slot = loaded[i];
+                const isActive = slot && assetOrder.indexOf(slot) === currentAssetIndex;
+                btn.classList.toggle('active', !!isActive);
+            });
+
+            // Slide underline to new position
+            positionAssetUnderline();
         }
 
         // Update checkAllLoaded to show view mode buttons
