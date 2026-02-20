@@ -1946,14 +1946,21 @@
                 const badge = vw.querySelector('.split-zoom-indicator');
                 if (badge) badge.textContent = zoomLevel.toFixed(2) + '×';
 
-                // Position info bar flush above the wrapper
+                // Position info bar flush above the wrapper, tracking pan offset.
+                // Store the unshifted base coords as data attributes so handlePanMove()
+                // can compute deltas without calling the full applyZoom() on every mousemove.
                 const infoBar = layer.querySelector('.asset-info-bar');
                 if (infoBar) {
                     const ibH = infoBar.offsetHeight || 28;
+                    // Stash base (un-panned) position for use by handlePanMove()
+                    infoBar.dataset.centerTop = centerTop;
+                    infoBar.dataset.centerLeft = centerLeft;
+                    infoBar.dataset.scaledW = scaledW;
+                    const clampedLeft = Math.max(0, centerLeft + panOffsetX);
                     infoBar.style.position = 'fixed';
-                    infoBar.style.left = centerLeft + panOffsetX + 'px';
+                    infoBar.style.left = clampedLeft + 'px';
                     infoBar.style.top = Math.max(HEADER_OVERLAP, centerTop + panOffsetY - ibH) + 'px';
-                    infoBar.style.width = scaledW + 'px';
+                    infoBar.style.width = Math.min(scaledW, window.innerWidth - clampedLeft) + 'px';
                     infoBar.style.right = '';
                     infoBar.style.bottom = '';
                     infoBar.style.height = '';
@@ -2016,17 +2023,32 @@
 
         function handlePanMove(e) {
             if (!isPanning) return;
-            
+
             e.preventDefault();
             panOffsetX = e.clientX - panStartX;
             panOffsetY = e.clientY - panStartY;
-            
-            // Apply transform to all active images
+
+            // Apply transform to the active image and track the info bar in real time
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
                 const img = activeLayer.querySelector('img, video');
                 if (img) {
                     img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+                }
+                // Move info bar with the image so it never lags
+                const infoBar = activeLayer.querySelector('.asset-info-bar');
+                if (infoBar) {
+                    const ibH = infoBar.offsetHeight || 28;
+                    const barTop = parseFloat(infoBar.dataset.centerTop || HEADER_OVERLAP);
+                    const barLeft = parseFloat(infoBar.dataset.centerLeft || 0);
+                    const barW = parseFloat(infoBar.dataset.scaledW || infoBar.offsetWidth);
+                    // top: track image top, clamped so bar stays visible below header
+                    infoBar.style.top = Math.max(HEADER_OVERLAP, barTop + panOffsetY - ibH) + 'px';
+                    // left: track image left, clamped so bar never scrolls off-screen left
+                    infoBar.style.left = Math.max(0, barLeft + panOffsetX) + 'px';
+                    // width: shrink bar if image+pan extends past right viewport edge, but never wider than scaledW
+                    const clampedLeft = Math.max(0, barLeft + panOffsetX);
+                    infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
                 }
             }
         }
