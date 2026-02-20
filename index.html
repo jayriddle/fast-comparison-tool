@@ -2597,14 +2597,14 @@
                 });
             }
 
-            // Horizontal compare pre-pass: scale all assets so their shorter side matches
-            // the smallest shorter-side across loaded assets. For portrait images this anchors
-            // on width — a crop (wider but same scene) scales down so content appears at the
-            // same size as the original. For landscape images it anchors on height.
+            // Horizontal compare pre-pass: scale all assets so their longest side matches
+            // the smallest longest-side across loaded assets. Anchoring on the longest side
+            // ensures both landscape and portrait assets render at the same dominant dimension
+            // (width for landscape, height for portrait), giving a consistent physical screen size.
             // Each slot then clamps independently to its own cell dimensions.
-            let compareRefShort = 0;
+            let compareRefLong = 0;
             if (!isVertical && !isTripartite && !isOverlay) {
-                let minShort = Infinity;
+                let minLong = Infinity;
                 slots.forEach(slot => {
                     if (!mediaData[slot]) return;
                     const layer = getLayer(slot);
@@ -2613,10 +2613,10 @@
                     const nw = media.naturalWidth || media.videoWidth || 0;
                     const nh = media.naturalHeight || media.videoHeight || 0;
                     if (!nw || !nh) return;
-                    const shortest = Math.min(nw, nh);
-                    if (shortest < minShort) minShort = shortest;
+                    const longest = Math.max(nw, nh);
+                    if (longest < minLong) minLong = longest;
                 });
-                compareRefShort = minShort === Infinity ? 0 : minShort;
+                compareRefLong = minLong === Infinity ? 0 : minLong;
             }
 
             // Overlay mode: find the smallest "longest side" across all loaded assets.
@@ -2725,13 +2725,12 @@
                     const boxTop  = Math.round((fitH - refPx) / 2);
                     offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
                     offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
-                } else if (!isVertical && !isTripartite && compareRefShort > 0) {
-                    // Horizontal compare: scale each asset so its shorter side = compareRefShort.
-                    // Portrait: anchors on width so a wider crop scales down to match the
-                    // original's width, making the content appear at the same size.
-                    // Landscape: anchors on height for the same reason.
-                    const shortSide = Math.min(naturalWidth, naturalHeight);
-                    const refScale = compareRefShort / shortSide;
+                } else if (!isVertical && !isTripartite && compareRefLong > 0) {
+                    // Horizontal compare: scale each asset so its longest side = compareRefLong.
+                    // Anchoring on the longest side gives the same dominant dimension on screen
+                    // for both landscape (same width) and portrait (same height) pairs.
+                    const longestSide = Math.max(naturalWidth, naturalHeight);
+                    const refScale = compareRefLong / longestSide;
                     const baseW = naturalWidth * refScale;
                     const baseH = naturalHeight * refScale;
                     const clampScale = Math.min(1, containerW / baseW, fitH / baseH);
