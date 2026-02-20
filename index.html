@@ -2736,26 +2736,18 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar.
-                // Vertical-stack: bar occupies the reserved strip at the top of the cell,
-                // spanning full cell width — video is always positioned below it.
-                // Other split modes: bar floats above the video (may be clipped if offsetY≈0).
+                // Position the info bar flush above the video, matching its width and x-position.
+                // In vertical-stack the reserved ibReserve strip guarantees space so the bar
+                // never overlaps the video — no special-casing needed.
                 if (infoBar) {
                     infoBar.style.position = ''; // clear fixed positioning from overlay mode
                     infoBar.style.bottom = '';
                     infoBar.style.height = '';
-                    if (isVertical) {
-                        infoBar.style.left = '0px';
-                        infoBar.style.top  = '0px';
-                        infoBar.style.width = '100%';
-                        infoBar.style.right = '';
-                    } else {
-                        const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
-                        infoBar.style.left = Math.round(offsetX) + 'px';
-                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
-                        infoBar.style.right = '';
-                        infoBar.style.width = Math.round(renderedW) + 'px';
-                    }
+                    infoBar.style.right  = '';
+                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    infoBar.style.left  = Math.round(offsetX) + 'px';
+                    infoBar.style.top   = Math.round(offsetY - ibH) + 'px';
+                    infoBar.style.width = Math.round(renderedW) + 'px';
                 }
             });
 
@@ -2790,9 +2782,10 @@
                     const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
                     const ibH = ib ? (ib._cachedH || 28) : 0;
                     layer.style.height = (ibH + slotRenderedH[slot]) + 'px';
-                    // Video top stays at ibReserve (already set by the main loop above)
+                    // Video positioned below the bar strip
                     if (videoWrapper) videoWrapper.style.top = ibH + 'px';
-                    // Info bar stays at top: 0 (already set by main loop)
+                    // Bar top: main loop already set correct left/width; just pin top to 0
+                    if (ib) ib.style.top = '0px';
                 });
 
                 // Shift the first layer down to center the group
