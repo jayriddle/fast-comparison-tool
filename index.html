@@ -2910,10 +2910,23 @@
             _applyZoomResizeTimer = setTimeout(applyZoom, 60);
         }
 
+        // rAF-throttled positionLabelsToMedia for resize — runs once per frame so
+        // JS-positioned wrappers track the CSS grid in real time without the 150ms
+        // debounce delay that causes jitter during window drag.
+        let _positionRafPending = false;
+        function positionLabelsToMediaRaf() {
+            if (_positionRafPending) return;
+            _positionRafPending = true;
+            requestAnimationFrame(() => {
+                _positionRafPending = false;
+                positionLabelsToMedia();
+            });
+        }
+
         // Call positioning on resize
         window.addEventListener('resize', () => {
             if (isSplitMode) {
-                positionLabelsToMediaDebounced(); // debounced: expensive 3-pass layout
+                positionLabelsToMediaRaf(); // rAF-throttled: smooth during window drag
             } else {
                 applyZoomDebounced(); // debounced: avoid per-pixel reflow during window drag
             }
