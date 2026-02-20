@@ -455,7 +455,7 @@
             width: 100%;
             height: calc((100vh - 80px) / 3);
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 0;
             overflow: hidden;
         }
 
@@ -2599,7 +2599,12 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
-                const fitH = containerH;
+                // In vertical-stack, reserve the top of each cell for the info bar so the
+                // video is always fitted below it — no overlap, no gap between cells.
+                const ibReserve = (isVertical && infoBar)
+                    ? (infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28))
+                    : 0;
+                const fitH = containerH - ibReserve;
 
                 let renderedW, renderedH, offsetX, offsetY;
                 if (isOverlay && overlayRefLong > 0) {
@@ -2638,7 +2643,8 @@
                     renderedW = naturalWidth * scale;
                     renderedH = naturalHeight * scale;
                     offsetX = (containerW - renderedW) / 2;
-                    offsetY = (containerH - renderedH) / 2;
+                    // Center within the video area (below the reserved info-bar strip)
+                    offsetY = ibReserve + (fitH - renderedH) / 2;
                     // Record for vertical-stack group-centering pass below
                     if (isVertical) slotRenderedH[slot] = Math.round(renderedH);
                 }
@@ -2730,47 +2736,63 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar flush above the asset, matching its width and x-position.
+                // Position the info bar.
+                // Vertical-stack: bar occupies the reserved strip at the top of the cell,
+                // spanning full cell width — video is always positioned below it.
+                // Other split modes: bar floats above the video (may be clipped if offsetY≈0).
                 if (infoBar) {
                     infoBar.style.position = ''; // clear fixed positioning from overlay mode
-                    // Use cached height to avoid a layout read after wrapper writes (reflow).
-                    // Cache is set on first measurement and stays valid (bar height is fixed).
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
-                    infoBar.style.left = Math.round(offsetX) + 'px';
-                    infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
                     infoBar.style.bottom = '';
-                    infoBar.style.right = '';
-                    infoBar.style.width = Math.round(renderedW) + 'px';
                     infoBar.style.height = '';
+                    if (isVertical) {
+                        infoBar.style.left = '0px';
+                        infoBar.style.top  = '0px';
+                        infoBar.style.width = '100%';
+                        infoBar.style.right = '';
+                    } else {
+                        const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                        infoBar.style.left = Math.round(offsetX) + 'px';
+                        infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
+                        infoBar.style.right = '';
+                        infoBar.style.width = Math.round(renderedW) + 'px';
+                    }
                 }
             });
 
-            // Vertical-stack 100%-cap: shrink each layer to its video height so there's no
-            // dead space around each video, then center the whole group in the viewport.
+            // Vertical-stack 100%-cap: shrink each layer to info-bar + video height so there's
+            // no dead space, then center the whole group in the viewport.
             if (isVertical && splitZoomLevel === 1 && Object.keys(slotRenderedH).length > 0) {
                 const headerEl = getHeaderEl();
                 const headerH = headerEl ? headerEl.offsetHeight : 39;
                 const availH = window.innerHeight - headerH;
-                const SEP = 10; // matches margin-bottom: 10px on .overlay-layer
+                // margin-bottom is now 0; no separator between cells
                 const loadedSlots = slots.filter(s => slotRenderedH[s] !== undefined);
-                const totalH = loadedSlots.reduce((sum, s) => sum + slotRenderedH[s], 0)
-                             + SEP * (loadedSlots.length - 1);
+
+                // Compute total height: each cell = ibReserve + renderedVideoH
+                let totalH = 0;
+                loadedSlots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
+                    const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    const ibH = ib ? (ib._cachedH || (ib._cachedH = ib.offsetHeight || 28)) : 0;
+                    totalH += ibH + slotRenderedH[slot];
+                });
                 const topPad = Math.max(0, Math.round((availH - totalH) / 2));
 
-                // Apply per-slot: shrink layer to exact video height, reset offsetY to 0
+                // Apply per-slot: shrink layer to ibReserve + video height; video stays at ibReserve
                 loadedSlots.forEach(slot => {
                     const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
                     const layer = document.getElementById(`layer${slotName}`);
                     if (!layer) return;
-                    layer.style.height = slotRenderedH[slot] + 'px';
-                    // Video is now top-aligned within its perfectly-sized layer; fix wrapper top
                     const mediaContainer = layer.querySelector('.media-container');
                     const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
-                    const infoBar = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
-                    if (videoWrapper) videoWrapper.style.top = '0px';
-                    // Info bar: overlay at top of video (layer has overflow:hidden so
-                    // negative top would be clipped; keep bar inside at top edge)
-                    if (infoBar) infoBar.style.top = '0px';
+                    const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    const ibH = ib ? (ib._cachedH || 28) : 0;
+                    layer.style.height = (ibH + slotRenderedH[slot]) + 'px';
+                    // Video top stays at ibReserve (already set by the main loop above)
+                    if (videoWrapper) videoWrapper.style.top = ibH + 'px';
+                    // Info bar stays at top: 0 (already set by main loop)
                 });
 
                 // Shift the first layer down to center the group
