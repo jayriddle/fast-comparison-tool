@@ -732,6 +732,12 @@
             border: 1px solid #444;
         }
 
+        .shortcut-divider {
+            border: none;
+            border-top: 1px solid #2a2a2a;
+            margin: 4px 0;
+        }
+
         .video-controls {
             position: absolute;
             bottom: 60px;
@@ -952,7 +958,7 @@
                         <li>Press <kbd>F</kbd> for fullscreen, <kbd>←</kbd> <kbd>→</kbd> to compare</li>
                         <li>Press <kbd>+</kbd> <kbd>-</kbd> to zoom in/out</li>
                         <li>Press <kbd>Space</kbd> to play/pause videos</li>
-                        <li>Press <kbd>K</kbd> for all keyboard shortcuts</li>
+                        <li>Press <kbd>K</kbd> for all hotkeys</li>
                     </ol>
                 </div>
             </div>
@@ -3275,19 +3281,23 @@
 
     <div class="shortcuts-panel" id="shortcutsPanel">
         <div class="shortcuts-panel-header">
-            <span>Keyboard Shortcuts</span>
+            <span>Hotkeys</span>
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
         <div class="shortcuts-list">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
+            <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
+            <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset zoom to fit</span></div>
+            <hr class="shortcut-divider">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
+            <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
         </div>
