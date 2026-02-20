@@ -2698,7 +2698,24 @@
                     }
                     renderedW = naturalWidth * scale;
                     renderedH = naturalHeight * scale;
-                    offsetX = (containerW - renderedW) / 2;
+                    // Horizontal compare: align images to their inner edges so they sit
+                    // flush against the centre divider, minimising the visual gap.
+                    // First slot → right-align (push to right edge of cell).
+                    // Last slot  → left-align  (push to left edge of cell).
+                    // Middle / single / other modes → centre as usual.
+                    if (!isVertical && !isTripartite && !isOverlay) {
+                        const loadedSlots = slots.filter(s => mediaData[s]);
+                        const slotIdx = loadedSlots.indexOf(slot);
+                        if (loadedSlots.length > 1 && slotIdx === 0) {
+                            offsetX = containerW - renderedW; // right-align
+                        } else if (loadedSlots.length > 1 && slotIdx === loadedSlots.length - 1) {
+                            offsetX = 0; // left-align
+                        } else {
+                            offsetX = (containerW - renderedW) / 2; // centre
+                        }
+                    } else {
+                        offsetX = (containerW - renderedW) / 2;
+                    }
                     // Center within the video area (below the reserved info-bar strip)
                     offsetY = ibReserve + (fitH - renderedH) / 2;
                     // Record for vertical-stack group-centering pass below
