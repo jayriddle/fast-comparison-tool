@@ -2069,38 +2069,52 @@
             const headerEl = getHeaderEl();
             const headerH = headerEl ? headerEl.offsetHeight : HEADER_OVERLAP;
 
-            // Compute fitZoom and refW/refH using the asset whose longest side is smallest.
-            // All assets are then scaled to fit within that reference bounding box, preserving
-            // their own aspect ratio — so portrait and landscape assets stay comparable.
-            let refW = 0, refH = 0;
+            // Compute a shared scale anchored to the narrowest asset's width.
+            // Every asset is rendered so its width = minNW * sharedScale, giving identical
+            // rendered widths for same-width assets and scaling wider ones down to match.
+            // fitZoom is set so the widest rendered asset just fits the viewport at zoomLevel=1.
+            let minNW = Infinity;
             {
-                let minLongest = Infinity;
                 ['original', 'editA', 'editB'].forEach(slot => {
                     if (mediaData[slot]) {
                         const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
                         const media = layer && layer.querySelector('img, video');
                         if (media) {
                             const nw = media.naturalWidth || media.videoWidth || 0;
-                            const nh = media.naturalHeight || media.videoHeight || 0;
-                            const longest = Math.max(nw, nh);
-                            if (longest > 0 && longest < minLongest) {
-                                minLongest = longest;
-                                refW = nw;
-                                refH = nh;
-                            }
+                            if (nw > 0 && nw < minNW) minNW = nw;
                         }
                     }
                 });
+                if (minNW === Infinity) minNW = 0;
+                // fitZoom: scale so the narrowest (reference) asset fits the viewport
                 const viewW = window.innerWidth;
                 const viewH = window.innerHeight - headerH;
-                if (refW > 0 && refH > 0) {
-                    fitZoom = Math.min(viewW / refW, viewH / refH);
+                if (minNW > 0) {
+                    // fitZoom = scale that makes the narrowest asset's width fill the viewport.
+                    // Height is also clamped: find the tallest rendered height across all assets
+                    // at width-fit scale and ensure that fits vertically too.
+                    let maxRenderedH = 0;
+                    ['original', 'editA', 'editB'].forEach(slot => {
+                        if (mediaData[slot]) {
+                            const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
+                            const media = layer && layer.querySelector('img, video');
+                            if (media) {
+                                const nw = media.naturalWidth || media.videoWidth || 0;
+                                const nh = media.naturalHeight || media.videoHeight || 0;
+                                if (nw > 0 && nh > 0) {
+                                    // rendered height at width-fit scale = nh * (minNW/nw)
+                                    const rh = nh * (minNW / nw);
+                                    if (rh > maxRenderedH) maxRenderedH = rh;
+                                }
+                            }
+                        }
+                    });
+                    fitZoom = Math.min(viewW / minNW, maxRenderedH > 0 ? viewH / maxRenderedH : Infinity);
                 }
             }
 
-            // Position each asset wrapper. Each asset is scaled to fit within the reference
-            // bounding box (refW × refH) at the current zoomLevel, preserving its own aspect ratio.
-            // This keeps all assets the same on-screen size regardless of native resolution or orientation.
+            // Position each asset wrapper. Every asset is scaled so its rendered width equals
+            // minNW * sharedScale — same-width assets appear identically wide on screen.
             const availH = window.innerHeight - headerH;
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
@@ -2115,10 +2129,10 @@
                 const nh = media.naturalHeight || media.videoHeight || 0;
                 if (!nw || !nh) return;
 
-                // Scale this asset to fit within the reference bounding box, preserving aspect ratio
-                const perAssetScale = refW > 0 && refH > 0
-                    ? Math.min(refW / nw, refH / nh) * zoomLevel
-                    : zoomLevel;
+                // Scale this asset so its rendered width matches the narrowest asset's width.
+                // (minNW/nw) normalises wider assets down; zoomLevel is already in px/naturalPx
+                // units (fitZoom at fit-to-viewport, 1 at 100% actual pixels).
+                const perAssetScale = minNW > 0 ? (minNW / nw) * zoomLevel : zoomLevel;
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
                 const centerTop = headerH + Math.max(0, Math.round((availH - scaledH) / 2));
@@ -2150,9 +2164,9 @@
                 media.style.objectFit = 'contain';
                 media.style.transform = '';
 
-                // Update per-asset zoom badge (actual ratio for this asset)
+                // Update per-asset zoom badge (actual pixel ratio for this specific asset)
                 const badge = vw.querySelector('.split-zoom-indicator');
-                if (badge) badge.textContent = zoomLevel.toFixed(2) + '×';
+                if (badge) badge.textContent = perAssetScale.toFixed(2) + '×';
 
                 // Position info bar flush above the wrapper.
                 // Store base (un-panned) coords so handlePanMove() can update cheaply.
