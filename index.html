@@ -2413,6 +2413,18 @@
             const isTripartite = document.body.classList.contains('tripartite');
             const isOverlay = !isSideBySide && !isVertical;
 
+            // In vertical-stack 100%-cap mode we shrink each layer to its video height and
+            // center the group. Clear those overrides first so offsetHeight reads CSS values.
+            if (isVertical) {
+                slots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    if (layer) { layer.style.height = ''; layer.style.marginTop = ''; }
+                });
+                const container = document.querySelector('.overlay-container');
+                if (container) container.style.paddingTop = '';
+            }
+
             // In tripartite mode, compute a shared rendered dimension so all three assets
             // appear the same size. Portrait assets (nw < nh) share rendered WIDTH;
             // landscape assets share rendered HEIGHT.
@@ -2485,6 +2497,9 @@
                 overlayRefLong = minLong === Infinity ? 0 : minLong;
             }
 
+            // Track rendered heights so the vertical-stack group-centering pass can use them.
+            const slotRenderedH = {}; // slot → rendered px height (for loaded slots only)
+
             slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2547,6 +2562,8 @@
                     renderedH = naturalHeight * scale;
                     offsetX = (containerW - renderedW) / 2;
                     offsetY = (containerH - renderedH) / 2;
+                    // Record for vertical-stack group-centering pass below
+                    if (isVertical) slotRenderedH[slot] = Math.round(renderedH);
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
@@ -2648,6 +2665,40 @@
                     infoBar.style.height = '';
                 }
             });
+
+            // Vertical-stack 100%-cap: shrink each layer to its video height so there's no
+            // dead space around each video, then center the whole group in the viewport.
+            if (isVertical && splitZoomLevel === 1 && Object.keys(slotRenderedH).length > 0) {
+                const headerEl = document.querySelector('.header');
+                const headerH = headerEl ? headerEl.offsetHeight : 39;
+                const availH = window.innerHeight - headerH;
+                const SEP = 10; // matches margin-bottom: 10px on .overlay-layer
+                const loadedSlots = slots.filter(s => slotRenderedH[s] !== undefined);
+                const totalH = loadedSlots.reduce((sum, s) => sum + slotRenderedH[s], 0)
+                             + SEP * (loadedSlots.length - 1);
+                const topPad = Math.max(0, Math.round((availH - totalH) / 2));
+
+                // Apply per-slot: shrink layer to exact video height, reset offsetY to 0
+                loadedSlots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    if (!layer) return;
+                    layer.style.height = slotRenderedH[slot] + 'px';
+                    // Video is now top-aligned within its perfectly-sized layer; fix wrapper top
+                    const mediaContainer = layer.querySelector('.media-container');
+                    const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
+                    const infoBar = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    if (videoWrapper) videoWrapper.style.top = '0px';
+                    // Info bar: overlay at top of video (layer has overflow:hidden so
+                    // negative top would be clipped; keep bar inside at top edge)
+                    if (infoBar) infoBar.style.top = '0px';
+                });
+
+                // Shift the first layer down to center the group
+                const firstSlot = loadedSlots[0];
+                const firstLayer = document.getElementById(`layer${firstSlot.charAt(0).toUpperCase() + firstSlot.slice(1)}`);
+                if (firstLayer) firstLayer.style.marginTop = topPad + 'px';
+            }
 
             // If any loaded slot had a zero-dimension container (layout not yet committed),
             // retry after the next paint so those slots get positioned correctly.
@@ -2786,6 +2837,10 @@
 
                 // Clear any inline styles set by positionLabelsToMedia() so CSS takes over.
                 // Done AFTER the body class change so the layout is already live.
+                document.querySelectorAll('.overlay-layer').forEach(layer => {
+                    layer.style.height = '';    // clear vertical-stack 100%-cap height override
+                    layer.style.marginTop = ''; // clear vertical-stack 100%-cap centering offset
+                });
                 document.querySelectorAll('.video-wrapper').forEach(vw => {
                     vw.style.position = ''; // clear fixed positioning set by applyZoom()
                     vw.style.width = '';
