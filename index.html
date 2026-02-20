@@ -2008,8 +2008,8 @@
             container.addEventListener('mouseleave', handlePanEnd);
         }
 
-        // Clamp panOffsetX/Y so the image can't be dragged completely off-screen.
-        // At least 1px of the image must remain visible on each axis.
+        // Clamp panOffsetX/Y so each edge of the image can't travel more than
+        // ~25% of the viewport past the corresponding side of the frame.
         function clampPanOffsets() {
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (!activeLayer) return;
@@ -2022,20 +2022,18 @@
             const headerH    = parseFloat(document.querySelector('.header')?.offsetHeight || HEADER_OVERLAP);
             const viewW = window.innerWidth;
             const viewH = window.innerHeight;
+            const slackX = viewW * 0.25;
+            const slackY = viewH * 0.25;
 
-            // Right edge must stay right of viewport left (x=0)
-            // pannedLeft + scaledW > 0  →  panOffsetX > -(centerLeft + scaledW)
-            const minX = -(centerLeft + scaledW - 1);
-            // Left edge must stay left of viewport right
-            // pannedLeft < viewW  →  panOffsetX < viewW - centerLeft
-            const maxX = viewW - centerLeft - 1;
+            // Right edge can't go more than slackX past the left of the viewport
+            const minX = -(centerLeft + scaledW) + slackX;
+            // Left edge can't go more than slackX past the right of the viewport
+            const maxX = (viewW - centerLeft) - slackX;
 
-            // Bottom edge must stay below header bottom
-            // pannedTop + scaledH > headerH  →  panOffsetY > headerH - centerTop - scaledH
-            const minY = headerH - centerTop - scaledH + 1;
-            // Top edge must stay above viewport bottom
-            // pannedTop < viewH  →  panOffsetY < viewH - centerTop
-            const maxY = viewH - centerTop - 1;
+            // Bottom edge can't go more than slackY above the header
+            const minY = (headerH - centerTop - scaledH) + slackY;
+            // Top edge can't go more than slackY below the viewport bottom
+            const maxY = (viewH - centerTop) - slackY;
 
             panOffsetX = Math.min(maxX, Math.max(minX, panOffsetX));
             panOffsetY = Math.min(maxY, Math.max(minY, panOffsetY));
