@@ -2572,6 +2572,28 @@
                 });
             }
 
+            // Horizontal compare pre-pass: same longest-side logic as overlay mode.
+            // Scale all assets so their longest side equals the smallest longest-side
+            // across loaded assets — preserving content scale relationships (e.g. a crop
+            // of another image renders smaller, not stretched to fill its cell).
+            // Each slot then clamps independently to its own cell dimensions.
+            let compareRefLong = 0;
+            if (!isVertical && !isTripartite && !isOverlay) {
+                let minLong = Infinity;
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const layer = getLayer(slot);
+                    const media = layer ? layer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const longest = Math.max(nw, nh);
+                    if (longest < minLong) minLong = longest;
+                });
+                compareRefLong = minLong === Infinity ? 0 : minLong;
+            }
+
             // Overlay mode: find the smallest "longest side" across all loaded assets.
             // All assets are then rendered so their longest side equals that reference
             // length — the smallest asset shows at 1:1, larger ones scale down to match.
@@ -2678,9 +2700,21 @@
                     const boxTop  = Math.round((fitH - refPx) / 2);
                     offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
                     offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
+                } else if (!isVertical && !isTripartite && compareRefLong > 0) {
+                    // Horizontal compare: scale each asset so its longest side = compareRefLong,
+                    // then clamp to the cell so nothing overflows. Same logic as overlay mode,
+                    // preserving content-scale relationships across images.
+                    const longestSide = Math.max(naturalWidth, naturalHeight);
+                    const refScale = compareRefLong / longestSide;
+                    const baseW = naturalWidth * refScale;
+                    const baseH = naturalHeight * refScale;
+                    const clampScale = Math.min(1, containerW / baseW, fitH / baseH);
+                    renderedW = Math.round(baseW * clampScale);
+                    renderedH = Math.round(baseH * clampScale);
+                    offsetX = (containerW - renderedW) / 2;
+                    offsetY = ibReserve + (fitH - renderedH) / 2;
                 } else {
-                    // Split modes: contain-fit, optionally capped at 100% actual pixels.
-                    // Vertical-stack uses a shared scale so all assets render at the same zoom.
+                    // Vertical-stack / tripartite / fallback: contain-fit per cell.
                     let scale;
                     if (isVertical && verticalSharedScale !== null) {
                         scale = verticalSharedScale;
@@ -2698,24 +2732,7 @@
                     }
                     renderedW = naturalWidth * scale;
                     renderedH = naturalHeight * scale;
-                    // Horizontal compare: align images to their inner edges so they sit
-                    // flush against the centre divider, minimising the visual gap.
-                    // First slot → right-align (push to right edge of cell).
-                    // Last slot  → left-align  (push to left edge of cell).
-                    // Middle / single / other modes → centre as usual.
-                    if (!isVertical && !isTripartite && !isOverlay) {
-                        const loadedSlots = slots.filter(s => mediaData[s]);
-                        const slotIdx = loadedSlots.indexOf(slot);
-                        if (loadedSlots.length > 1 && slotIdx === 0) {
-                            offsetX = containerW - renderedW; // right-align
-                        } else if (loadedSlots.length > 1 && slotIdx === loadedSlots.length - 1) {
-                            offsetX = 0; // left-align
-                        } else {
-                            offsetX = (containerW - renderedW) / 2; // centre
-                        }
-                    } else {
-                        offsetX = (containerW - renderedW) / 2;
-                    }
+                    offsetX = (containerW - renderedW) / 2;
                     // Center within the video area (below the reserved info-bar strip)
                     offsetY = ibReserve + (fitH - renderedH) / 2;
                     // Record for vertical-stack group-centering pass below
