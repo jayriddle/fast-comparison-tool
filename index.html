@@ -1898,6 +1898,7 @@
             let _scrubVideo = null;       // primary (active) video element
             let _scrubAllVideos = null;   // all video elements (for sync)
             let _scrubContainerRect = null; // progress bar bounding rect (stable during drag)
+            let _seekInFlight = false;    // true while the decoder is processing a seek
 
             // Seek a single video, preferring fastSeek() for keyframe-level speed.
             function seekVideo(v, time) {
@@ -1909,12 +1910,14 @@
             }
 
             // Flush the pending scrub: seek video(s) and update the UI.
-            // Called at most once per animation frame to drain the seek backlog.
+            // Only fires when the decoder is idle (_seekInFlight === false) so seeks
+            // never queue up inside the browser's media pipeline.
             // In overlay mode only the active (visible) video is seeked during drag;
             // hidden videos are synced on mouseup so they don't compete for the decoder.
             function flushScrub() {
                 scrubRafId = null;
                 if (pendingScrubPct === null) return;
+                if (_seekInFlight) return; // decoder busy — drop stale position, next seeked event will retry
                 const pct = pendingScrubPct;
                 pendingScrubPct = null;
 
@@ -1924,6 +1927,9 @@
                 // Update the progress bar immediately from mouse position (no seek lag)
                 getProgressEls();
                 if (_elProgressBar) _elProgressBar.style.width = (pct * 100) + '%';
+
+                // Mark seek in-flight; cleared by the 'seeked' event on the primary video
+                _seekInFlight = true;
 
                 // Overlay mode: only seek the visible video during drag — hidden videos
                 // would compete for the decoder and slow down the one you're watching.
@@ -1953,20 +1959,40 @@
                 getProgressEls();
                 if (_elProgressBar) _elProgressBar.style.width = (pendingScrubPct * 100) + '%';
 
-                // Schedule one seek per animation frame — rapid mousemoves collapse into one seek
+                // Schedule one flush per animation frame — rapid mousemoves collapse into one seek.
+                // If a seek is already in-flight the rAF will find _seekInFlight=true and drop it;
+                // the 'seeked' handler will schedule a fresh rAF to pick up whatever is pending.
                 if (scrubRafId === null) {
                     scrubRafId = requestAnimationFrame(flushScrub);
                 }
             }
 
+            // Called when the primary video finishes a seek — clears the in-flight flag
+            // and immediately schedules another flush if the user moved the scrubber
+            // while the decoder was busy (pendingScrubPct will be non-null in that case).
+            function onScrubSeeked() {
+                _seekInFlight = false;
+                if (isDragging && pendingScrubPct !== null) {
+                    if (scrubRafId === null) {
+                        scrubRafId = requestAnimationFrame(flushScrub);
+                    }
+                }
+            }
+
             progressContainer.addEventListener('mousedown', function(e) {
                 isDragging = true;
+                _seekInFlight = false;
 
                 // Cache all scrub targets once at drag-start — zero DOM queries during drag
                 const activeLayer = document.querySelector('.overlay-layer.active');
                 _scrubVideo = activeLayer ? activeLayer.querySelector('video') : null;
                 _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer video'));
                 _scrubContainerRect = progressContainer.getBoundingClientRect();
+
+                // Listen for seek completion on the primary video to pace the next seek
+                if (_scrubVideo) {
+                    _scrubVideo.addEventListener('seeked', onScrubSeeked);
+                }
 
                 // Pause video during scrubbing for smooth experience
                 if (_scrubVideo) {
@@ -1995,12 +2021,18 @@
                         flushScrub();
                     }
 
+                    // Remove the seeked listener and clear in-flight flag
+                    if (_scrubVideo) {
+                        _scrubVideo.removeEventListener('seeked', onScrubSeeked);
+                    }
+                    _seekInFlight = false;
+
                     // In overlay mode, hidden videos weren't seeked during drag —
                     // sync them now to the final position before resuming playback.
                     if (!isSideBySide && _scrubVideo && _scrubAllVideos) {
-                        const finalPct = pendingScrubPct !== null
-                            ? pendingScrubPct
-                            : (_scrubVideo.duration ? _scrubVideo.currentTime / _scrubVideo.duration : 0);
+                        const finalPct = _scrubVideo.duration
+                            ? _scrubVideo.currentTime / _scrubVideo.duration
+                            : 0;
                         for (let i = 0; i < _scrubAllVideos.length; i++) {
                             const v = _scrubAllVideos[i];
                             if (v !== _scrubVideo) seekVideo(v, finalPct * v.duration);
