@@ -1917,9 +1917,11 @@
                 const pannedTop = centerTop + panOffsetY;
                 const pannedLeft = centerLeft + panOffsetX;
 
-                // Stash base (un-panned) coords for handlePanMove() to use
+                // Stash base (un-panned) coords and dimensions for handlePanMove() to use
                 vw.dataset.centerTop = centerTop;
                 vw.dataset.centerLeft = centerLeft;
+                vw.dataset.scaledW = scaledW;
+                vw.dataset.scaledH = scaledH;
 
                 vw.style.position = 'fixed';
                 vw.style.top = pannedTop + 'px';
@@ -2006,6 +2008,39 @@
             container.addEventListener('mouseleave', handlePanEnd);
         }
 
+        // Clamp panOffsetX/Y so the image can't be dragged completely off-screen.
+        // At least 1px of the image must remain visible on each axis.
+        function clampPanOffsets() {
+            const activeLayer = document.querySelector('.overlay-layer.active');
+            if (!activeLayer) return;
+            const vw = activeLayer.querySelector('.video-wrapper');
+            if (!vw) return;
+            const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
+            const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
+            const scaledW    = parseFloat(vw.dataset.scaledW    || 0);
+            const scaledH    = parseFloat(vw.dataset.scaledH    || 0);
+            const headerH    = parseFloat(document.querySelector('.header')?.offsetHeight || HEADER_OVERLAP);
+            const viewW = window.innerWidth;
+            const viewH = window.innerHeight;
+
+            // Right edge must stay right of viewport left (x=0)
+            // pannedLeft + scaledW > 0  →  panOffsetX > -(centerLeft + scaledW)
+            const minX = -(centerLeft + scaledW - 1);
+            // Left edge must stay left of viewport right
+            // pannedLeft < viewW  →  panOffsetX < viewW - centerLeft
+            const maxX = viewW - centerLeft - 1;
+
+            // Bottom edge must stay below header bottom
+            // pannedTop + scaledH > headerH  →  panOffsetY > headerH - centerTop - scaledH
+            const minY = headerH - centerTop - scaledH + 1;
+            // Top edge must stay above viewport bottom
+            // pannedTop < viewH  →  panOffsetY < viewH - centerTop
+            const maxY = viewH - centerTop - 1;
+
+            panOffsetX = Math.min(maxX, Math.max(minX, panOffsetX));
+            panOffsetY = Math.min(maxY, Math.max(minY, panOffsetY));
+        }
+
         function handlePanStart(e) {
             if (zoomLevel <= fitZoom) return; // no pan when full image is visible
             e.preventDefault(); // Prevent browser's default drag behavior
@@ -2021,6 +2056,7 @@
             e.preventDefault();
             panOffsetX = e.clientX - panStartX;
             panOffsetY = e.clientY - panStartY;
+            clampPanOffsets();
 
             // Move the wrapper (not the media) so zoom badge and all children track with it
             const activeLayer = document.querySelector('.overlay-layer.active');
