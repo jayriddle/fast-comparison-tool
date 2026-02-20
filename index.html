@@ -1908,8 +1908,10 @@
                 }
             }
 
-            // Flush the pending scrub: seek all videos and update the UI.
+            // Flush the pending scrub: seek video(s) and update the UI.
             // Called at most once per animation frame to drain the seek backlog.
+            // In overlay mode only the active (visible) video is seeked during drag;
+            // hidden videos are synced on mouseup so they don't compete for the decoder.
             function flushScrub() {
                 scrubRafId = null;
                 if (pendingScrubPct === null) return;
@@ -1923,13 +1925,17 @@
                 getProgressEls();
                 if (_elProgressBar) _elProgressBar.style.width = (pct * 100) + '%';
 
-                // Seek all videos to the proportional position
+                // Overlay mode: only seek the visible video during drag — hidden videos
+                // would compete for the decoder and slow down the one you're watching.
+                // Compare/split modes: seek all videos in real time for sync preview.
                 seekVideo(video, pct * video.duration);
-                const all = _scrubAllVideos;
-                if (all) {
-                    for (let i = 0; i < all.length; i++) {
-                        const v = all[i];
-                        if (v !== video) seekVideo(v, pct * v.duration);
+                if (isSideBySide) {
+                    const all = _scrubAllVideos;
+                    if (all) {
+                        for (let i = 0; i < all.length; i++) {
+                            const v = all[i];
+                            if (v !== video) seekVideo(v, pct * v.duration);
+                        }
                     }
                 }
 
@@ -1987,6 +1993,18 @@
                         cancelAnimationFrame(scrubRafId);
                         scrubRafId = null;
                         flushScrub();
+                    }
+
+                    // In overlay mode, hidden videos weren't seeked during drag —
+                    // sync them now to the final position before resuming playback.
+                    if (!isSideBySide && _scrubVideo && _scrubAllVideos) {
+                        const finalPct = pendingScrubPct !== null
+                            ? pendingScrubPct
+                            : (_scrubVideo.duration ? _scrubVideo.currentTime / _scrubVideo.duration : 0);
+                        for (let i = 0; i < _scrubAllVideos.length; i++) {
+                            const v = _scrubAllVideos[i];
+                            if (v !== _scrubVideo) seekVideo(v, finalPct * v.duration);
+                        }
                     }
 
                     // Clear cached scrub targets
