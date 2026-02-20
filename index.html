@@ -617,16 +617,6 @@
             color: #ffffff;
         }
 
-        /* Drag and drop styling */
-        .overlay-layer.dragging {
-            opacity: 0.5;
-            cursor: grabbing;
-        }
-
-        .overlay-layer.drag-over {
-            border: 3px solid rgb(160, 160, 160);
-        }
-
         .layout-controls {
             display: none !important;
         }
@@ -1083,10 +1073,6 @@
         const HEADER_OVERLAP = 50; // px reserved for the header bar in inspect mode
         const INFO_BAR_H = 30;     // px reserved for the asset info bar in overlay mode
         let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
-
-        // Per-layer drag handler references — stored so we can removeEventListener
-        // cleanly without cloning DOM nodes (cloning destroys freshly-loaded media).
-        const dragHandlers = new WeakMap();
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
@@ -2232,7 +2218,6 @@
                         layer.classList.add('active');
                     }
                 });
-                setupLayerDragAndDrop();
             } else {
                 document.body.classList.remove('side-by-side');
                 document.body.classList.remove('vertical-stack');
@@ -2242,7 +2227,6 @@
                     layer.classList.remove('active');
                 });
                 switchToAsset(currentAssetIndex);
-                removeDragAndDrop();
             }
         }
 
@@ -2611,7 +2595,6 @@
                         layer.classList.remove('active-audio');
                     });
                     switchToAsset(currentAssetIndex);
-                    removeDragAndDrop();
                     // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport
                     requestAnimationFrame(() => requestAnimationFrame(() => applyZoom()));
                 }
@@ -2625,12 +2608,6 @@
                             layer.classList.add('active');
                         }
                     });
-                    if (mode !== 'tripartite') {
-                        setupLayerDragAndDrop();
-                    } else {
-                        removeDragAndDrop();
-                    }
-
                     // Ensure only the current audio source plays
                     selectAudioSource(currentAudioSource);
                 }
@@ -2648,12 +2625,10 @@
                     document.body.classList.remove('side-by-side');
                     document.body.classList.remove('vertical-stack');
                     document.body.classList.add('tripartite');
-                    removeDragAndDrop();
                 } else {
                     document.body.classList.remove('vertical-stack');
                     document.body.classList.remove('tripartite');
                     document.body.classList.add('side-by-side');
-                    setupLayerDragAndDrop();
                 }
 
                 // Show/hide layers based on whether they have media loaded.
@@ -2898,120 +2873,6 @@
                 console.log('=== checkAllLoaded complete ===');
             } else {
                 console.log('Not enough files loaded yet');
-            }
-        }
-
-        function setupLayerDragAndDrop() {
-            const layers = document.querySelectorAll('.overlay-layer');
-
-            layers.forEach(layer => {
-                if (!layer.querySelector('img, video')) return; // Skip empty layers
-
-                // Remove any existing handlers first (idempotent)
-                _removeDragListeners(layer);
-
-                layer.draggable = true;
-
-                // Build named handler functions so they can be removed later without
-                // cloning the DOM node (cloning destroys freshly-loaded media elements).
-                const handlers = {
-                    dragstart(e) {
-                        layer.classList.add('dragging');
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/html', layer.id);
-                    },
-                    dragend(e) {
-                        layer.classList.remove('dragging');
-                    },
-                    dragover(e) {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        layer.classList.add('drag-over');
-                    },
-                    dragleave(e) {
-                        layer.classList.remove('drag-over');
-                    },
-                    drop(e) {
-                        e.preventDefault();
-                        layer.classList.remove('drag-over');
-
-                        const draggedId = e.dataTransfer.getData('text/html');
-                        const draggedElement = document.getElementById(draggedId);
-
-                        if (draggedElement && draggedElement !== layer) {
-                            const container = layer.parentNode;
-                            const allLayers = Array.from(container.querySelectorAll('.overlay-layer'));
-                            const draggedIndex = allLayers.indexOf(draggedElement);
-                            const targetIndex = allLayers.indexOf(layer);
-
-                            if (draggedIndex < targetIndex) {
-                                layer.parentNode.insertBefore(draggedElement, layer.nextSibling);
-                            } else {
-                                layer.parentNode.insertBefore(draggedElement, layer);
-                            }
-
-                            syncLayerOrderWithDropZones();
-                        }
-                    }
-                };
-
-                dragHandlers.set(layer, handlers);
-                layer.addEventListener('dragstart', handlers.dragstart);
-                layer.addEventListener('dragend',   handlers.dragend);
-                layer.addEventListener('dragover',  handlers.dragover);
-                layer.addEventListener('dragleave', handlers.dragleave);
-                layer.addEventListener('drop',      handlers.drop);
-            });
-        }
-
-        function _removeDragListeners(layer) {
-            const handlers = dragHandlers.get(layer);
-            if (!handlers) return;
-            layer.removeEventListener('dragstart', handlers.dragstart);
-            layer.removeEventListener('dragend',   handlers.dragend);
-            layer.removeEventListener('dragover',  handlers.dragover);
-            layer.removeEventListener('dragleave', handlers.dragleave);
-            layer.removeEventListener('drop',      handlers.drop);
-            dragHandlers.delete(layer);
-        }
-
-        function removeDragAndDrop() {
-            document.querySelectorAll('.overlay-layer').forEach(layer => {
-                layer.draggable = false;
-                _removeDragListeners(layer);
-            });
-        }
-
-        function syncLayerOrderWithDropZones() {
-            // Get current DOM order of layers
-            const layers = Array.from(document.querySelectorAll('.overlay-layer'));
-            const newOrder = layers.map(layer => {
-                if (layer.id === 'layerOriginal') return 'original';
-                if (layer.id === 'layerEditA') return 'editA';
-                if (layer.id === 'layerEditB') return 'editB';
-            }).filter(x => x);
-
-            // Update assetOrder array
-            assetOrder.length = 0;
-            assetOrder.push(...newOrder);
-
-            // Reorder drop zones to match
-            const dropZonesContainer = document.querySelector('.drop-zones');
-            newOrder.forEach(slot => {
-                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
-                const dropZone = document.getElementById(`drop${slotName}`);
-                if (dropZone) {
-                    dropZonesContainer.appendChild(dropZone);
-                }
-            });
-
-            // Update currentAssetIndex to match new order
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const newIndex = layers.indexOf(activeLayer);
-                if (newIndex !== -1) {
-                    currentAssetIndex = newIndex;
-                }
             }
         }
 
