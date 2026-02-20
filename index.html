@@ -3500,8 +3500,8 @@
                 } else {
                     setViewMode(layoutMode);
                 }
-            } else if (e.key === 's' || e.key === 'S') {
-                // S key cycles through view modes depending on asset count.
+            } else if (e.key === 'c' || e.key === 'C') {
+                // C key toggles compare mode depending on asset count.
                 e.preventDefault();
                 const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
                 if (allThreeLoaded) {
@@ -3556,7 +3556,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>C</kbd></span><span class="shortcut-desc">Toggle compare mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
