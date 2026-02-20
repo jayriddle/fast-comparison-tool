@@ -855,28 +855,35 @@
             position: relative; /* anchor the sliding underline */
         }
 
-        /* Mode buttons slide as a group when overlay activates */
+        /* Mode buttons slide left as a group when overlay activates */
+        @keyframes modeCoreSlideLeft {
+            from { transform: translateX(var(--asset-group-width, 0px)); }
+            to   { transform: translateX(0); }
+        }
         .mode-core {
             display: flex;
             align-items: center;
             gap: 2px;
-            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .mode-core.sliding {
+            animation: modeCoreSlideLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
-        /* Asset group slides in from right when overlay activates */
+        /* Asset group fades + slides in from right when overlay activates */
+        @keyframes assetGroupReveal {
+            from { opacity: 0; transform: translateX(8px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
         .asset-group {
             display: flex;
             align-items: center;
             gap: 0;
             margin-left: -2px; /* eat the strip's flex gap so band butts against OVERLAY pill */
-            transform: translateX(12px);
             opacity: 0;
-            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-                        opacity 0.5s ease;
         }
         .asset-group.visible {
-            transform: translateX(0);
             opacity: 1;
+            animation: assetGroupReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
         .mode-btn, .asset-btn {
@@ -2857,11 +2864,11 @@
                 const loaded = assetOrder.filter(slot => mediaData[slot]);
 
                 const assetGroup = document.createElement('div');
-                assetGroup.className = 'asset-group'; // starts offset + invisible; .visible triggers transition
+                // Render invisible but in-flow so we can measure its width before animating
+                assetGroup.className = 'asset-group';
 
                 loaded.forEach((slot, i) => {
                     const sep = document.createElement('span');
-                    // asset-sep shares the dim tint so the band reads as one continuous strip
                     sep.className = 'strip-sep asset-sep';
                     sep.textContent = '·';
                     assetGroup.appendChild(sep);
@@ -2871,8 +2878,6 @@
                     const label = nameEl ? nameEl.textContent : slotName;
                     const btn = document.createElement('button');
                     const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
-                    // first-asset: negative margin eats the flex gap to butt against OVERLAY pill
-                    // last-asset: rounded right end caps the tint band
                     const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
                     btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
                     btn.textContent = label;
@@ -2886,24 +2891,29 @@
                 if (!underline) {
                     underline = document.createElement('div');
                     underline.id = 'assetUnderline';
-                    strip.appendChild(underline);
-                } else {
-                    strip.appendChild(underline);
                 }
+                strip.appendChild(underline);
 
-                // Trigger slide-in on next frame (must be after layout)
+                // After layout: measure asset group width, set it as a CSS custom property
+                // so the @keyframe animation slides mode-core left by exactly that amount.
                 requestAnimationFrame(() => {
+                    const groupW = assetGroup.offsetWidth;
+
+                    // Tell the keyframe animation how far to slide
+                    modeCore.style.setProperty('--asset-group-width', `${groupW}px`);
+                    modeCore.classList.add('sliding');
+
+                    // Snap underline into place (offsetLeft-based, immune to transforms)
+                    underline.style.transition = 'none';
+                    positionAssetUnderline();
+
+                    // Trigger asset group reveal animation
                     assetGroup.classList.add('visible');
-                    // Snap underline to position instantly (no slide on first appearance),
-                    // then re-enable transition for subsequent switches
-                    if (underline) {
-                        underline.style.transition = 'none';
-                        positionAssetUnderline();
-                        // Re-enable transition after placement (double rAF ensures paint happened)
-                        requestAnimationFrame(() => {
-                            underline.style.transition = '';
-                        });
-                    }
+
+                    // Re-enable underline slide transition after it's been placed
+                    requestAnimationFrame(() => {
+                        underline.style.transition = '';
+                    });
                 });
             } else {
                 // Hide underline when not in overlay mode
@@ -2913,7 +2923,8 @@
         }
 
         // Moves the sliding underline to sit beneath the currently active asset button.
-        // Called after DOM layout so offsetLeft/offsetWidth are accurate.
+        // Uses offsetLeft traversal (not getBoundingClientRect) so CSS transforms on
+        // parent elements don't skew the measurement.
         function positionAssetUnderline() {
             const strip = document.getElementById('modeStrip');
             const underline = document.getElementById('assetUnderline');
@@ -2922,13 +2933,16 @@
             const activeBtn = strip.querySelector('.asset-btn.active');
             if (!activeBtn) { underline.classList.remove('visible'); return; }
 
-            const stripRect = strip.getBoundingClientRect();
-            const btnRect = activeBtn.getBoundingClientRect();
-            const left = btnRect.left - stripRect.left;
-            const width = btnRect.width;
+            // Walk up offsetParent chain to sum offsetLeft relative to the strip
+            let left = 0;
+            let el = activeBtn;
+            while (el && el !== strip) {
+                left += el.offsetLeft;
+                el = el.offsetParent;
+            }
 
             underline.style.left = left + 'px';
-            underline.style.width = width + 'px';
+            underline.style.width = activeBtn.offsetWidth + 'px';
             underline.classList.add('visible');
         }
 
