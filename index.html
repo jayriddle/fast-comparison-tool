@@ -2172,7 +2172,11 @@
                 // Store base (un-panned) coords so handlePanMove() can update cheaply.
                 const infoBar = layer.querySelector('.asset-info-bar');
                 if (infoBar) {
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    // Always read live offsetHeight here (not cached) — the bar height can
+                    // change on first render (font load, initial layout) and a stale cache
+                    // causes the bar to separate from the video's top edge.
+                    const ibH = infoBar.offsetHeight || 28;
+                    infoBar._cachedH = ibH; // update cache for handlePanMove hot path
                     infoBar.dataset.centerTop = centerTop;
                     infoBar.dataset.centerLeft = centerLeft;
                     infoBar.dataset.scaledW = scaledW;
@@ -2668,7 +2672,7 @@
                     const ch = mediaContainer.offsetHeight;
                     if (!cw || !ch) return;
                     const ibH = infoBar
-                        ? (infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28))
+                        ? (infoBar._cachedH = infoBar.offsetHeight || 28)
                         : 0;
                     const availH = ch - ibH;
                     const fitScale = (cw / nw) < (availH / nh) ? cw / nw : availH / nh;
@@ -2706,7 +2710,7 @@
                 // In vertical-stack, reserve the top of each cell for the info bar so the
                 // video is always fitted below it — no overlap, no gap between cells.
                 const ibReserve = (isVertical && infoBar)
-                    ? (infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28))
+                    ? (infoBar._cachedH = infoBar.offsetHeight || 28)
                     : 0;
                 const fitH = containerH - ibReserve;
 
@@ -2855,7 +2859,7 @@
                     infoBar.style.bottom = '';
                     infoBar.style.height = '';
                     infoBar.style.right  = '';
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    const ibH = infoBar._cachedH = infoBar.offsetHeight || 28;
                     infoBar.style.left  = Math.round(offsetX) + 'px';
                     infoBar.style.top   = Math.round(offsetY - ibH) + 'px';
                     infoBar.style.width = Math.round(renderedW) + 'px';
