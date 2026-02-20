@@ -1105,6 +1105,7 @@
             document.body.addEventListener('drop', (e) => {
                 e.preventDefault();
                 const files = Array.from(e.dataTransfer.files);
+                if (files.length === 0) return; // DOM element drag (layer reorder), not a file drop
                 handleMultipleFiles(files);
             }, false);
         }
