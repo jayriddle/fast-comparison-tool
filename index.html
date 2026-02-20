@@ -11,6 +11,10 @@
             box-sizing: border-box;
         }
 
+        html {
+            overflow: hidden;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: rgb(32, 32, 32);
@@ -22,6 +26,7 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .header {
@@ -47,10 +52,16 @@
             cursor: pointer;
             font-size: 10px;
             margin-left: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .position-toggle:hover {
             background: #666;
+        }
+
+        .position-toggle:focus {
+            outline: none;
         }
 
         .help-tooltip {
@@ -275,9 +286,11 @@
             border: none;
             border-radius: 3px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             margin-left: 15px;
             position: relative;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .quick-start-btn:hover {
@@ -288,14 +301,14 @@
             position: absolute;
             top: 100%;
             left: 0;
-            margin-top: 5px;
-            background: #2a2a2a;
-            border: 2px solid rgb(160, 160, 160);
-            border-radius: 8px;
-            padding: 20px 30px;
+            margin-top: 6px;
+            background: #242424;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 16px 20px;
             z-index: 1000;
-            width: 450px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            width: 360px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
             display: none;
         }
 
@@ -309,13 +322,18 @@
 
         .quick-start-close {
             float: right;
-            background: #dc3545;
-            color: white;
+            background: transparent;
+            color: #999;
             border: none;
-            border-radius: 3px;
-            padding: 4px 10px;
+            padding: 0;
             cursor: pointer;
             font-size: 11px;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .quick-start-close:hover {
+            color: #ccc;
         }
 
         .comparison-view {
@@ -518,12 +536,12 @@
         }
 
         body.tripartite .overlay-layer.active-audio .asset-info-bar {
-            border: 2px solid #28a745;
-            box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
+            background: rgba(60, 60, 60, 0.95);
+            color: #e0e0e0;
         }
 
         body.tripartite .overlay-layer.active-audio .asset-info-bar .asset-name {
-            color: #28a745;
+            color: #ffffff;
         }
 
         /* fit-cover toggles */
@@ -575,27 +593,29 @@
             color: #ffffff;
         }
 
-        /* Active asset indicator - show and highlight in overlay mode only */
+        /* Active asset indicator - brighter info bar in overlay mode */
         body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-layer.active .asset-info-bar {
             display: flex;
-            border: 2px solid #007bff;
-            background: rgba(0, 123, 255, 0.2);
+            background: rgba(60, 60, 60, 0.95);
+            color: #e0e0e0;
         }
 
         body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-layer.active .asset-info-bar .asset-name {
-            color: #007bff;
+            color: #ffffff;
         }
 
         /* Active audio indicator for split views - shows which audio is playing */
         body.side-by-side .overlay-layer.active-audio .asset-info-bar,
-        body.vertical-stack .overlay-layer.active-audio .asset-info-bar {
-            border: 2px solid #28a745;
-            box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
+        body.vertical-stack .overlay-layer.active-audio .asset-info-bar,
+        body.tripartite .overlay-layer.active-audio .asset-info-bar {
+            background: rgba(60, 60, 60, 0.95);
+            color: #e0e0e0;
         }
 
         body.side-by-side .overlay-layer.active-audio .asset-info-bar .asset-name,
-        body.vertical-stack .overlay-layer.active-audio .asset-info-bar .asset-name {
-            color: #28a745;
+        body.vertical-stack .overlay-layer.active-audio .asset-info-bar .asset-name,
+        body.tripartite .overlay-layer.active-audio .asset-info-bar .asset-name {
+            color: #ffffff;
         }
 
         /* Drag and drop styling */
@@ -627,7 +647,7 @@
             top: 0;
             right: 0;
             height: 100vh;
-            width: 240px;
+            width: 280px;
             background: #1a1a1a;
             border-left: 1px solid #333;
             z-index: 200;
@@ -712,52 +732,11 @@
             border: 1px solid #444;
         }
 
-        body.fullscreen {
-            background: #000;
+        .shortcut-divider {
+            border: none;
+            border-top: 1px solid #2a2a2a;
+            margin: 4px 0;
         }
-
-        body.fullscreen .header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px;
-            gap: 10px;
-            backdrop-filter: blur(5px);
-        }
-
-        body.fullscreen .comparison-view {
-            display: block;
-        }
-
-        body.fullscreen .comparison-view.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        body.fullscreen .overlay-layer img {
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-            user-select: none;
-            -webkit-user-drag: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-        }
-
-        body.fullscreen .overlay-layer video {
-            user-select: none;
-            -webkit-user-drag: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-        }
-
-        body.fullscreen .overlay-container {
-            user-select: none;
-        }
-
 
         .video-controls {
             position: absolute;
@@ -841,33 +820,19 @@
             display: block;
         }
 
-        body.fullscreen .overlay-container {
+        /* Overlay mode: pan cursor always active (zoom/pan available without mode gate) */
+        body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-container {
             cursor: grab;
-            overflow: hidden;
         }
 
-        body.fullscreen .overlay-container.panning {
+        body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-container.panning {
             cursor: grabbing;
         }
 
-        body.fullscreen .overlay-layer img,
-        body.fullscreen .overlay-layer video {
+        body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-layer img,
+        body:not(.side-by-side):not(.vertical-stack):not(.tripartite) .overlay-layer video {
             position: relative;
             transition: none;
-        }
-
-        /* Inspect mode: hide non-active layers regardless of which mode we came from.
-           Tripartite normally forces all layers to opacity:1, so we need !important here. */
-        body.fullscreen .overlay-layer:not(.active) {
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
-
-
-        /* Inspect mode: hide info bar in overlay and tripartite (not in true split modes
-           where each wrapper is anchored in its own cell). */
-        body.fullscreen:not(.side-by-side):not(.vertical-stack) .overlay-layer .asset-info-bar {
-            display: none !important;
         }
 
         .pan-hint {
@@ -894,23 +859,42 @@
             display: none; /* removed — split-zoom-indicator on the image is sufficient */
         }
 
-        .inspect-mode-badge {
-            display: none;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            color: #f0a500;
-            background: rgba(240, 165, 0, 0.15);
-            border: 1px solid rgba(240, 165, 0, 0.4);
-            border-radius: 4px;
-            padding: 3px 8px;
-            margin-left: auto;
-            align-self: center;
-        }
-
-        body.fullscreen .inspect-mode-badge {
+        #modeStrip, #assetStrip {
             display: flex;
             align-items: center;
+            gap: 2px;
+        }
+
+        .mode-btn, .asset-btn {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            background: transparent;
+            color: #777;
+            transition: background 0.15s, color 0.15s;
+            font-family: inherit;
+        }
+
+        .mode-btn:hover, .asset-btn:hover {
+            background: #555;
+            color: #fff;
+        }
+
+        .mode-btn.active, .asset-btn.active {
+            background: rgb(160, 160, 160);
+            color: #000;
+        }
+
+        .strip-sep {
+            color: #444;
+            font-size: 11px;
+            padding: 0 1px;
+            pointer-events: none;
+            user-select: none;
         }
 
         .instructions {
@@ -945,64 +929,43 @@
 <body>
     <div class="container">
         <div class="header">
-            <div style="position: relative;">
+            <div style="position: relative; display: flex; align-items: center; gap: 4px;">
                 <span style="font-size: 16px; font-weight: 600;">WarpDiff</span>
-                <button class="quick-start-btn" onclick="toggleQuickStart()">Quick Start</button>
-                
-                <!-- Quick Start Popup -->
-                <div class="quick-start-popup" id="quickStartPopup">
-                    <button class="quick-start-close" onclick="toggleQuickStart()">Close</button>
-                    <h2 style="margin-top: 0; color: rgb(160, 160, 160);">Quick Start Guide</h2>
-                    <ol style="line-height: 1.8;">
-                        <li>Right-click save files from in-house tool in order: <strong>&lt;Original, A, B&gt;</strong></li>
-                        <li><strong>Select 2 or 3 files</strong> (Cmd+click) and drag anywhere, or press <kbd>L</kbd> to open the file picker
-                            <ul style="margin-top: 5px; font-size: 11px; color: #999;">
-                                <li><strong>2 files:</strong> Edit A vs Edit B (no original)</li>
-                                <li><strong>3 files:</strong> Original vs Edit A vs Edit B</li>
-                            </ul>
-                        </li>
-                        <li>Tool auto-sorts by save time and loads into correct slots</li>
-                        <li>Press <kbd>F</kbd> for fullscreen, use <kbd>←</kbd> <kbd>→</kbd> to compare</li>
-                        <li>Press <kbd>+</kbd> <kbd>-</kbd> to zoom in/out</li>
-                        <li>Press <kbd>Space</kbd> to play/pause videos</li>
-                        <li>Press <kbd>K</kbd> to see all keyboard shortcuts</li>
-                    </ol>
-                    <p style="margin-top: 15px; font-size: 11px; color: #999;">
-                        <em>Tip: Files are automatically sorted by modification time. Arrow keys skip empty slots.</em>
-                    </p>
-                </div>
-            </div>
-            <div>
-                <button class="position-toggle" onclick="document.getElementById('multiFileInput').click()" id="loadBtn" data-help="Load 2–3 files to compare (or press L)">
+                <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 2–3 files to compare (or press L)">
                     Load
                     <div class="help-tooltip">Select 2–3 files to compare (auto-sorts by save time). Shortcut: L</div>
                 </button>
                 <input type="file" id="multiFileInput" accept="image/*,video/*" multiple onchange="handleMultiFileLoad(event)" style="display: none;">
-                <button class="position-toggle" onclick="setViewMode('overlay')" id="overlayViewBtn" data-help="Single asset view with arrow key switching" style="display: none;">
-                    Overlay
-                    <div class="help-tooltip">Single asset view</div>
-                </button>
-                <button class="position-toggle" onclick="setViewMode('horizontal')" id="horizontalViewBtn" data-help="Side-by-side horizontal comparison" style="display: none;">
-                    Horizontal
-                    <div class="help-tooltip">Side-by-side view</div>
-                </button>
-                <button class="position-toggle" onclick="setViewMode('vertical')" id="verticalViewBtn" data-help="Vertically stacked comparison" style="display: none;">
-                    Vertical
-                    <div class="help-tooltip">Stacked view</div>
-                </button>
-                <button class="position-toggle" onclick="setViewMode('tripartite')" id="tripartiteViewBtn" data-help="Original left, Edit A/B stacked right (3 assets)" style="display: none;">
-                    Tripartite
-                    <div class="help-tooltip">Original left, Edits stacked right</div>
-                </button>
-
-            </div>
-            <div>
                 <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
-                    Reset All
+                    Reset
                     <div class="help-tooltip">Clear all assets and start over</div>
                 </button>
+                <button class="quick-start-btn" onclick="toggleQuickStart()">Help</button>
+
+                <!-- Help Popup -->
+                <div class="quick-start-popup" id="quickStartPopup">
+                    <button class="quick-start-close" onclick="toggleQuickStart()">✕</button>
+                    <p style="margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #aaa; text-transform: uppercase;">Help</p>
+                    <ol style="margin: 0; padding-left: 18px; font-size: 13px; color: #ccc; line-height: 1.7;">
+                        <li>Save files from the tool in order: Original, A, B</li>
+                        <li>Select 2–3 files and drag anywhere, or press <kbd>L</kbd>
+                            <ul style="margin: 3px 0 3px; color: #999; list-style: disc; padding-left: 16px;">
+                                <li>2 files: Edit A vs Edit B</li>
+                                <li>3 files: Original vs Edit A vs Edit B</li>
+                            </ul>
+                        </li>
+                        <li>Files auto-sort by save time into the correct slots</li>
+                        <li>Press <kbd>F</kbd> for fullscreen, <kbd>←</kbd> <kbd>→</kbd> to compare</li>
+                        <li>Press <kbd>+</kbd> <kbd>-</kbd> to zoom in/out</li>
+                        <li>Press <kbd>Space</kbd> to play/pause videos</li>
+                        <li>Press <kbd>K</kbd> for all hotkeys</li>
+                    </ol>
+                </div>
             </div>
-            <div id="inspectModeBadge" class="inspect-mode-badge">INSPECT</div>
+            <!-- Mode strip: OVERLAY / 3-UP / COMPARE — tappable, active one highlighted -->
+            <div id="modeStrip" style="display:none;"></div>
+            <!-- Asset strip: overlay mode only — shows asset names, active one highlighted -->
+            <div id="assetStrip" style="display:none;"></div>
         </div>
 
         <div class="comparison-view" id="comparisonView">
@@ -1051,7 +1014,7 @@
                 </div>
 
                 <div class="pan-hint">
-                    Click and drag to pan &nbsp;·&nbsp; Esc to exit
+                    Click and drag to pan
                 </div>
 
                 <div class="video-controls" id="videoControls">
@@ -1094,7 +1057,7 @@
 
         const assetOrder = ['original', 'editA', 'editB'];
         let currentAssetIndex = 0;
-        let isFullscreen = false;
+        // isFullscreen removed — zoom/pan always available in overlay; browser fullscreen via F key
         let hasVideos = false;
         let isMuted = false;
         let isPanning = false;
@@ -1672,13 +1635,23 @@
 
         function toggleQuickStart() {
             const popup = document.getElementById('quickStartPopup');
-            
+
             if (popup.classList.contains('show')) {
                 popup.classList.remove('show');
             } else {
                 popup.classList.add('show');
             }
         }
+
+        // Dismiss Help popup when clicking outside it
+        document.addEventListener('mousedown', function(e) {
+            const popup = document.getElementById('quickStartPopup');
+            const btn = document.querySelector('.quick-start-btn');
+            if (popup && popup.classList.contains('show') &&
+                !popup.contains(e.target) && !(btn && btn.contains(e.target))) {
+                popup.classList.remove('show');
+            }
+        });
 
         function checkForIdenticalAssets() {
             const identicalPairs = [];
@@ -1796,8 +1769,8 @@
                     console.error(`Layer layer${layerName} not found!`);
                 }
 
-                // Recompute normalization with all currently-loaded dimensions
-                positionLabelsToMedia();
+                // Recompute overlay positions for current zoom level
+                applyZoom();
             }
 
             // Check if current asset is video and update progress if so
@@ -1808,14 +1781,14 @@
                 updateVideoProgress(video);
             }
 
-            // Apply current pan offset if in fullscreen
-            if (isFullscreen) {
-                const img = activeLayer.querySelector('img, video');
-                if (img) {
-                    img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-                }
+            // Apply current pan offset
+            const mediaEl = activeLayer.querySelector('img, video');
+            if (mediaEl) {
+                mediaEl.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
             }
 
+            // Refresh asset strip highlight in header
+            updateAssetStrip();
         }
 
         // Setup video scrubbing with drag support
@@ -1882,210 +1855,120 @@
             });
         });
 
-        function toggleFullscreen() {
-            saveState(); // Save state before toggling
-            isFullscreen = !isFullscreen;
-            
-            if (isFullscreen) {
-                document.body.classList.add('fullscreen');
+        // Browser fullscreen change handler — recalculates layout when chrome disappears/reappears.
+        document.addEventListener('fullscreenchange', () => {
+            if (isSideBySide) {
+                requestAnimationFrame(() => positionLabelsToMedia());
+            } else {
+                applyZoom();
+            }
+        });
 
-                // In split modes (tripartite, side-by-side, vertical-stack) all layers are
-                // marked active so they all display. Inspect mode shows one at a time, so
-                // reduce to just the currently selected asset. We'll restore on exit.
-                if (isSideBySide) {
-                    const assetKey = assetOrder[currentAssetIndex];
-                    document.querySelectorAll('.overlay-layer').forEach(layer => {
-                        layer.classList.remove('active');
-                    });
-                    const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-                    const targetLayer = document.getElementById(`layer${layerName}`);
-                    if (targetLayer) targetLayer.classList.add('active');
-                }
+        function applyZoom() {
+            if (isSideBySide) return; // zoom/pan only applies in overlay mode
 
-                // Find largest native dimensions across all loaded assets
-                let maxNativeW = 0, maxNativeH = 0;
+            // Compute fitZoom and overlayMinLongest so all assets share the same
+            // rendered footprint — sized by the lowest-res asset's longest side.
+            // Higher-res assets scale DOWN to match; the lowest-res asset renders at 1:1.
+            let overlayMinLongest = 0;
+            {
+                let minLongest = Infinity;
+                let refW = 0, refH = 0;
                 ['original', 'editA', 'editB'].forEach(slot => {
                     if (mediaData[slot]) {
                         const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
-                        const media = layer.querySelector('img, video');
+                        const media = layer && layer.querySelector('img, video');
                         if (media) {
-                            maxNativeW = Math.max(maxNativeW, media.naturalWidth || media.videoWidth || 0);
-                            maxNativeH = Math.max(maxNativeH, media.naturalHeight || media.videoHeight || 0);
+                            const nw = media.naturalWidth || media.videoWidth || 0;
+                            const nh = media.naturalHeight || media.videoHeight || 0;
+                            const longest = Math.max(nw, nh);
+                            if (longest > 0 && longest < minLongest) {
+                                minLongest = longest;
+                                refW = nw;
+                                refH = nh;
+                            }
                         }
                     }
                 });
-
-                // Fit largest asset to viewport. Use window.innerWidth/Height — always the
-                // true CSS viewport size regardless of content overflow. Header is
-                // position:absolute in fullscreen so subtract its height visually.
+                overlayMinLongest = minLongest === Infinity ? 0 : minLongest;
                 const viewW = window.innerWidth;
                 const viewH = window.innerHeight - HEADER_OVERLAP;
-                fitZoom = (maxNativeW > 0 && maxNativeH > 0)
-                    ? Math.min(viewW / maxNativeW, viewH / maxNativeH)
-                    : 1;
-
-                zoomLevel = fitZoom;
-                panOffsetX = 0;
-                panOffsetY = 0;
-                applyZoom();
-                setupPanHandlers();
-                showPanHint();
-            } else {
-                document.body.classList.remove('fullscreen');
-
-                // Restore split-mode active state: in tripartite/side-by-side/vertical-stack
-                // all layers with media should be active again.
-                if (isSideBySide) {
-                    document.querySelectorAll('.overlay-layer').forEach(layer => {
-                        if (layer.querySelector('img, video')) {
-                            layer.classList.add('active');
-                        }
-                    });
+                if (refW > 0 && refH > 0) {
+                    fitZoom = Math.min(viewW / refW, viewH / refH);
                 }
-
-                // Reset wrapper position back to absolute (was set to fixed in inspect mode)
-                document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
-                    vw.style.position = '';
-                });
-
-                // Reset to normal scaling
-                document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
-                    media.style.imageRendering = '';
-                    media.style.width = '';
-                    media.style.height = '';
-                    // Don't override maxWidth/maxHeight in split modes (CSS handles those)
-                    if (!isSideBySide && !document.body.classList.contains('vertical-stack')) {
-                        media.style.maxWidth = '100%';
-                        media.style.maxHeight = '100%';
-                    } else {
-                        media.style.maxWidth = '';
-                        media.style.maxHeight = '';
-                    }
-                    media.style.transform = '';
-                    media.style.objectFit = '';
-                });
-
-                // Re-run label positioning so info bar and wrapper are placed correctly
-                // (CSS removes the fullscreen flex overrides once body.fullscreen is gone)
-                requestAnimationFrame(() => positionLabelsToMedia());
-                
-                // Reset pan state and zoom
-                panOffsetX = 0;
-                panOffsetY = 0;
-                zoomLevel = 1;
-
-                // Remove pan handlers
-                const container = document.getElementById('overlayContainer');
-                container.removeEventListener('mousedown', handlePanStart);
-                container.removeEventListener('mousemove', handlePanMove);
-                container.removeEventListener('mouseup', handlePanEnd);
-                container.removeEventListener('mouseleave', handlePanEnd);
-                container.classList.remove('panning');
             }
-        }
 
-        function applyZoom() {
-            // Find the largest dimensions across all loaded assets
-            let maxWidth = 0;
-            let maxHeight = 0;
-            
+            // Position each asset wrapper. Each asset is scaled so its longest side
+            // equals overlayMinLongest × zoomLevel — giving all assets the same
+            // physical footprint on screen regardless of their native resolution.
+            const availH = window.innerHeight - HEADER_OVERLAP;
             ['original', 'editA', 'editB'].forEach(slot => {
-                if (mediaData[slot]) {
-                    const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
-                    const media = layer.querySelector('img, video');
-                    if (media) {
-                        const w = media.naturalWidth || media.videoWidth || 0;
-                        const h = media.naturalHeight || media.videoHeight || 0;
-                        maxWidth = Math.max(maxWidth, w);
-                        maxHeight = Math.max(maxHeight, h);
-                    }
+                if (!mediaData[slot]) return;
+                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                const layer = document.getElementById(`layer${slotName}`);
+                if (!layer) return;
+                const media = layer.querySelector('img, video');
+                const vw = layer.querySelector('.video-wrapper');
+                if (!media || !vw) return;
+
+                const nw = media.naturalWidth || media.videoWidth || 0;
+                const nh = media.naturalHeight || media.videoHeight || 0;
+                if (!nw || !nh) return;
+
+                // Scale this asset so its longest side = overlayMinLongest × zoomLevel
+                const longest = Math.max(nw, nh);
+                const perAssetScale = overlayMinLongest > 0 ? (overlayMinLongest / longest) * zoomLevel : zoomLevel;
+                const scaledW = Math.round(nw * perAssetScale);
+                const scaledH = Math.round(nh * perAssetScale);
+                const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
+                const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
+
+                vw.style.position = 'fixed';
+                vw.style.top = centerTop + 'px';
+                vw.style.left = centerLeft + 'px';
+                vw.style.width = scaledW + 'px';
+                vw.style.height = scaledH + 'px';
+
+                // Media fills its wrapper
+                media.style.imageRendering = zoomLevel >= 2 ? 'pixelated' : '';
+                media.style.width = '100%';
+                media.style.height = '100%';
+                media.style.maxWidth = 'none';
+                media.style.maxHeight = 'none';
+                media.style.objectFit = 'contain';
+
+                // Apply pan offset
+                media.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+
+                // Update per-asset zoom badge (actual ratio for this asset)
+                const badge = vw.querySelector('.split-zoom-indicator');
+                if (badge) badge.textContent = zoomLevel.toFixed(2) + '×';
+
+                // Position info bar flush above the wrapper
+                const infoBar = layer.querySelector('.asset-info-bar');
+                if (infoBar) {
+                    const ibH = infoBar.offsetHeight || 28;
+                    infoBar.style.position = 'fixed';
+                    infoBar.style.left = centerLeft + 'px';
+                    infoBar.style.top = Math.max(0, centerTop - ibH) + 'px';
+                    infoBar.style.width = scaledW + 'px';
+                    infoBar.style.right = '';
+                    infoBar.style.bottom = '';
+                    infoBar.style.height = '';
                 }
             });
-            
-            if (isFullscreen) {
-                const scaledW = Math.round(maxWidth * zoomLevel);
-                const scaledH = Math.round(maxHeight * zoomLevel);
-
-                // True split modes (side-by-side, vertical-stack): each wrapper is
-                // absolute-positioned inside its own cell — preserve top/left, just resize.
-                // Overlay and tripartite: center the wrapper in the full viewport using
-                // explicit math. isSideBySide is true for tripartite too so we can't use
-                // it as the guard — check body classes directly.
-                const isTrueSplit = document.body.classList.contains('side-by-side') ||
-                                    document.body.classList.contains('vertical-stack');
-
-                if (isTrueSplit) {
-                    document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
-                        vw.style.width = scaledW + 'px';
-                        vw.style.height = scaledH + 'px';
-                    });
-                } else {
-                    // Center wrapper in the area below the header using position:fixed so
-                    // it escapes any parent clipping (tripartite grid cells have overflow:hidden).
-                    // HEADER_OVERLAP matches the value used when computing fitZoom.
-                    const availH = window.innerHeight - HEADER_OVERLAP;
-                    const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
-                    const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
-                    document.querySelectorAll('.overlay-layer .video-wrapper').forEach(vw => {
-                        vw.style.position = 'fixed';
-                        vw.style.top = centerTop + 'px';
-                        vw.style.left = centerLeft + 'px';
-                        vw.style.width = scaledW + 'px';
-                        vw.style.height = scaledH + 'px';
-                    });
-                    // Clear info bar inline styles so CSS display:none !important applies
-                    document.querySelectorAll('.overlay-layer .asset-info-bar').forEach(bar => {
-                        bar.style.cssText = '';
-                    });
-                }
-
-                // img/video fills its wrapper 100%×100% — wrapper is sized above.
-                document.querySelectorAll('.overlay-layer img, .overlay-layer video').forEach(media => {
-                    media.style.imageRendering = 'pixelated';
-                    media.style.width = '100%';
-                    media.style.height = '100%';
-                    media.style.maxWidth = 'none';
-                    media.style.maxHeight = 'none';
-                    media.style.objectFit = 'contain';
-                });
-            }
-            
-            // Always show the numeric zoom ratio (rendered pixels ÷ native pixels).
-            const zoomText = zoomLevel.toFixed(2) + '×';
-            document.getElementById('zoomIndicator').textContent = zoomText;
-            // In inspect mode, sync per-asset corner badges to the same zoom value.
-            // Outside inspect, positionLabelsToMedia() keeps them accurate.
-            if (isFullscreen) {
-                document.querySelectorAll('.overlay-layer .split-zoom-indicator').forEach(ind => {
-                    ind.textContent = zoomText;
-                });
-            }
         }
 
         function zoomIn() {
-            if (!isFullscreen) return;
+            if (isSideBySide) return; // zoom only in overlay mode
             zoomLevel = Math.min(zoomLevel * ZOOM_STEP, ZOOM_MAX);
             applyZoom();
-
-            // Reapply pan offset to active image
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const img = activeLayer.querySelector('img, video');
-                if (img) img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-            }
         }
 
         function zoomOut() {
-            if (!isFullscreen) return;
+            if (isSideBySide) return; // zoom only in overlay mode
             zoomLevel = Math.max(zoomLevel / ZOOM_STEP, ZOOM_MIN);
             applyZoom();
-
-            // Reapply pan offset to active image
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const img = activeLayer.querySelector('img, video');
-                if (img) img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-            }
         }
 
         let panHintTimer = null;
@@ -2101,16 +1984,11 @@
         }
 
         function resetFitZoom() {
-            if (!isFullscreen) return;
+            if (isSideBySide) return;
             zoomLevel = fitZoom;
             panOffsetX = 0;
             panOffsetY = 0;
             applyZoom();
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const img = activeLayer.querySelector('img, video');
-                if (img) img.style.transform = '';
-            }
         }
 
         function setupPanHandlers() {
@@ -2164,7 +2042,6 @@
             mediaData.editB = null;
             currentAssetIndex = 0;
             expectedFileCount = 0;
-            isFullscreen = false;
             hasVideos = false;
             zoomLevel = 1;
             fitZoom = 1;
@@ -2217,11 +2094,9 @@
             });
             document.getElementById('comparisonView').classList.remove('active');
             document.getElementById('resetBtn').style.display = 'none';
-            // Hide all view mode buttons — they'll be re-shown when assets load
-            ['overlayViewBtn', 'horizontalViewBtn', 'verticalViewBtn', 'tripartiteViewBtn'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            // Hide mode and asset strips — they'll be rebuilt when assets load
+            document.getElementById('modeStrip').style.display = 'none';
+            document.getElementById('assetStrip').style.display = 'none';
             document.getElementById('videoControls').classList.remove('active');
 
             // Clear layers
@@ -2392,10 +2267,9 @@
         //   - Overlay/Horizontal: above the video-wrapper (top edge)
         //   - Vertical: to the left of the video-wrapper
         function positionLabelsToMedia(retriesLeft = 5) {
-            // In inspect mode, applyZoom() owns all wrapper positions. Skip so we don't
-            // clobber the centered top/left values it computes (debounce timer can fire
-            // after toggleFullscreen sets up centering).
-            if (isFullscreen) return;
+            // In overlay mode, applyZoom() owns all wrapper positions.
+            // positionLabelsToMedia only handles split modes (side-by-side, vertical-stack, tripartite).
+            if (!isSideBySide) return;
 
             let anySkipped = false; // tracks if any slot had zero-dimension container (needs retry)
             const slots = ['original', 'editA', 'editB'];
@@ -2403,76 +2277,9 @@
             const isTripartite = document.body.classList.contains('tripartite');
             const isOverlay = !isSideBySide && !isVertical;
 
-            // In overlay mode, normalize assets to display at the same screen footprint:
-            //   Portrait (w < h): normalize to the same contain-fit WIDTH
-            //   Landscape (w >= h): normalize to the same contain-fit HEIGHT
-            // Reference = smallest value in that dimension across loaded slots of that orientation.
-            // All others scale down to match, so stepping through assets feels like the same image size.
-            const normalizeScales = {}; // slot → multiplier (≤ 1) to apply to contain-fit renderedW/H
-            if (isOverlay) {
-                // Pass 1: compute each slot's contain-fit rendered width and height.
-                // Reserve INFO_BAR_H pixels at the top so the info bar always has room
-                // to float above the image without overlapping it.
-                const fitDims = {}; // slot → { fw, fh, portrait }
-                slots.forEach(slot => {
-                    if (!mediaData[slot]) return;
-                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
-                    const layer = document.getElementById(`layer${slotName}`);
-                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
-                    const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
-                    if (!media) return;
-                    const nw = media.naturalWidth || media.videoWidth || 0;
-                    const nh = media.naturalHeight || media.videoHeight || 0;
-                    if (!nw || !nh) return;
-                    const cw = mediaContainer.offsetWidth;
-                    const ch = mediaContainer.offsetHeight;
-                    if (!cw || !ch) { anySkipped = true; return; }
-                    const aspect = nw / nh;
-                    // Subtract INFO_BAR_H from available height so the image never fills
-                    // flush to the top — the bar can always sit above it.
-                    const availH = ch - INFO_BAR_H;
-                    const containerAspect = cw / availH;
-                    let fw, fh;
-                    if (containerAspect > aspect) { fh = availH; fw = fh * aspect; }
-                    else { fw = cw; fh = fw / aspect; }
-                    fitDims[slot] = { fw, fh, portrait: nw < nh };
-                });
-
-                // Pass 2: find the minimum contain-fit width (portraits) and height (landscapes),
-                // capped at the minimum native dimension so we never scale any asset above 1.0×.
-                let minPortraitW = Infinity, minLandscapeH = Infinity;
-                slots.forEach(slot => {
-                    const d = fitDims[slot];
-                    if (!d) return;
-                    const media = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`)
-                        ?.querySelector('img, video');
-                    const nw = media ? (media.naturalWidth || media.videoWidth || 0) : 0;
-                    const nh = media ? (media.naturalHeight || media.videoHeight || 0) : 0;
-                    if (d.portrait) {
-                        // Cap at native width so no asset exceeds 1.0× zoom
-                        minPortraitW = Math.min(minPortraitW, d.fw, nw);
-                    } else {
-                        // Cap at native height so no asset exceeds 1.0× zoom
-                        minLandscapeH = Math.min(minLandscapeH, d.fh, nh);
-                    }
-                });
-
-                // Pass 3: scale each slot so its reference dimension matches the capped minimum
-                slots.forEach(slot => {
-                    const d = fitDims[slot];
-                    if (!d) { normalizeScales[slot] = 1; return; }
-                    if (d.portrait) {
-                        normalizeScales[slot] = minPortraitW < Infinity ? minPortraitW / d.fw : 1;
-                    } else {
-                        normalizeScales[slot] = minLandscapeH < Infinity ? minLandscapeH / d.fh : 1;
-                    }
-                });
-            }
-
             // In tripartite mode, compute a shared rendered dimension so all three assets
-            // appear the same size. Mirrors overlay normalization: portrait assets (nw < nh)
-            // share rendered WIDTH (same as minPortraitW in overlay); landscape assets share
-            // rendered HEIGHT (same as minLandscapeH in overlay).
+            // appear the same size. Portrait assets (nw < nh) share rendered WIDTH;
+            // landscape assets share rendered HEIGHT.
             // Original is flush-right; A/B are flush-left at the A/B boundary.
             const tripartiteLayout = {}; // slot → { rw, rh, cw, ch, sharedZoom }
             if (isTripartite) {
@@ -2521,6 +2328,27 @@
                 });
             }
 
+            // Overlay mode: find the smallest "longest side" across all loaded assets.
+            // All assets are then rendered so their longest side equals that reference
+            // length — the smallest asset shows at 1:1, larger ones scale down to match.
+            let overlayRefLong = 0;
+            if (isOverlay) {
+                let minLong = Infinity;
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const media = layer ? layer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const longest = Math.max(nw, nh);
+                    if (longest < minLong) minLong = longest;
+                });
+                overlayRefLong = minLong === Infinity ? 0 : minLong;
+            }
+
             slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2543,33 +2371,45 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
-                // Calculate the rendered content bounds within object-fit: contain
-                const mediaAspect = naturalWidth / naturalHeight;
-                const containerAspect = containerW / containerH;
+                const fitH = containerH;
 
                 let renderedW, renderedH, offsetX, offsetY;
-                if (containerAspect > mediaAspect) {
-                    renderedH = containerH;
-                    renderedW = renderedH * mediaAspect;
-                    offsetX = (containerW - renderedW) / 2;
-                    offsetY = 0;
+                if (isOverlay && overlayRefLong > 0) {
+                    // Scale each asset so its longest side = overlayRefLong px on screen.
+                    // The asset with the shortest longest-side renders at 1:1 (100% zoom);
+                    // larger assets scale down proportionally so they match that same footprint.
+                    const longestSide = Math.max(naturalWidth, naturalHeight);
+                    const scale = overlayRefLong / longestSide;
+                    const baseW = Math.round(naturalWidth * scale);
+                    const baseH = Math.round(naturalHeight * scale);
+                    // Clamp to viewport in case even the reference asset is larger than the screen.
+                    // Apply the same clampScale to the reference box too so the anchor is stable.
+                    const clampScale = Math.min(1, containerW / overlayRefLong, fitH / overlayRefLong);
+                    renderedW = Math.round(baseW * clampScale);
+                    renderedH = Math.round(baseH * clampScale);
+                    // Anchor: center the overlayRefLong × overlayRefLong reference box, then
+                    // place each asset centered within that fixed box. This keeps the anchor
+                    // point identical for all assets regardless of their individual heights.
+                    const refPx = Math.round(overlayRefLong * clampScale);
+                    const boxLeft = Math.round((containerW - refPx) / 2);
+                    const boxTop  = Math.round((fitH - refPx) / 2);
+                    offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
+                    offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
                 } else {
-                    renderedW = containerW;
-                    renderedH = renderedW / mediaAspect;
-                    offsetX = 0;
-                    offsetY = (containerH - renderedH) / 2;
-                }
-
-                // In overlay mode, scale down to the smallest asset's rendered area so all
-                // assets occupy the same physical screen footprint. Center within the area
-                // below the info bar (INFO_BAR_H reserved at top) so the bar always floats above.
-                if (isOverlay && normalizeScales[slot] !== undefined) {
-                    const scale = normalizeScales[slot];
-                    renderedW = renderedW * scale;
-                    renderedH = renderedH * scale;
-                    offsetX = (containerW - renderedW) / 2;
-                    const availH = containerH - INFO_BAR_H;
-                    offsetY = INFO_BAR_H + Math.max(0, (availH - renderedH) / 2);
+                    // Split modes: contain-fit to fill the available area
+                    const mediaAspect = naturalWidth / naturalHeight;
+                    const containerAspect = containerW / fitH;
+                    if (containerAspect > mediaAspect) {
+                        renderedH = fitH;
+                        renderedW = renderedH * mediaAspect;
+                        offsetX = (containerW - renderedW) / 2;
+                        offsetY = 0;
+                    } else {
+                        renderedW = containerW;
+                        renderedH = renderedW / mediaAspect;
+                        offsetX = 0;
+                        offsetY = (containerH - renderedH) / 2;
+                    }
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
@@ -2612,6 +2452,7 @@
                     }
 
                     if (infoBar) {
+                        infoBar.style.position = ''; // clear fixed positioning from overlay mode
                         const ibH = infoBar.offsetHeight || 28;
                         infoBar.style.left = tx + 'px';
                         infoBar.style.width = tw + 'px';
@@ -2641,6 +2482,16 @@
                 videoWrapper.style.transformOrigin = '';
                 videoWrapper.style.opacity = '';
 
+                // In overlay mode the .overlay-layer img CSS rule sets width:auto which
+                // prevents the image from filling the JS-sized wrapper. Force 100%×100%
+                // so the image scales to exactly the wrapper dimensions.
+                if (isOverlay) {
+                    media.style.width = '100%';
+                    media.style.height = '100%';
+                    media.style.maxWidth = 'none';
+                    media.style.maxHeight = 'none';
+                }
+
                 // Update zoom indicator to reflect actual displayed size
                 const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
                 if (zoomIndicator) {
@@ -2648,10 +2499,9 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar above the video in all non-tripartite modes.
-                // In overlay mode, offsetY is always >= INFO_BAR_H so there's always room.
-                // In split modes, clamp to 0 so it never goes above the container boundary.
+                // Position the info bar flush above the asset, matching its width and x-position.
                 if (infoBar) {
+                    infoBar.style.position = ''; // clear fixed positioning from overlay mode
                     const ibH = infoBar.offsetHeight || 28;
                     infoBar.style.left = Math.round(offsetX) + 'px';
                     infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
@@ -2672,10 +2522,10 @@
 
         // Call positioning on resize
         window.addEventListener('resize', () => {
-            if (isFullscreen) {
-                applyZoom(); // refit image to new viewport size in inspect mode
-            } else {
+            if (isSideBySide) {
                 positionLabelsToMediaDebounced(); // debounced: expensive 3-pass layout
+            } else {
+                applyZoom(); // overlay mode: refit/reposition using zoom level
             }
         });
 
@@ -2699,6 +2549,7 @@
 
                     // Clear inline styles set by positionLabelsToMedia() so CSS takes over in overlay mode
                     document.querySelectorAll('.video-wrapper').forEach(vw => {
+                        vw.style.position = ''; // clear fixed positioning set by applyZoom()
                         vw.style.width = '';
                         vw.style.height = '';
                         vw.style.top = '';
@@ -2732,14 +2583,8 @@
                     });
                     switchToAsset(currentAssetIndex);
                     removeDragAndDrop();
-
-                    // Two nested rAFs ensure CSS class removal reflow is complete
-                    // before positionLabelsToMedia() reads container dimensions.
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            positionLabelsToMedia();
-                        });
-                    });
+                    // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport
+                    requestAnimationFrame(() => requestAnimationFrame(() => applyZoom()));
                 }
             } else {
                 // Enable split view
@@ -2807,6 +2652,7 @@
                 // Clear any inline styles set by positionLabelsToMedia() so CSS takes over.
                 // Done AFTER the body class change so the layout is already live.
                 document.querySelectorAll('.video-wrapper').forEach(vw => {
+                    vw.style.position = ''; // clear fixed positioning set by applyZoom()
                     vw.style.width = '';
                     vw.style.height = '';
                     vw.style.top = '';
@@ -2842,44 +2688,75 @@
                 }
             }
 
-            // Update button visibility and active states
-            updateViewModeButtons(mode);
+            // Update mode and asset strips in header
+            updateModeStrip(isSideBySide ? layoutMode : 'overlay');
+            updateAssetStrip();
         }
 
-        function updateViewModeButtons(activeMode) {
-            const overlayBtn = document.getElementById('overlayViewBtn');
-            const horizontalBtn = document.getElementById('horizontalViewBtn');
-            const verticalBtn = document.getElementById('verticalViewBtn');
-            const tripartiteBtn = document.getElementById('tripartiteViewBtn');
+        // Rebuilds the mode strip in the header. activeMode is 'overlay', 'tripartite',
+        // 'horizontal', 'vertical', or 'compare' (the 2-asset auto-layout bucket).
+        function updateModeStrip(activeMode) {
+            const strip = document.getElementById('modeStrip');
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
-            const allThree = loadedCount === 3;
-            // 2-asset mode has auto-picked layout; hide H/V buttons so user can't manually cycle
-            const twoAssetAuto = loadedCount === 2 && !mediaData.original;
-            const hideHV = allThree || twoAssetAuto;
+            if (loadedCount === 0) { strip.style.display = 'none'; return; }
 
-            if (activeMode === 'overlay') {
-                // In overlay mode: hide overlay btn, show split options appropriate to asset count
-                overlayBtn.style.display = 'none';
-                horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
-                verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
-                tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
-            } else {
-                // In split mode: show overlay btn + mode-appropriate split buttons
-                overlayBtn.style.display = 'inline-block';
-                horizontalBtn.style.display = hideHV ? 'none' : 'inline-block';
-                verticalBtn.style.display = hideHV ? 'none' : 'inline-block';
-                tripartiteBtn.style.display = allThree ? 'inline-block' : 'none';
+            strip.style.display = 'flex';
+            strip.innerHTML = '';
 
-                // Reset all highlight styles
-                overlayBtn.style.background = '';
-                overlayBtn.style.color = '';
-                horizontalBtn.style.background = activeMode === 'horizontal' ? 'rgb(160, 160, 160)' : '';
-                horizontalBtn.style.color = activeMode === 'horizontal' ? '#000' : '';
-                verticalBtn.style.background = activeMode === 'vertical' ? 'rgb(160, 160, 160)' : '';
-                verticalBtn.style.color = activeMode === 'vertical' ? '#000' : '';
-                tripartiteBtn.style.background = activeMode === 'tripartite' ? 'rgb(160, 160, 160)' : '';
-                tripartiteBtn.style.color = activeMode === 'tripartite' ? '#000' : '';
-            }
+            // 3-asset → OVERLAY + 3-UP; 2-asset → OVERLAY + COMPARE
+            const modes = loadedCount === 3
+                ? [['overlay', 'OVERLAY'], ['tripartite', '3-UP']]
+                : [['overlay', 'OVERLAY'], ['compare', 'COMPARE']];
+
+            // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
+            const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
+
+            modes.forEach(([mode, label], i) => {
+                if (i > 0) {
+                    const sep = document.createElement('span');
+                    sep.className = 'strip-sep';
+                    sep.textContent = '/';
+                    strip.appendChild(sep);
+                }
+                const btn = document.createElement('button');
+                btn.className = 'mode-btn' + (mode === normalised ? ' active' : '');
+                btn.textContent = label;
+                btn.onclick = () => {
+                    if (mode === 'compare') setViewMode(layoutMode); // use auto-picked H/V
+                    else setViewMode(mode);
+                };
+                strip.appendChild(btn);
+            });
+        }
+
+        // Rebuilds the asset strip in the header. Shown in overlay mode only.
+        function updateAssetStrip() {
+            const strip = document.getElementById('assetStrip');
+            if (isSideBySide) { strip.style.display = 'none'; return; }
+
+            const loaded = assetOrder.filter(slot => mediaData[slot]);
+            if (loaded.length === 0) { strip.style.display = 'none'; return; }
+
+            strip.style.display = 'flex';
+            strip.innerHTML = '';
+
+            loaded.forEach((slot, i) => {
+                if (i > 0) {
+                    const sep = document.createElement('span');
+                    sep.className = 'strip-sep';
+                    sep.textContent = '·';
+                    strip.appendChild(sep);
+                }
+                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                const nameEl = document.querySelector(`#layer${slotName} .asset-name`);
+                const label = nameEl ? nameEl.textContent : slotName;
+                const btn = document.createElement('button');
+                const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
+                btn.className = 'asset-btn' + (isActive ? ' active' : '');
+                btn.textContent = label;
+                btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
+                strip.appendChild(btn);
+            });
         }
 
         // Update checkAllLoaded to show view mode buttons
@@ -3112,7 +2989,6 @@
         function captureState() {
             const state = {
                 currentAssetIndex: currentAssetIndex,
-                isFullscreen: isFullscreen,
                 isSideBySide: isSideBySide,
                 layoutMode: layoutMode,
                 zoomLevel: zoomLevel,
@@ -3190,11 +3066,6 @@
 
             timecodeMode = state.timecodeMode;
             isMuted = state.isMuted;
-            
-            // Restore fullscreen
-            if (state.isFullscreen !== isFullscreen) {
-                toggleFullscreen();
-            }
             
             // Restore split view
             if (state.isSideBySide !== isSideBySide) {
@@ -3306,16 +3177,6 @@
                 }
                 if (mediaData[assetOrder[nextIndex]]) {
                     switchToAsset(nextIndex);
-                    // In inspect mode from a split layout, switchToAsset won't hide other
-                    // layers (isSideBySide=true). Force exactly one active layer, then
-                    // re-center after the CSS layout update commits.
-                    if (isFullscreen && isSideBySide) {
-                        const assetKey = assetOrder[nextIndex];
-                        document.querySelectorAll('.overlay-layer').forEach(l => l.classList.remove('active'));
-                        const ln = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-                        document.getElementById(`layer${ln}`)?.classList.add('active');
-                        requestAnimationFrame(() => applyZoom());
-                    }
                 }
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
@@ -3328,42 +3189,22 @@
                 }
                 if (mediaData[assetOrder[nextIndex]]) {
                     switchToAsset(nextIndex);
-                    // In inspect mode from a split layout, switchToAsset won't hide other
-                    // layers (isSideBySide=true). Force exactly one active layer, then
-                    // re-center after the CSS layout update commits.
-                    if (isFullscreen && isSideBySide) {
-                        const assetKey = assetOrder[nextIndex];
-                        document.querySelectorAll('.overlay-layer').forEach(l => l.classList.remove('active'));
-                        const ln = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-                        document.getElementById(`layer${ln}`)?.classList.add('active');
-                        requestAnimationFrame(() => applyZoom());
-                    }
                 }
-            } else if (e.key === 'i' || e.key === 'I') {
-                e.preventDefault();
-                toggleFullscreen();
             } else if (e.key === 'f' || e.key === 'F') {
+                // F toggles browser fullscreen (hides browser chrome)
                 e.preventDefault();
-                toggleFullscreen();
-            } else if (e.key === 'Escape') {
-                // Escape always exits inspect — never enters it.
-                e.preventDefault();
-                if (isFullscreen) toggleFullscreen();
-            } else if (e.key === '+' || e.key === '=') {
-                // Both + and = (no shift needed) zoom in.
-                // Auto-enter inspect only from overlay (not from split modes).
-                e.preventDefault();
-                if (!isFullscreen && !isSideBySide) {
-                    toggleFullscreen();
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen();
                 }
+            } else if (e.key === '+' || e.key === '=') {
+                // Zoom in (overlay mode only — always available, no mode gate)
+                e.preventDefault();
                 zoomIn();
             } else if (e.key === '-' || e.key === '_') {
-                // Both - and _ zoom out.
-                // Auto-enter inspect only from overlay (not from split modes).
+                // Zoom out (overlay mode only)
                 e.preventDefault();
-                if (!isFullscreen && !isSideBySide) {
-                    toggleFullscreen();
-                }
                 zoomOut();
             } else if (e.key === '0') {
                 e.preventDefault();
@@ -3382,9 +3223,7 @@
                 toggleMute();
             } else if (e.key === 'o' || e.key === 'O') {
                 // O key toggles overlay <-> split (tripartite for 3 assets, auto-layout for 2).
-                // If in inspect mode, exit it first so layout state is clean.
                 e.preventDefault();
-                if (isFullscreen) toggleFullscreen();
                 const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
                 if (isSideBySide) {
                     setViewMode('overlay');
@@ -3395,9 +3234,7 @@
                 }
             } else if (e.key === 's' || e.key === 'S') {
                 // S key cycles through view modes depending on asset count.
-                // If in inspect mode, exit it first so layout state is clean.
                 e.preventDefault();
-                if (isFullscreen) toggleFullscreen();
                 const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
                 if (allThreeLoaded) {
                     // 3-asset cycle: overlay <-> tripartite
@@ -3420,7 +3257,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             setupDragAndDrop();
-            
+            setupPanHandlers(); // pan always available in overlay mode
         });
 
         function toggleShortcutsPanel() {
@@ -3444,20 +3281,23 @@
 
     <div class="shortcuts-panel" id="shortcutsPanel">
         <div class="shortcuts-panel-header">
-            <span>Keyboard Shortcuts</span>
+            <span>Hotkeys</span>
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
         <div class="shortcuts-list">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
+            <hr class="shortcut-divider">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
+            <hr class="shortcut-divider">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset zoom to fit</span></div>
+            <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay / split</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>I</kbd></span><span class="shortcut-desc">Enter / exit inspect</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>Esc</kbd></span><span class="shortcut-desc">Exit inspect</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom (enters inspect)</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset to fit</span></div>
+            <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
         </div>
