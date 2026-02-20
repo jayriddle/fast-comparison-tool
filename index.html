@@ -564,13 +564,27 @@
             display: block; /* Always show in all modes */
         }
 
-        @keyframes zoomLimitFlash {
-            0%   { color: rgb(160, 160, 160); background: rgba(0, 0, 0, 0.85); }
-            30%  { color: #fff;               background: rgba(200, 150, 20, 0.92); }
-            100% { color: rgb(160, 160, 160); background: rgba(0, 0, 0, 0.85); }
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            color: #111;
+            padding: 8px 22px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            z-index: 300;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            white-space: nowrap;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.25);
         }
-        .split-zoom-indicator.at-limit {
-            animation: zoomLimitFlash 0.4s ease-out forwards;
+        .toast.visible {
+            opacity: 1;
         }
 
         /* Asset info bar styling */
@@ -1147,6 +1161,7 @@
                 <div class="pan-hint">
                     Click and drag to pan
                 </div>
+                <div class="toast" id="toast"></div>
 
                 <div class="video-controls" id="videoControls">
                     <div class="video-controls-row">
@@ -1211,6 +1226,17 @@
             toast.classList.add('visible');
             clearTimeout(_toastTimer);
             _toastTimer = setTimeout(() => toast.classList.remove('visible'), duration);
+        }
+
+        // Brief centered toast for zoom-limit and other transient notifications.
+        let _zoomToastTimer = null;
+        function showToast(message, duration = 2000) {
+            const el = document.getElementById('toast');
+            if (!el) return;
+            el.textContent = message;
+            el.classList.add('visible');
+            clearTimeout(_zoomToastTimer);
+            _zoomToastTimer = setTimeout(() => el.classList.remove('visible'), duration);
         }
 
         let currentAssetIndex = 0;
@@ -2207,22 +2233,12 @@
             });
         }
 
-        function flashZoomLimitBadges() {
-            document.querySelectorAll('.split-zoom-indicator').forEach(el => {
-                el.classList.remove('at-limit');
-                // Force reflow so removing+re-adding the class restarts the animation
-                void el.offsetWidth;
-                el.classList.add('at-limit');
-                el.addEventListener('animationend', () => el.classList.remove('at-limit'), { once: true });
-            });
-        }
-
         function zoomIn() {
             if (isSplitMode) {
                 // Cap at 1.0: fit-to-viewport is the maximum for split modes.
                 // Going larger causes clipping with no pan to recover, so we stop at fit.
                 if (splitStepZoom >= 1.0) {
-                    flashZoomLimitBadges();
+                    showToast('Zoom limit reached');
                     return;
                 }
                 splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, 1.0);
@@ -2933,14 +2949,13 @@
                         ? Math.round(td.cw - td.rw) - 8
                         : 8;
 
-                    videoWrapper.style.opacity = '0';
+                    videoWrapper.style.position = '';
                     videoWrapper.style.width = tw + 'px';
                     videoWrapper.style.height = th + 'px';
                     videoWrapper.style.top = ty + 'px';
                     videoWrapper.style.left = tx + 'px';
                     videoWrapper.style.transform = '';
                     videoWrapper.style.transformOrigin = '';
-                    videoWrapper.style.opacity = '';
 
                     const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
                     if (zoomIndicator) {
@@ -2962,15 +2977,14 @@
                 }
 
                 // Size and position the video-wrapper to exactly cover the rendered media pixels.
-                // Hide during the write so the browser never paints an intermediate state.
-                videoWrapper.style.opacity = '0';
+                // Clear position so any inline 'fixed' left by applyZoom() doesn't override CSS.
+                videoWrapper.style.position = '';
                 videoWrapper.style.width = Math.round(renderedW) + 'px';
                 videoWrapper.style.height = Math.round(renderedH) + 'px';
                 videoWrapper.style.top = Math.round(offsetY) + 'px';
                 videoWrapper.style.left = Math.round(offsetX) + 'px';
                 videoWrapper.style.transform = '';
                 videoWrapper.style.transformOrigin = '';
-                videoWrapper.style.opacity = '';
 
                 // In overlay mode the .overlay-layer img CSS rule sets width:auto which
                 // prevents the image from filling the JS-sized wrapper. Force 100%×100%
@@ -3155,115 +3169,90 @@
                     requestAnimationFrame(() => requestAnimationFrame(() => resetFitZoom()));
                 }
             } else {
-                // Enable split view — reset any compare-mode 100% cap
+                const targetMode = mode;
+                const loadedSlotCount = Object.values(mediaData).filter(m => m !== null).length;
+
                 splitZoomLevel = null;
                 splitStepZoom = 1.0;
-                document.body.classList.remove('zoom-100');
-
                 if (!isSplitMode) {
                     isSplitMode = true;
-                    document.querySelectorAll('.overlay-layer').forEach(layer => {
-                        const hasMedia = layer.querySelector('img, video');
-                        if (hasMedia) {
-                            layer.classList.add('active');
-                        }
-                    });
-                    // Ensure only the current audio source plays
                     selectAudioSource(currentAudioSource);
                 }
+                layoutMode = targetMode;
 
-                // Apply body layout class FIRST so the CSS grid/flex is active before
-                // we clear wrapper inline styles and measure offsetWidth. If the class
-                // is added after the clear, positionLabelsToMedia() may read 0-dimension
-                // cells (grid not yet committed) and bail, leaving wrappers invisible.
-                layoutMode = mode;
-                if (mode === 'vertical') {
-                    document.body.classList.remove('side-by-side');
-                    document.body.classList.remove('tripartite');
-                    document.body.classList.add('vertical-stack');
-                } else if (mode === 'tripartite') {
-                    document.body.classList.remove('side-by-side');
-                    document.body.classList.remove('vertical-stack');
-                    document.body.classList.add('tripartite');
-                } else {
-                    document.body.classList.remove('vertical-stack');
-                    document.body.classList.remove('tripartite');
-                    document.body.classList.add('side-by-side');
-                }
+                // All DOM mutations happen in one synchronous block so they are batched
+                // into a single style recalc. positionLabelsToMedia() overwrites the
+                // video-wrapper inline styles (position/top/left/width/height) set by
+                // applyZoom() — no prior clear needed, which would create a blank frame.
+                const applyLayout = () => {
+                    document.body.classList.remove('zoom-100');
 
-                // Show/hide layers based on whether they have media loaded.
-                // Empty layers must be hidden so they don't take up space in the layout.
-                // Exception: tripartite uses a CSS grid — all 3 cells must remain in the DOM
-                // and visible, or the grid collapses and renders black.
-                const loadedSlotCount = Object.values(mediaData).filter(m => m !== null).length;
-                if (mode !== 'tripartite') {
                     document.querySelectorAll('.overlay-layer').forEach(layer => {
                         const hasMedia = layer.querySelector('img, video');
-                        layer.style.display = hasMedia ? '' : 'none';
+                        if (hasMedia) layer.classList.add('active');
+                        layer.style.height = '';
+                        layer.style.marginTop = '';
                     });
-                } else {
-                    document.querySelectorAll('.overlay-layer').forEach(layer => {
-                        layer.style.display = '';
-                    });
-                }
-                // two-asset class drives /2 height in vertical-stack instead of /3
-                if (loadedSlotCount === 2) {
-                    document.body.classList.add('two-asset');
-                } else {
-                    document.body.classList.remove('two-asset');
-                }
 
-                // Clear any inline styles set by positionLabelsToMedia() so CSS takes over.
-                // Done AFTER the body class change so the layout is already live.
-                document.querySelectorAll('.overlay-layer').forEach(layer => {
-                    layer.style.height = '';    // clear vertical-stack 100%-cap height override
-                    layer.style.marginTop = ''; // clear vertical-stack 100%-cap centering offset
-                });
-                document.querySelectorAll('.video-wrapper').forEach(vw => {
-                    vw.style.position = ''; // clear fixed positioning set by applyZoom()
-                    vw.style.width = '';
-                    vw.style.height = '';
-                    vw.style.top = '';
-                    vw.style.left = '';
-                    const zi = vw.querySelector('.split-zoom-indicator');
-                    if (zi) { zi.style.bottom = ''; zi.style.right = ''; }
-                });
-                // Clear inline styles left on info bars by applyZoom() / handlePanMove() so
-                // they don't stay at their overlay fixed-position coordinates while waiting
-                // for positionLabelsToMedia() to run in the next rAF cycle.
-                document.querySelectorAll('.asset-info-bar').forEach(bar => {
-                    bar.style.position = '';
-                    bar.style.top = '';
-                    bar.style.left = '';
-                    bar.style.width = '';
-                    bar.style.right = '';
-                    bar.style.bottom = '';
-                    bar.style.height = '';
-                });
+                    if (targetMode === 'vertical') {
+                        document.body.classList.remove('side-by-side');
+                        document.body.classList.remove('tripartite');
+                        document.body.classList.add('vertical-stack');
+                    } else if (targetMode === 'tripartite') {
+                        document.body.classList.remove('side-by-side');
+                        document.body.classList.remove('vertical-stack');
+                        document.body.classList.add('tripartite');
+                    } else {
+                        document.body.classList.remove('vertical-stack');
+                        document.body.classList.remove('tripartite');
+                        document.body.classList.add('side-by-side');
+                    }
 
-                // Tripartite uses a CSS grid whose cell dimensions only stabilise after
-                // a full layout pass. Three nested rAFs (vs two for other modes) give the
-                // browser an extra paint cycle to commit grid row/column sizes before
-                // positionLabelsToMedia() reads offsetWidth/offsetHeight.
-                // Higher retry count (10 vs default 5) handles slower machines or busy
-                // image-decode cycles that delay grid dimension availability.
-                if (mode === 'tripartite') {
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                                updateSplitViewZoomIndicators();
-                                positionLabelsToMedia(10);
-                            });
+                    // Tripartite keeps all 3 cells visible so the CSS grid doesn't collapse.
+                    if (targetMode !== 'tripartite') {
+                        document.querySelectorAll('.overlay-layer').forEach(layer => {
+                            layer.style.display = layer.querySelector('img, video') ? '' : 'none';
                         });
+                    } else {
+                        document.querySelectorAll('.overlay-layer').forEach(layer => {
+                            layer.style.display = '';
+                        });
+                    }
+                    document.body.classList.toggle('two-asset', loadedSlotCount === 2);
+
+                    document.querySelectorAll('.asset-info-bar').forEach(bar => {
+                        bar.style.position = '';
+                        bar.style.top = '';
+                        bar.style.left = '';
+                        bar.style.width = '';
+                        bar.style.right = '';
+                        bar.style.bottom = '';
+                        bar.style.height = '';
                     });
-                } else {
-                    // Two nested rAFs guarantee a full layout pass with the new body class
-                    // applied before we read offsetWidth/offsetHeight to compute positions.
+
+                    // zoom-indicator bottom/right offsets left by positionLabelsToMedia
+                    document.querySelectorAll('.video-wrapper .split-zoom-indicator').forEach(zi => {
+                        zi.style.bottom = '';
+                        zi.style.right = '';
+                    });
+                };
+
+                // Tripartite: grid cell sizes only stabilise after a layout pass,
+                // so run applyLayout in rAF N, then positionLabelsToMedia in rAF N+1.
+                // Other modes: a single rAF suffices since there is no grid to settle.
+                if (targetMode === 'tripartite') {
                     requestAnimationFrame(() => {
+                        applyLayout();
                         requestAnimationFrame(() => {
                             updateSplitViewZoomIndicators();
-                            positionLabelsToMedia();
+                            positionLabelsToMedia(10);
                         });
+                    });
+                } else {
+                    requestAnimationFrame(() => {
+                        applyLayout();
+                        updateSplitViewZoomIndicators();
+                        positionLabelsToMedia();
                     });
                 }
             }
@@ -3627,10 +3616,9 @@
                     document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
                     positionLabelsToMedia();
                     // In tripartite mode, if the 100%-anchor size was clamped to fit (assets
-                    // are already at or below native pixels at the fit zoom level), flash the
-                    // zoom badges to signal that nothing visually changed.
+                    // are already at or below native pixels at the fit zoom level), notify the user.
                     if (splitZoomLevel === 1 && document.body.classList.contains('tripartite') && _tripartiteZoomWasCapped) {
-                        flashZoomLimitBadges();
+                        showToast('Already at fit size');
                     }
                 }
             } else if (e.key === ' ') {
