@@ -3315,6 +3315,15 @@
             } else if (e.key === '0') {
                 e.preventDefault();
                 resetFitZoom();
+            } else if (e.key === '1') {
+                // Snap to 100% actual pixels
+                e.preventDefault();
+                if (!isSideBySide) {
+                    zoomLevel = 1;
+                    panOffsetX = 0;
+                    panOffsetY = 0;
+                    applyZoom();
+                }
             } else if (e.key === ' ') {
                 // Spacebar toggles play/pause for videos
                 e.preventDefault();
@@ -3398,7 +3407,8 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset zoom to fit</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Zoom to fit</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>1</kbd></span><span class="shortcut-desc">Zoom to 100%</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
