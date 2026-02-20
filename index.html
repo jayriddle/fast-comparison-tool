@@ -2199,7 +2199,9 @@
 
         function zoomIn() {
             if (isSplitMode) {
-                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, ZOOM_MAX);
+                // Cap at 1.0: fit-to-viewport is the maximum for split modes.
+                // Going larger causes clipping with no pan to recover, so we stop at fit.
+                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, 1.0);
                 positionLabelsToMedia();
                 return;
             }
