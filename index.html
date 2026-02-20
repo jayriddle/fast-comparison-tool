@@ -1165,6 +1165,23 @@
             return _headerEl;
         }
 
+        // Cached progress-bar UI elements — queried once at startup, reused by
+        // updateVideoProgress() which runs inside the rAF loop at 60fps.
+        let _elProgressBar = null;
+        let _elTimecode    = null;
+        let _elDuration    = null;
+        function getProgressEls() {
+            if (!_elProgressBar) _elProgressBar = document.getElementById('videoProgressBar');
+            if (!_elTimecode)    _elTimecode    = document.getElementById('videoTimecode');
+            if (!_elDuration)    _elDuration    = document.getElementById('videoDuration');
+        }
+
+        // Cached pan targets: set in handlePanStart, reused every mousemove in
+        // handlePanMove and clampPanOffsets without re-querying the DOM.
+        let _panVw        = null; // active .video-wrapper during pan
+        let _panInfoBar   = null; // active .asset-info-bar during pan
+        let _panLayer     = null; // active .overlay-layer during pan
+
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
         let _positionDebounceTimer = null;
@@ -1240,7 +1257,6 @@
                                `  ORIGINAL: ${sortedFiles[0].name}\n` +
                                `  EDIT A: ${sortedFiles[1].name}\n` +
                                `  EDIT B: ${sortedFiles[2].name}`;
-                    console.log(msg);
                 }, 500);
             } else {
                 // 2 files: oldest -> editA, newest -> editB (no original)
@@ -1251,7 +1267,6 @@
                     const msg = `✓ Auto-loaded 2 files (no original):\n` +
                                `  EDIT A: ${sortedFiles[0].name}\n` +
                                `  EDIT B: ${sortedFiles[1].name}`;
-                    console.log(msg);
                 }, 500);
             }
         }
@@ -1283,19 +1298,16 @@
                 mediaContainer.className = 'media-container';
 
                 if (isVideo) {
-                    console.log(`Creating video element for ${slot}`);
                     const video = document.createElement('video');
                     video.src = dataUrl;
                     video.controls = false;
                     video.volume = 1.0;
 
                     video.addEventListener('loadedmetadata', function() {
-                        console.log(`${slot} loadedmetadata event fired`);
                         if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
                         updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
                         updateDurationDisplay(slot, video.duration);
 
-                        console.log(`Video ${slot} metadata loaded: ${video.videoWidth}x${video.videoHeight}`);
 
                         // Setup video handlers
                         setupVideoHandlers(video, slot);
@@ -1309,13 +1321,10 @@
                         // are measured together once rapid successive loads settle.
                         positionLabelsToMediaDebounced();
 
-                        console.log(`Video ${slot} fully loaded and ready`);
                     });
 
-                    console.log(`Appending video to container for ${slot}`);
                     mediaContainer.appendChild(video);
                     hasVideos = true;
-                    console.log(`hasVideos set to true`);
                 } else {
                     const img = document.createElement('img');
                     img.src = dataUrl;
@@ -1555,7 +1564,6 @@
             // Toggle mute state for this source
             audioMuteStates[source] = !audioMuteStates[source];
             
-            console.log(`Toggling ${source} mute to:`, audioMuteStates[source]);
             
             // Apply mute state IMMEDIATELY using volume (more reliable than muted property)
             applyAudioMuteImmediate(source);
@@ -1564,7 +1572,6 @@
             const slotName = source.charAt(0).toUpperCase() + source.slice(1);
             const button = document.getElementById(`audio${slotName}`);
             if (!button) {
-                console.log(`Button audio${slotName} not found`);
                 return;
             }
             
@@ -1597,12 +1604,9 @@
                 if (video) {
                     const shouldBeMuted = audioMuteStates[source];
                     video.muted = shouldBeMuted;
-                    console.log(`Applied ${source}: muted=${video.muted}`);
                 } else {
-                    console.log(`No video found in layer ${slotName}`);
                 }
             } else {
-                console.log(`Layer ${slotName} not found`);
             }
         }
 
@@ -1664,12 +1668,13 @@
         function updateVideoProgressFromTime(video, currentTime) {
             const duration = video.duration;
             if (isNaN(duration) || duration === 0) return;
+            getProgressEls();
             const fps = videoFrameRates[video.src] || 30;
             if (timecodeMode === 'frames') {
                 const currentFrame = Math.floor(currentTime * fps);
                 const totalFrames = Math.floor(duration * fps);
-                document.getElementById('videoTimecode').textContent = `Frame ${currentFrame}`;
-                document.getElementById('videoDuration').textContent = `${totalFrames}`;
+                _elTimecode.textContent = `Frame ${currentFrame}`;
+                _elDuration.textContent = `${totalFrames}`;
             } else {
                 const currentMinutes = Math.floor(currentTime / 60);
                 const currentSeconds = Math.floor(currentTime % 60);
@@ -1677,9 +1682,9 @@
                 const totalMinutes = Math.floor(duration / 60);
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFramesD = Math.floor((duration % 1) * fps);
-                document.getElementById('videoTimecode').textContent =
+                _elTimecode.textContent =
                     `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
-                document.getElementById('videoDuration').textContent =
+                _elDuration.textContent =
                     `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFramesD.toString().padStart(2, '0')}`;
             }
         }
@@ -1687,19 +1692,20 @@
         function updateVideoProgress(video) {
             const currentTime = video.currentTime;
             const duration = video.duration;
+            getProgressEls(); // ensure cache is warm (no-op after first call)
 
             // Guard against NaN when video metadata isn't ready yet
             if (isNaN(duration) || duration === 0) {
-                document.getElementById('videoProgressBar').style.width = '0%';
-                document.getElementById('videoTimecode').textContent = '0:00:00';
-                document.getElementById('videoDuration').textContent = '0:00:00';
+                _elProgressBar.style.width = '0%';
+                _elTimecode.textContent = '0:00:00';
+                _elDuration.textContent = '0:00:00';
                 return;
             }
 
             const progress = (currentTime / duration) * 100;
 
             // Update progress bar
-            document.getElementById('videoProgressBar').style.width = progress + '%';
+            _elProgressBar.style.width = progress + '%';
 
             // Get framerate (assume 30fps if not detected)
             const fps = videoFrameRates[video.src] || 30;
@@ -1708,8 +1714,8 @@
                 // Frame mode: "Frame 462" and "3720"
                 const currentFrame = Math.floor(currentTime * fps);
                 const totalFrames = Math.floor(duration * fps);
-                document.getElementById('videoTimecode').textContent = `Frame ${currentFrame}`;
-                document.getElementById('videoDuration').textContent = `${totalFrames}`;
+                _elTimecode.textContent = `Frame ${currentFrame}`;
+                _elDuration.textContent = `${totalFrames}`;
             } else {
                 // Time mode: "0:15:22" and "2:35:18" (min:sec:frame)
                 const currentMinutes = Math.floor(currentTime / 60);
@@ -1720,11 +1726,8 @@
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFrames = Math.floor((duration % 1) * fps);
 
-                const currentTC = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
-                const totalTC = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
-
-                document.getElementById('videoTimecode').textContent = currentTC;
-                document.getElementById('videoDuration').textContent = totalTC;
+                _elTimecode.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
+                _elDuration.textContent = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
             }
         }
 
@@ -1858,39 +1861,25 @@
             // Always switch audio to the selected video
             selectAudioSource(assetKey);
             
+            const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
+            const activeLayer = document.getElementById(`layer${layerName}`);
+
             // Hide all layers (only in overlay mode)
             if (!isSideBySide) {
-                console.log('Overlay mode - hiding all layers');
                 document.querySelectorAll('.overlay-layer').forEach(layer => {
                     layer.classList.remove('active');
                 });
-
-                // Show selected layer
-                const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-                const activeLayer = document.getElementById(`layer${layerName}`);
-                console.log(`Activating layer: layer${layerName}`, activeLayer);
-                if (activeLayer) {
-                    activeLayer.classList.add('active');
-                    console.log(`Layer activated, has media:`, activeLayer.querySelector('img, video') !== null);
-                } else {
-                    console.error(`Layer layer${layerName} not found!`);
-                }
-
-                // Recompute overlay positions for current zoom level
-                applyZoom();
+                if (activeLayer) activeLayer.classList.add('active');
             }
 
             // Check if current asset is video and update progress if so
-            const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-            const activeLayer = document.getElementById(`layer${layerName}`);
-            const video = activeLayer.querySelector('video');
+            const video = activeLayer ? activeLayer.querySelector('video') : null;
             if (video) {
                 primaryVideoRef = video; // keep rAF loop ref fresh
                 updateVideoProgress(video);
             }
 
-            // Pan is now on the wrapper position, not a media transform — call applyZoom()
-            // to reposition the newly active layer's wrapper with the current pan offset.
+            // Reposition the newly active layer's wrapper with the current zoom/pan offset.
             applyZoom();
 
             // Refresh active highlight and slide the underline to the new asset button
@@ -2168,9 +2157,7 @@
         // Clamp panOffsetX/Y so each edge of the image can't travel more than
         // ~25% of the viewport past the corresponding side of the frame.
         function clampPanOffsets() {
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (!activeLayer) return;
-            const vw = activeLayer.querySelector('.video-wrapper');
+            const vw = _panVw;
             if (!vw) return;
             const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
             const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
@@ -2204,6 +2191,11 @@
             panStartX = e.clientX - panOffsetX;
             panStartY = e.clientY - panOffsetY;
             document.getElementById('overlayContainer').classList.add('panning');
+            // Cache the active layer's vw and infoBar so handlePanMove/clampPanOffsets
+            // never query the DOM during the hot mousemove path.
+            _panLayer   = document.querySelector('.overlay-layer.active');
+            _panVw      = _panLayer ? _panLayer.querySelector('.video-wrapper') : null;
+            _panInfoBar = _panLayer ? _panLayer.querySelector('.asset-info-bar') : null;
         }
 
         function handlePanMove(e) {
@@ -2214,36 +2206,34 @@
             panOffsetY = e.clientY - panStartY;
             clampPanOffsets();
 
-            // Move the wrapper (not the media) so zoom badge and all children track with it
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const vw = activeLayer.querySelector('.video-wrapper');
-                if (vw) {
-                    const centerTop = parseFloat(vw.dataset.centerTop || 0);
-                    const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
-                    vw.style.top = (centerTop + panOffsetY) + 'px';
-                    vw.style.left = (centerLeft + panOffsetX) + 'px';
-                }
-                // Move info bar in lockstep
-                const infoBar = activeLayer.querySelector('.asset-info-bar');
-                if (infoBar) {
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
-                    const barCenterTop = parseFloat(infoBar.dataset.centerTop || HEADER_OVERLAP);
-                    const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
-                    const barW = parseFloat(infoBar.dataset.scaledW || infoBar.offsetWidth);
-                    const barHeaderH = parseFloat(infoBar.dataset.headerH || HEADER_OVERLAP);
-                    const pannedTop = barCenterTop + panOffsetY;
-                    const pannedLeft = barCenterLeft + panOffsetX;
-                    const clampedLeft = Math.max(0, pannedLeft);
-                    infoBar.style.top = Math.max(barHeaderH, pannedTop - ibH) + 'px';
-                    infoBar.style.left = clampedLeft + 'px';
-                    infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
-                }
+            // Move the wrapper using cached refs set in handlePanStart — no DOM queries
+            const vw = _panVw;
+            if (vw) {
+                const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
+                const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
+                vw.style.top  = (centerTop  + panOffsetY) + 'px';
+                vw.style.left = (centerLeft + panOffsetX) + 'px';
+            }
+            // Move info bar in lockstep
+            const infoBar = _panInfoBar;
+            if (infoBar) {
+                const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                const barCenterTop  = parseFloat(infoBar.dataset.centerTop  || HEADER_OVERLAP);
+                const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
+                const barW          = parseFloat(infoBar.dataset.scaledW    || infoBar.offsetWidth);
+                const barHeaderH    = parseFloat(infoBar.dataset.headerH    || HEADER_OVERLAP);
+                const pannedTop  = barCenterTop  + panOffsetY;
+                const pannedLeft = barCenterLeft + panOffsetX;
+                const clampedLeft = Math.max(0, pannedLeft);
+                infoBar.style.top   = Math.max(barHeaderH, pannedTop - ibH) + 'px';
+                infoBar.style.left  = clampedLeft + 'px';
+                infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
             }
         }
 
         function handlePanEnd(e) {
             isPanning = false;
+            _panVw = null; _panInfoBar = null; _panLayer = null; // release cached refs
             document.getElementById('overlayContainer').classList.remove('panning');
             applyZoom(); // re-anchor info bars to the settled pan position
         }
@@ -3146,17 +3136,13 @@
 
         // Update checkAllLoaded to show view mode buttons
         function checkAllLoaded() {
-            console.log('=== checkAllLoaded called ===');
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
-            console.log('Loaded count:', loadedCount);
-            console.log('hasVideos:', hasVideos);
             
             // Wait until all expected files are loaded before activating the view.
             // Firing early (e.g. at loadedCount=2 during a 3-file load) causes
             // setViewMode('horizontal') to hide the not-yet-loaded third layer,
             // resulting in a black screen when tripartite mode is set moments later.
             if (loadedCount < expectedFileCount) {
-                console.log(`Waiting for all files: ${loadedCount}/${expectedFileCount} loaded`);
                 return;
             }
 
@@ -3168,7 +3154,6 @@
             // NOTE: we cannot check comparisonView.classList.contains('active') here
             // because clearAllMedia() removes that class before new files start loading.
             if (viewActivating) {
-                console.log('checkAllLoaded: activation already in progress, repositioning only');
                 positionLabelsToMediaDebounced();
                 return;
             }
@@ -3176,25 +3161,21 @@
             // Need at least 2 files loaded (Edit A and Edit B minimum)
             if (loadedCount >= 2) {
                 viewActivating = true; // prevent re-entry from subsequent img.load events
-                console.log('2+ files loaded, activating comparison view');
                 
                 // Hide quick start popup if showing
                 document.getElementById('quickStartPopup').classList.remove('show');
 
                 document.getElementById('comparisonView').classList.add('active');
-                console.log('comparisonView activated');
 
                 document.getElementById('resetBtn').style.display = 'block';
 
                 // Show view mode buttons (initial state is overlay mode)
                 // (updateViewModeButtons will set correct visibility based on asset count)
-                console.log('View mode buttons shown');
 
                 // Show/hide audio source buttons based on what's loaded
                 document.getElementById('audioOriginal').style.display = mediaData.original ? 'inline-block' : 'none';
                 document.getElementById('audioEditA').style.display = mediaData.editA ? 'inline-block' : 'none';
                 document.getElementById('audioEditB').style.display = mediaData.editB ? 'inline-block' : 'none';
-                console.log('Audio buttons configured');
 
                 // Set initial audio source to first loaded video
                 if (mediaData.original) {
@@ -3204,21 +3185,16 @@
                 } else {
                     selectAudioSource('editB');
                 }
-                console.log('Audio source selected');
 
                 // Check for identical assets
                 checkForIdenticalAssets();
                 
                 // Start with first loaded asset
-                console.log('About to switch to asset...');
                 if (mediaData.original) {
-                    console.log('Switching to Original (index 0)');
                     switchToAsset(0); // Start with original
                 } else if (mediaData.editA) {
-                    console.log('Switching to Edit A (index 1)');
                     switchToAsset(1); // Start with Edit A if no original
                 } else {
-                    console.log('Switching to Edit B (index 2)');
                     switchToAsset(2); // Start with Edit B
                 }
 
@@ -3240,20 +3216,13 @@
                 }
 
                 // Show video controls if any videos
-                console.log('Checking for video controls, hasVideos =', hasVideos);
                 if (hasVideos) {
-                    console.log('Activating video controls');
                     const videoControls = document.getElementById('videoControls');
-                    console.log('videoControls element:', videoControls);
                     videoControls.classList.add('active');
-                    console.log('videoControls classes:', videoControls.className);
                 } else {
-                    console.log('No videos, controls will not show');
                 }
                 
-                console.log('=== checkAllLoaded complete ===');
             } else {
-                console.log('Not enough files loaded yet');
             }
         }
 
@@ -3301,7 +3270,6 @@
 
         function undo() {
             if (undoStack.length === 0) {
-                console.log('Nothing to undo');
                 return;
             }
             
@@ -3315,7 +3283,6 @@
 
         function redo() {
             if (redoStack.length === 0) {
-                console.log('Nothing to redo');
                 return;
             }
             
@@ -3385,7 +3352,6 @@
             document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
             document.getElementById('zoomIndicator').textContent = zoomLevel.toFixed(2) + '×';
             
-            console.log('State restored');
         }
 
         function toggleMute() {
