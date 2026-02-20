@@ -297,14 +297,14 @@
             position: absolute;
             top: 100%;
             left: 0;
-            margin-top: 5px;
-            background: #2a2a2a;
-            border: 2px solid rgb(160, 160, 160);
-            border-radius: 8px;
-            padding: 20px 30px;
+            margin-top: 6px;
+            background: #242424;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 16px 20px;
             z-index: 1000;
-            width: 450px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            width: 360px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
             display: none;
         }
 
@@ -318,13 +318,18 @@
 
         .quick-start-close {
             float: right;
-            background: #dc3545;
-            color: white;
+            background: transparent;
+            color: #777;
             border: none;
-            border-radius: 3px;
-            padding: 4px 10px;
+            padding: 0;
             cursor: pointer;
             font-size: 11px;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .quick-start-close:hover {
+            color: #ccc;
         }
 
         .comparison-view {
@@ -929,25 +934,23 @@
 
                 <!-- Help Popup -->
                 <div class="quick-start-popup" id="quickStartPopup">
-                    <button class="quick-start-close" onclick="toggleQuickStart()">Close</button>
-                    <h2 style="margin-top: 0; color: rgb(160, 160, 160);">Quick Start Guide</h2>
-                    <ol style="line-height: 1.8;">
-                        <li>Right-click save files from in-house tool in order: <strong>&lt;Original, A, B&gt;</strong></li>
-                        <li><strong>Select 2 or 3 files</strong> (Cmd+click) and drag anywhere, or press <kbd>L</kbd> to open the file picker
-                            <ul style="margin-top: 5px; font-size: 11px; color: #999;">
-                                <li><strong>2 files:</strong> Edit A vs Edit B (no original)</li>
-                                <li><strong>3 files:</strong> Original vs Edit A vs Edit B</li>
+                    <button class="quick-start-close" onclick="toggleQuickStart()">✕</button>
+                    <p style="margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #888; text-transform: uppercase;">Help</p>
+                    <ol style="margin: 0; padding-left: 18px; font-size: 12px; color: #bbb; line-height: 1.7;">
+                        <li>Save files from the tool in order: Original, A, B</li>
+                        <li>Select 2–3 files and drag anywhere, or press <kbd>L</kbd>
+                            <ul style="margin: 3px 0 3px; color: #777; list-style: disc; padding-left: 16px;">
+                                <li>2 files: Edit A vs Edit B</li>
+                                <li>3 files: Original vs Edit A vs Edit B</li>
                             </ul>
                         </li>
-                        <li>Tool auto-sorts by save time and loads into correct slots</li>
-                        <li>Press <kbd>F</kbd> for fullscreen, use <kbd>←</kbd> <kbd>→</kbd> to compare</li>
+                        <li>Files auto-sort by save time into the correct slots</li>
+                        <li>Press <kbd>F</kbd> for fullscreen, <kbd>←</kbd> <kbd>→</kbd> to compare</li>
                         <li>Press <kbd>+</kbd> <kbd>-</kbd> to zoom in/out</li>
                         <li>Press <kbd>Space</kbd> to play/pause videos</li>
-                        <li>Press <kbd>K</kbd> to see all keyboard shortcuts</li>
+                        <li>Press <kbd>K</kbd> for all keyboard shortcuts</li>
                     </ol>
-                    <p style="margin-top: 15px; font-size: 11px; color: #999;">
-                        <em>Tip: Files are automatically sorted by modification time. Arrow keys skip empty slots.</em>
-                    </p>
+                    <p style="margin: 10px 0 0; font-size: 11px; color: #555; font-style: italic;">Arrow keys skip empty slots.</p>
                 </div>
             </div>
             <!-- Mode strip: OVERLAY / 3-UP / COMPARE — tappable, active one highlighted -->
