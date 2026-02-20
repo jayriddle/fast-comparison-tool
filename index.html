@@ -1937,13 +1937,12 @@
             const headerEl = document.querySelector('.header');
             const headerH = headerEl ? headerEl.offsetHeight : HEADER_OVERLAP;
 
-            // Compute fitZoom and overlayMinLongest so all assets share the same
-            // rendered footprint — sized by the lowest-res asset's longest side.
-            // Higher-res assets scale DOWN to match; the lowest-res asset renders at 1:1.
-            let overlayMinLongest = 0;
+            // Compute fitZoom and refW/refH using the asset whose longest side is smallest.
+            // All assets are then scaled to fit within that reference bounding box, preserving
+            // their own aspect ratio — so portrait and landscape assets stay comparable.
+            let refW = 0, refH = 0;
             {
                 let minLongest = Infinity;
-                let refW = 0, refH = 0;
                 ['original', 'editA', 'editB'].forEach(slot => {
                     if (mediaData[slot]) {
                         const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
@@ -1960,7 +1959,6 @@
                         }
                     }
                 });
-                overlayMinLongest = minLongest === Infinity ? 0 : minLongest;
                 const viewW = window.innerWidth;
                 const viewH = window.innerHeight - HEADER_OVERLAP;
                 if (refW > 0 && refH > 0) {
@@ -1968,9 +1966,9 @@
                 }
             }
 
-            // Position each asset wrapper. Each asset is scaled so its longest side
-            // equals overlayMinLongest × zoomLevel — giving all assets the same
-            // physical footprint on screen regardless of their native resolution.
+            // Position each asset wrapper. Each asset is scaled to fit within the reference
+            // bounding box (refW × refH) at the current zoomLevel, preserving its own aspect ratio.
+            // This keeps all assets the same on-screen size regardless of native resolution or orientation.
             const availH = window.innerHeight - HEADER_OVERLAP;
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
@@ -1985,9 +1983,10 @@
                 const nh = media.naturalHeight || media.videoHeight || 0;
                 if (!nw || !nh) return;
 
-                // Scale this asset so its longest side = overlayMinLongest × zoomLevel
-                const longest = Math.max(nw, nh);
-                const perAssetScale = overlayMinLongest > 0 ? (overlayMinLongest / longest) * zoomLevel : zoomLevel;
+                // Scale this asset to fit within the reference bounding box, preserving aspect ratio
+                const perAssetScale = refW > 0 && refH > 0
+                    ? Math.min(refW / nw, refH / nh) * zoomLevel
+                    : zoomLevel;
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
                 const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
@@ -2718,13 +2717,9 @@
                     });
                     switchToAsset(currentAssetIndex);
                     // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport.
-                    // After applyZoom computes fitZoom, snap zoomLevel to it so assets fit the
-                    // viewport instead of rendering at 1:1 (especially important for portrait assets).
-                    requestAnimationFrame(() => requestAnimationFrame(() => {
-                        applyZoom();           // computes fitZoom from asset dimensions
-                        zoomLevel = fitZoom;   // snap to fit — same as pressing 0
-                        applyZoom();           // re-render at the correct fit zoom
-                    }));
+                    // resetFitZoom() computes fitZoom then snaps zoomLevel to it, same as pressing 0.
+                    // This ensures portrait/tall assets fit the viewport instead of rendering at 1:1.
+                    requestAnimationFrame(() => requestAnimationFrame(() => resetFitZoom()));
                 }
             } else {
                 // Enable split view
