@@ -849,10 +849,14 @@
             position: relative; /* anchor the sliding underline */
         }
 
-        /* Mode buttons slide left as a group when overlay activates */
+        /* Mode buttons slide left when overlay activates, right when leaving */
         @keyframes modeCoreSlideLeft {
             from { transform: translateX(var(--asset-group-width, 0px)); }
             to   { transform: translateX(0); }
+        }
+        @keyframes modeCoreSlideRight {
+            from { transform: translateX(0); }
+            to   { transform: translateX(var(--asset-group-width, 0px)); }
         }
         .mode-core {
             display: flex;
@@ -860,13 +864,20 @@
             gap: 2px;
         }
         .mode-core.sliding {
-            animation: modeCoreSlideLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+            animation: modeCoreSlideLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .mode-core.sliding-out {
+            animation: modeCoreSlideRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
-        /* Asset group fades + slides in from right when overlay activates */
+        /* Asset group fades + slides in when overlay activates, out when leaving */
         @keyframes assetGroupReveal {
             from { opacity: 0; transform: translateX(8px); }
             to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes assetGroupHide {
+            from { opacity: 1; transform: translateX(0); }
+            to   { opacity: 0; transform: translateX(8px); }
         }
         .asset-group {
             display: flex;
@@ -877,7 +888,10 @@
         }
         .asset-group.visible {
             opacity: 1;
-            animation: assetGroupReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+            animation: assetGroupReveal 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .asset-group.hiding {
+            animation: assetGroupHide 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
         .mode-btn, .asset-btn {
@@ -2558,6 +2572,28 @@
                 });
             }
 
+            // Horizontal compare pre-pass: scale all assets so their shorter side matches
+            // the smallest shorter-side across loaded assets. For portrait images this anchors
+            // on width — a crop (wider but same scene) scales down so content appears at the
+            // same size as the original. For landscape images it anchors on height.
+            // Each slot then clamps independently to its own cell dimensions.
+            let compareRefShort = 0;
+            if (!isVertical && !isTripartite && !isOverlay) {
+                let minShort = Infinity;
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const layer = getLayer(slot);
+                    const media = layer ? layer.querySelector('img, video') : null;
+                    if (!media) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const shortest = Math.min(nw, nh);
+                    if (shortest < minShort) minShort = shortest;
+                });
+                compareRefShort = minShort === Infinity ? 0 : minShort;
+            }
+
             // Overlay mode: find the smallest "longest side" across all loaded assets.
             // All assets are then rendered so their longest side equals that reference
             // length — the smallest asset shows at 1:1, larger ones scale down to match.
@@ -2664,10 +2700,32 @@
                     const boxTop  = Math.round((fitH - refPx) / 2);
                     offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
                     offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
+                } else if (!isVertical && !isTripartite && compareRefShort > 0) {
+                    // Horizontal compare: scale each asset so its shorter side = compareRefShort.
+                    // Portrait: anchors on width so a wider crop scales down to match the
+                    // original's width, making the content appear at the same size.
+                    // Landscape: anchors on height for the same reason.
+                    const shortSide = Math.min(naturalWidth, naturalHeight);
+                    const refScale = compareRefShort / shortSide;
+                    const baseW = naturalWidth * refScale;
+                    const baseH = naturalHeight * refScale;
+                    const clampScale = Math.min(1, containerW / baseW, fitH / baseH);
+                    renderedW = Math.round(baseW * clampScale);
+                    renderedH = Math.round(baseH * clampScale);
+                    // Align to inner edge with a small gap: first slot right-aligns with 8px
+                    // inset, last slot left-aligns with 8px inset — 16px total between images.
+                    const loadedSlots = slots.filter(s => mediaData[s]);
+                    const slotIdx = loadedSlots.indexOf(slot);
+                    if (loadedSlots.length > 1 && slotIdx === 0) {
+                        offsetX = containerW - renderedW - 8;
+                    } else if (loadedSlots.length > 1 && slotIdx === loadedSlots.length - 1) {
+                        offsetX = 8;
+                    } else {
+                        offsetX = (containerW - renderedW) / 2;
+                    }
+                    offsetY = ibReserve + (fitH - renderedH) / 2;
                 } else {
-                    // Split modes: contain-fit, optionally capped at 100% actual pixels.
-                    // Vertical-stack uses a shared scale (pre-pass above) so all videos
-                    // render at the same zoom regardless of per-cell height differences.
+                    // Vertical-stack / tripartite / fallback: contain-fit per cell.
                     let scale;
                     if (isVertical && verticalSharedScale !== null) {
                         scale = verticalSharedScale;
@@ -2712,10 +2770,11 @@
                     } else {
                         ty = 0; // flush top
                     }
-                    // Original: flush right; A/B: flush left
+                    // Original: flush right with 8px gap; A/B: flush left with 8px gap.
+                    // 16px total between the centre column edges, matching compare mode.
                     const tx = slot === 'original'
-                        ? Math.round(td.cw - td.rw)
-                        : 0;
+                        ? Math.round(td.cw - td.rw) - 8
+                        : 8;
 
                     videoWrapper.style.opacity = '0';
                     videoWrapper.style.width = tw + 'px';
@@ -2780,8 +2839,8 @@
                 }
 
                 // Position the info bar flush above the video, matching its width and x-position.
-                // In vertical-stack the reserved ibReserve strip guarantees space so the bar
-                // never overlaps the video — no special-casing needed.
+                // Clamp top to 0 so the bar never slides up into the header when the video is
+                // centered in a tall cell and offsetY < ibH.
                 if (infoBar) {
                     infoBar.style.position = ''; // clear fixed positioning from overlay mode
                     infoBar.style.bottom = '';
@@ -2789,7 +2848,7 @@
                     infoBar.style.right  = '';
                     const ibH = infoBar._cachedH = infoBar.offsetHeight || 28;
                     infoBar.style.left  = Math.round(offsetX) + 'px';
-                    infoBar.style.top   = Math.round(offsetY - ibH) + 'px';
+                    infoBar.style.top   = Math.round(Math.max(0, offsetY - ibH)) + 'px';
                     infoBar.style.width = Math.round(renderedW) + 'px';
                 }
             });
@@ -2885,6 +2944,15 @@
                         vw.style.height = '';
                         vw.style.top = '';
                         vw.style.left = '';
+                    });
+                    document.querySelectorAll('.asset-info-bar').forEach(bar => {
+                        bar.style.position = '';
+                        bar.style.top = '';
+                        bar.style.left = '';
+                        bar.style.width = '';
+                        bar.style.right = '';
+                        bar.style.bottom = '';
+                        bar.style.height = '';
                     });
 
                     // Reset audio mute states and button icons when leaving split view
@@ -2991,6 +3059,18 @@
                     const zi = vw.querySelector('.split-zoom-indicator');
                     if (zi) { zi.style.bottom = ''; zi.style.right = ''; }
                 });
+                // Clear inline styles left on info bars by applyZoom() / handlePanMove() so
+                // they don't stay at their overlay fixed-position coordinates while waiting
+                // for positionLabelsToMedia() to run in the next rAF cycle.
+                document.querySelectorAll('.asset-info-bar').forEach(bar => {
+                    bar.style.position = '';
+                    bar.style.top = '';
+                    bar.style.left = '';
+                    bar.style.width = '';
+                    bar.style.right = '';
+                    bar.style.bottom = '';
+                    bar.style.height = '';
+                });
 
                 // Tripartite uses a CSS grid whose cell dimensions only stabilise after
                 // a full layout pass. Three nested rAFs (vs two for other modes) give the
@@ -3031,6 +3111,28 @@
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
             if (loadedCount === 0) { strip.style.display = 'none'; return; }
 
+            // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
+            const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
+
+            // If we're leaving overlay mode and the asset group is currently visible,
+            // animate it out before rebuilding so the mode buttons slide back to the right.
+            if (normalised !== 'overlay') {
+                const existingAssetGroup = strip.querySelector('.asset-group.visible');
+                const existingModeCore   = strip.querySelector('.mode-core');
+                if (existingAssetGroup && existingModeCore) {
+                    const groupW = existingAssetGroup.offsetWidth;
+                    existingModeCore.style.setProperty('--asset-group-width', `${groupW}px`);
+                    const underline = document.getElementById('assetUnderline');
+                    if (underline) underline.classList.remove('visible');
+                    existingAssetGroup.classList.remove('visible');
+                    existingAssetGroup.classList.add('hiding');
+                    existingModeCore.classList.remove('sliding');
+                    existingModeCore.classList.add('sliding-out');
+                    setTimeout(() => updateModeStrip(activeMode), 220);
+                    return; // let the animation play; the setTimeout will rebuild
+                }
+            }
+
             strip.style.display = 'flex';
             strip.innerHTML = '';
 
@@ -3038,9 +3140,6 @@
             const modes = loadedCount === 3
                 ? [['tripartite', '3-UP'], ['overlay', 'OVERLAY']]
                 : [['compare', 'COMPARE'], ['overlay', 'OVERLAY']];
-
-            // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
-            const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
 
             // Wrap mode buttons in a flex group so they slide together
             const modeCore = document.createElement('div');
@@ -3120,10 +3219,6 @@
                         underline.style.transition = '';
                     });
                 });
-            } else {
-                // Hide underline when not in overlay mode
-                const underline = document.getElementById('assetUnderline');
-                if (underline) underline.classList.remove('visible');
             }
         }
 
