@@ -53,7 +53,7 @@
             border-radius: 3px;
             cursor: pointer;
             font-size: 10px;
-            margin-left: 10px;
+            margin-left: 0;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
@@ -142,7 +142,7 @@
         .video-progress-container {
             flex: 1;
             height: 8px;
-            background: rgba(160, 160, 160, 0.3);
+            background: rgba(160, 160, 160, 0.4);
             cursor: pointer;
             border-radius: 4px;
             overflow: hidden;
@@ -217,7 +217,7 @@
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
-            background: rgba(160, 160, 160, 0.3);
+            background: rgba(160, 160, 160, 0.4);
             outline: none;
             border-radius: 2px;
         }
@@ -289,7 +289,7 @@
             border-radius: 3px;
             cursor: pointer;
             font-size: 10px;
-            margin-left: 15px;
+            margin-left: 0;
             position: relative;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -388,6 +388,7 @@
         /* video-wrapper: JS sets top/left/width/height to exact rendered media bounds in all modes */
         .video-wrapper {
             position: absolute;
+            will-change: transform; /* promote to GPU compositor layer — cheap to reposition */
         }
 
         /* Media fills the wrapper exactly — object-fit:contain handled by JS sizing the wrapper */
@@ -454,7 +455,7 @@
             width: 100%;
             height: calc((100vh - 80px) / 3);
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 0;
             overflow: hidden;
         }
 
@@ -852,6 +853,38 @@
             display: flex;
             align-items: center;
             gap: 2px;
+            position: relative; /* anchor the sliding underline */
+        }
+
+        /* Mode buttons slide left as a group when overlay activates */
+        @keyframes modeCoreSlideLeft {
+            from { transform: translateX(var(--asset-group-width, 0px)); }
+            to   { transform: translateX(0); }
+        }
+        .mode-core {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .mode-core.sliding {
+            animation: modeCoreSlideLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+
+        /* Asset group fades + slides in from right when overlay activates */
+        @keyframes assetGroupReveal {
+            from { opacity: 0; transform: translateX(8px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        .asset-group {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            margin-left: -6px; /* underlap OVERLAY pill's 4px border-radius so tint fills flush to its edge */
+            opacity: 0;
+        }
+        .asset-group.visible {
+            opacity: 1;
+            animation: assetGroupReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
         .mode-btn, .asset-btn {
@@ -873,9 +906,58 @@
             color: #fff;
         }
 
-        .mode-btn.active, .asset-btn.active {
+        .mode-btn.active {
             background: rgb(160, 160, 160);
             color: #000;
+        }
+
+        /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
+        .asset-btn {
+            background: rgba(160, 160, 160, 0.4);
+            transition: background 0.15s, color 0.15s;
+            border-radius: 0;
+            color: rgb(145, 145, 145);
+        }
+
+        /* First asset button: square left edge to seamlessly join the OVERLAY pill */
+        .asset-btn.first-asset {
+            border-radius: 0;
+        }
+
+        /* Last asset button: round the right end */
+        .asset-btn.last-asset {
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* Asset separators (·) share the dim tint so the band reads as one continuous strip */
+        .strip-sep.asset-sep {
+            background: rgba(160, 160, 160, 0.4);
+            color: #555;
+            padding: 4px 1px;
+            margin: 0;
+        }
+
+        /* Active asset: slightly lighter text; underline is a separate sliding element */
+        .asset-btn.active {
+            background: rgba(160, 160, 160, 0.4);
+            color: rgb(220, 220, 220);
+        }
+
+        /* Sliding underline bar — positioned absolutely over the active asset button */
+        #assetUnderline {
+            position: absolute;
+            bottom: 0;
+            height: 2px;
+            background: rgb(160, 160, 160);
+            border-radius: 1px;
+            pointer-events: none;
+            transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                        width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.15s ease;
+            opacity: 0;
+        }
+        #assetUnderline.visible {
+            opacity: 1;
         }
 
         .strip-sep {
@@ -918,7 +1000,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div style="position: relative; display: flex; align-items: center; gap: 4px;">
+            <div style="position: relative; display: flex; align-items: center; gap: 6px;">
                 <span style="font-size: 16px; font-weight: 600;">WarpDiff</span>
                 <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 2–3 files to compare (or press L)" style="margin-left: 16px;">
                     Load
@@ -1057,6 +1139,7 @@
         let panOffsetY = 0;
 
         let zoomLevel = 1; // Default 1x zoom (actual size/fit)
+        let splitZoomLevel = null; // null = fit-to-panel; 1 = cap at 100% actual pixels (compare modes)
         let timecodeMode = 'time'; // 'time' or 'frames'
         let videoFrameRates = {}; // Store framerate for each video
         let splitViewFitMode = 'contain'; // 'contain' (fit, no crop - default) or 'cover' (fill, crop)
@@ -1073,6 +1156,31 @@
         const HEADER_OVERLAP = 50; // px reserved for the header bar in inspect mode
         const INFO_BAR_H = 30;     // px reserved for the asset info bar in overlay mode
         let fitZoom = 1; // Fit-to-viewport zoom, computed when entering inspect mode
+
+        // Cached header element — queried once, reused by applyZoom / positionLabelsToMedia
+        // instead of a live querySelector on every call.
+        let _headerEl = null;
+        function getHeaderEl() {
+            if (!_headerEl || !_headerEl.isConnected) _headerEl = document.querySelector('.header');
+            return _headerEl;
+        }
+
+        // Cached progress-bar UI elements — queried once at startup, reused by
+        // updateVideoProgress() which runs inside the rAF loop at 60fps.
+        let _elProgressBar = null;
+        let _elTimecode    = null;
+        let _elDuration    = null;
+        function getProgressEls() {
+            if (!_elProgressBar) _elProgressBar = document.getElementById('videoProgressBar');
+            if (!_elTimecode)    _elTimecode    = document.getElementById('videoTimecode');
+            if (!_elDuration)    _elDuration    = document.getElementById('videoDuration');
+        }
+
+        // Cached pan targets: set in handlePanStart, reused every mousemove in
+        // handlePanMove and clampPanOffsets without re-querying the DOM.
+        let _panVw        = null; // active .video-wrapper during pan
+        let _panInfoBar   = null; // active .asset-info-bar during pan
+        let _panLayer     = null; // active .overlay-layer during pan
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
@@ -1149,7 +1257,6 @@
                                `  ORIGINAL: ${sortedFiles[0].name}\n` +
                                `  EDIT A: ${sortedFiles[1].name}\n` +
                                `  EDIT B: ${sortedFiles[2].name}`;
-                    console.log(msg);
                 }, 500);
             } else {
                 // 2 files: oldest -> editA, newest -> editB (no original)
@@ -1160,7 +1267,6 @@
                     const msg = `✓ Auto-loaded 2 files (no original):\n` +
                                `  EDIT A: ${sortedFiles[0].name}\n` +
                                `  EDIT B: ${sortedFiles[1].name}`;
-                    console.log(msg);
                 }, 500);
             }
         }
@@ -1192,19 +1298,16 @@
                 mediaContainer.className = 'media-container';
 
                 if (isVideo) {
-                    console.log(`Creating video element for ${slot}`);
                     const video = document.createElement('video');
                     video.src = dataUrl;
                     video.controls = false;
                     video.volume = 1.0;
 
                     video.addEventListener('loadedmetadata', function() {
-                        console.log(`${slot} loadedmetadata event fired`);
                         if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
                         updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
                         updateDurationDisplay(slot, video.duration);
 
-                        console.log(`Video ${slot} metadata loaded: ${video.videoWidth}x${video.videoHeight}`);
 
                         // Setup video handlers
                         setupVideoHandlers(video, slot);
@@ -1218,13 +1321,10 @@
                         // are measured together once rapid successive loads settle.
                         positionLabelsToMediaDebounced();
 
-                        console.log(`Video ${slot} fully loaded and ready`);
                     });
 
-                    console.log(`Appending video to container for ${slot}`);
                     mediaContainer.appendChild(video);
                     hasVideos = true;
-                    console.log(`hasVideos set to true`);
                 } else {
                     const img = document.createElement('img');
                     img.src = dataUrl;
@@ -1373,32 +1473,36 @@
 
         // Global progress update loop (shared across all videos)
         let globalAnimationId = null;
+
+        // Cache the primary video reference so the rAF loop avoids querySelector every frame.
+        // Updated by setupVideoListeners (on load) and switchToAsset (on asset change).
+        let primaryVideoRef = null;
+
         function startProgressUpdateLoop() {
             // Only start if not already running
             if (globalAnimationId !== null) return;
 
             function updateLoop() {
-                // Find the video that should drive the progress bar
-                let primaryVideo = null;
-
-                if (!isSideBySide) {
-                    // In overlay mode, use the active layer's video
-                    const activeLayer = document.querySelector('.overlay-layer.active');
-                    if (activeLayer) {
-                        primaryVideo = activeLayer.querySelector('video');
+                // Use the cached primary video ref; fall back to a live query only if stale
+                let primaryVideo = primaryVideoRef;
+                if (!primaryVideo || primaryVideo.isConnected === false) {
+                    // Stale ref — re-query once and re-cache
+                    if (!isSideBySide) {
+                        const activeLayer = document.querySelector('.overlay-layer.active');
+                        primaryVideo = activeLayer ? activeLayer.querySelector('video') : null;
+                    } else {
+                        primaryVideo = document.querySelector('.overlay-layer video');
                     }
-                } else {
-                    // In split view, use the first video
-                    primaryVideo = document.querySelector('.overlay-layer video');
+                    primaryVideoRef = primaryVideo;
                 }
 
-                // Update progress if we have a primary video and it's playing
                 if (primaryVideo && !primaryVideo.paused) {
                     updateVideoProgress(primaryVideo);
+                    globalAnimationId = requestAnimationFrame(updateLoop);
+                } else {
+                    // Nothing is playing — stop the loop; it restarts on the next play event
+                    globalAnimationId = null;
                 }
-
-                // Always continue the loop
-                globalAnimationId = requestAnimationFrame(updateLoop);
             }
 
             updateLoop();
@@ -1460,7 +1564,6 @@
             // Toggle mute state for this source
             audioMuteStates[source] = !audioMuteStates[source];
             
-            console.log(`Toggling ${source} mute to:`, audioMuteStates[source]);
             
             // Apply mute state IMMEDIATELY using volume (more reliable than muted property)
             applyAudioMuteImmediate(source);
@@ -1469,7 +1572,6 @@
             const slotName = source.charAt(0).toUpperCase() + source.slice(1);
             const button = document.getElementById(`audio${slotName}`);
             if (!button) {
-                console.log(`Button audio${slotName} not found`);
                 return;
             }
             
@@ -1502,12 +1604,9 @@
                 if (video) {
                     const shouldBeMuted = audioMuteStates[source];
                     video.muted = shouldBeMuted;
-                    console.log(`Applied ${source}: muted=${video.muted}`);
                 } else {
-                    console.log(`No video found in layer ${slotName}`);
                 }
             } else {
-                console.log(`Layer ${slotName} not found`);
             }
         }
 
@@ -1563,22 +1662,50 @@
             // Volume label removed in compact redesign
         }
 
+        // updateVideoProgressFromTime: same as updateVideoProgress but uses an explicit
+        // time value instead of video.currentTime. Used during scrubbing so the timecode
+        // display matches the seek target instantly, without waiting for the seek to land.
+        function updateVideoProgressFromTime(video, currentTime) {
+            const duration = video.duration;
+            if (isNaN(duration) || duration === 0) return;
+            getProgressEls();
+            const fps = videoFrameRates[video.src] || 30;
+            if (timecodeMode === 'frames') {
+                const currentFrame = Math.floor(currentTime * fps);
+                const totalFrames = Math.floor(duration * fps);
+                _elTimecode.textContent = `Frame ${currentFrame}`;
+                _elDuration.textContent = `${totalFrames}`;
+            } else {
+                const currentMinutes = Math.floor(currentTime / 60);
+                const currentSeconds = Math.floor(currentTime % 60);
+                const currentFrames = Math.floor((currentTime % 1) * fps);
+                const totalMinutes = Math.floor(duration / 60);
+                const totalSeconds = Math.floor(duration % 60);
+                const totalFramesD = Math.floor((duration % 1) * fps);
+                _elTimecode.textContent =
+                    `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
+                _elDuration.textContent =
+                    `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFramesD.toString().padStart(2, '0')}`;
+            }
+        }
+
         function updateVideoProgress(video) {
             const currentTime = video.currentTime;
             const duration = video.duration;
+            getProgressEls(); // ensure cache is warm (no-op after first call)
 
             // Guard against NaN when video metadata isn't ready yet
             if (isNaN(duration) || duration === 0) {
-                document.getElementById('videoProgressBar').style.width = '0%';
-                document.getElementById('videoTimecode').textContent = '0:00:00';
-                document.getElementById('videoDuration').textContent = '0:00:00';
+                _elProgressBar.style.width = '0%';
+                _elTimecode.textContent = '0:00:00';
+                _elDuration.textContent = '0:00:00';
                 return;
             }
 
             const progress = (currentTime / duration) * 100;
 
             // Update progress bar
-            document.getElementById('videoProgressBar').style.width = progress + '%';
+            _elProgressBar.style.width = progress + '%';
 
             // Get framerate (assume 30fps if not detected)
             const fps = videoFrameRates[video.src] || 30;
@@ -1587,8 +1714,8 @@
                 // Frame mode: "Frame 462" and "3720"
                 const currentFrame = Math.floor(currentTime * fps);
                 const totalFrames = Math.floor(duration * fps);
-                document.getElementById('videoTimecode').textContent = `Frame ${currentFrame}`;
-                document.getElementById('videoDuration').textContent = `${totalFrames}`;
+                _elTimecode.textContent = `Frame ${currentFrame}`;
+                _elDuration.textContent = `${totalFrames}`;
             } else {
                 // Time mode: "0:15:22" and "2:35:18" (min:sec:frame)
                 const currentMinutes = Math.floor(currentTime / 60);
@@ -1599,11 +1726,8 @@
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFrames = Math.floor((duration % 1) * fps);
 
-                const currentTC = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
-                const totalTC = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
-
-                document.getElementById('videoTimecode').textContent = currentTC;
-                document.getElementById('videoDuration').textContent = totalTC;
+                _elTimecode.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
+                _elDuration.textContent = `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFrames.toString().padStart(2, '0')}`;
             }
         }
 
@@ -1737,42 +1861,29 @@
             // Always switch audio to the selected video
             selectAudioSource(assetKey);
             
+            const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
+            const activeLayer = document.getElementById(`layer${layerName}`);
+
             // Hide all layers (only in overlay mode)
             if (!isSideBySide) {
-                console.log('Overlay mode - hiding all layers');
                 document.querySelectorAll('.overlay-layer').forEach(layer => {
                     layer.classList.remove('active');
                 });
-
-                // Show selected layer
-                const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-                const activeLayer = document.getElementById(`layer${layerName}`);
-                console.log(`Activating layer: layer${layerName}`, activeLayer);
-                if (activeLayer) {
-                    activeLayer.classList.add('active');
-                    console.log(`Layer activated, has media:`, activeLayer.querySelector('img, video') !== null);
-                } else {
-                    console.error(`Layer layer${layerName} not found!`);
-                }
-
-                // Recompute overlay positions for current zoom level
-                applyZoom();
+                if (activeLayer) activeLayer.classList.add('active');
             }
 
             // Check if current asset is video and update progress if so
-            const layerName = assetKey.charAt(0).toUpperCase() + assetKey.slice(1);
-            const activeLayer = document.getElementById(`layer${layerName}`);
-            const video = activeLayer.querySelector('video');
+            const video = activeLayer ? activeLayer.querySelector('video') : null;
             if (video) {
+                primaryVideoRef = video; // keep rAF loop ref fresh
                 updateVideoProgress(video);
             }
 
-            // Pan is now on the wrapper position, not a media transform — call applyZoom()
-            // to reposition the newly active layer's wrapper with the current pan offset.
+            // Reposition the newly active layer's wrapper with the current zoom/pan offset.
             applyZoom();
 
-            // Refresh asset strip highlight in header
-            updateAssetStrip();
+            // Refresh active highlight and slide the underline to the new asset button
+            refreshAssetButtons();
         }
 
         // Setup video scrubbing with drag support
@@ -1780,32 +1891,62 @@
             const progressContainer = document.getElementById('videoProgressContainer');
             let isDragging = false;
             let wasPlaying = false;
-            
-            function scrubToPosition(e) {
-                const activeLayer = document.querySelector('.overlay-layer.active');
-                if (activeLayer) {
-                    const video = activeLayer.querySelector('video');
-                    if (video) {
-                        const rect = progressContainer.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left;
-                        const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-                        video.currentTime = percentage * video.duration;
-                        
-                        // Also scrub all other videos to same position
-                        document.querySelectorAll('.overlay-layer video').forEach(v => {
-                            if (v !== video) {
-                                v.currentTime = percentage * v.duration;
-                            }
-                        });
-                        
-                        updateVideoProgress(video);
-                    }
+            let pendingScrubPct = null; // latest scrub position waiting for next rAF
+            let scrubRafId = null;      // rAF handle for pending seek
+
+            // Seek a single video, preferring fastSeek() for keyframe-level speed.
+            function seekVideo(v, time) {
+                if (v.fastSeek) {
+                    v.fastSeek(time);
+                } else {
+                    v.currentTime = time;
                 }
             }
-            
+
+            // Flush the pending scrub: seek all videos and update the UI.
+            // Called at most once per animation frame to drain the seek backlog.
+            function flushScrub() {
+                scrubRafId = null;
+                if (pendingScrubPct === null) return;
+                const pct = pendingScrubPct;
+                pendingScrubPct = null;
+
+                const activeLayer = document.querySelector('.overlay-layer.active');
+                if (!activeLayer) return;
+                const video = activeLayer.querySelector('video');
+                if (!video || isNaN(video.duration)) return;
+
+                // Update the progress bar immediately from mouse position (no seek lag)
+                document.getElementById('videoProgressBar').style.width = (pct * 100) + '%';
+
+                // Seek all videos to the proportional position
+                seekVideo(video, pct * video.duration);
+                document.querySelectorAll('.overlay-layer video').forEach(v => {
+                    if (v !== video) seekVideo(v, pct * v.duration);
+                });
+
+                // Update timecode display from the seek target, not video.currentTime
+                // (currentTime lags until the seek completes)
+                updateVideoProgressFromTime(video, pct * video.duration);
+            }
+
+            function scrubToPosition(e) {
+                const rect = progressContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                pendingScrubPct = Math.max(0, Math.min(1, clickX / rect.width));
+
+                // Immediately update progress bar so it tracks the cursor without waiting
+                document.getElementById('videoProgressBar').style.width = (pendingScrubPct * 100) + '%';
+
+                // Schedule one seek per animation frame — rapid mousemoves collapse into one seek
+                if (scrubRafId === null) {
+                    scrubRafId = requestAnimationFrame(flushScrub);
+                }
+            }
+
             progressContainer.addEventListener('mousedown', function(e) {
                 isDragging = true;
-                
+
                 // Pause video during scrubbing for smooth experience
                 const activeLayer = document.querySelector('.overlay-layer.active');
                 if (activeLayer) {
@@ -1817,20 +1958,26 @@
                         }
                     }
                 }
-                
+
                 scrubToPosition(e);
             });
-            
+
             document.addEventListener('mousemove', function(e) {
                 if (isDragging) {
                     scrubToPosition(e);
                 }
             });
-            
+
             document.addEventListener('mouseup', function(e) {
                 if (isDragging) {
                     isDragging = false;
-                    
+                    // Flush any pending scrub so the final position is applied
+                    if (scrubRafId !== null) {
+                        cancelAnimationFrame(scrubRafId);
+                        scrubRafId = null;
+                        flushScrub();
+                    }
+
                     // Resume playback if it was playing before
                     if (wasPlaying) {
                         playAllVideos();
@@ -1853,16 +2000,15 @@
 
             // Measure actual header height for info bar clamping (HEADER_OVERLAP is used
             // for layout math but may not match the rendered header exactly)
-            const headerEl = document.querySelector('.header');
+            const headerEl = getHeaderEl();
             const headerH = headerEl ? headerEl.offsetHeight : HEADER_OVERLAP;
 
-            // Compute fitZoom and overlayMinLongest so all assets share the same
-            // rendered footprint — sized by the lowest-res asset's longest side.
-            // Higher-res assets scale DOWN to match; the lowest-res asset renders at 1:1.
-            let overlayMinLongest = 0;
+            // Compute fitZoom and refW/refH using the asset whose longest side is smallest.
+            // All assets are then scaled to fit within that reference bounding box, preserving
+            // their own aspect ratio — so portrait and landscape assets stay comparable.
+            let refW = 0, refH = 0;
             {
                 let minLongest = Infinity;
-                let refW = 0, refH = 0;
                 ['original', 'editA', 'editB'].forEach(slot => {
                     if (mediaData[slot]) {
                         const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
@@ -1879,18 +2025,17 @@
                         }
                     }
                 });
-                overlayMinLongest = minLongest === Infinity ? 0 : minLongest;
                 const viewW = window.innerWidth;
-                const viewH = window.innerHeight - HEADER_OVERLAP;
+                const viewH = window.innerHeight - headerH;
                 if (refW > 0 && refH > 0) {
                     fitZoom = Math.min(viewW / refW, viewH / refH);
                 }
             }
 
-            // Position each asset wrapper. Each asset is scaled so its longest side
-            // equals overlayMinLongest × zoomLevel — giving all assets the same
-            // physical footprint on screen regardless of their native resolution.
-            const availH = window.innerHeight - HEADER_OVERLAP;
+            // Position each asset wrapper. Each asset is scaled to fit within the reference
+            // bounding box (refW × refH) at the current zoomLevel, preserving its own aspect ratio.
+            // This keeps all assets the same on-screen size regardless of native resolution or orientation.
+            const availH = window.innerHeight - headerH;
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
                 const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -1904,12 +2049,13 @@
                 const nh = media.naturalHeight || media.videoHeight || 0;
                 if (!nw || !nh) return;
 
-                // Scale this asset so its longest side = overlayMinLongest × zoomLevel
-                const longest = Math.max(nw, nh);
-                const perAssetScale = overlayMinLongest > 0 ? (overlayMinLongest / longest) * zoomLevel : zoomLevel;
+                // Scale this asset to fit within the reference bounding box, preserving aspect ratio
+                const perAssetScale = refW > 0 && refH > 0
+                    ? Math.min(refW / nw, refH / nh) * zoomLevel
+                    : zoomLevel;
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
-                const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
+                const centerTop = headerH + Math.max(0, Math.round((availH - scaledH) / 2));
                 const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
 
                 // Pan is applied to the wrapper position directly (not as a media transform)
@@ -1946,7 +2092,7 @@
                 // Store base (un-panned) coords so handlePanMove() can update cheaply.
                 const infoBar = layer.querySelector('.asset-info-bar');
                 if (infoBar) {
-                    const ibH = infoBar.offsetHeight || 28;
+                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
                     infoBar.dataset.centerTop = centerTop;
                     infoBar.dataset.centerLeft = centerLeft;
                     infoBar.dataset.scaledW = scaledW;
@@ -2011,15 +2157,14 @@
         // Clamp panOffsetX/Y so each edge of the image can't travel more than
         // ~25% of the viewport past the corresponding side of the frame.
         function clampPanOffsets() {
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (!activeLayer) return;
-            const vw = activeLayer.querySelector('.video-wrapper');
+            const vw = _panVw;
             if (!vw) return;
             const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
             const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
             const scaledW    = parseFloat(vw.dataset.scaledW    || 0);
             const scaledH    = parseFloat(vw.dataset.scaledH    || 0);
-            const headerH    = parseFloat(document.querySelector('.header')?.offsetHeight || HEADER_OVERLAP);
+            const headerEl2  = getHeaderEl();
+            const headerH    = parseFloat(headerEl2 ? headerEl2.offsetHeight : HEADER_OVERLAP);
             const viewW = window.innerWidth;
             const viewH = window.innerHeight;
             const slackX = viewW * 0.25;
@@ -2046,6 +2191,11 @@
             panStartX = e.clientX - panOffsetX;
             panStartY = e.clientY - panOffsetY;
             document.getElementById('overlayContainer').classList.add('panning');
+            // Cache the active layer's vw and infoBar so handlePanMove/clampPanOffsets
+            // never query the DOM during the hot mousemove path.
+            _panLayer   = document.querySelector('.overlay-layer.active');
+            _panVw      = _panLayer ? _panLayer.querySelector('.video-wrapper') : null;
+            _panInfoBar = _panLayer ? _panLayer.querySelector('.asset-info-bar') : null;
         }
 
         function handlePanMove(e) {
@@ -2056,36 +2206,34 @@
             panOffsetY = e.clientY - panStartY;
             clampPanOffsets();
 
-            // Move the wrapper (not the media) so zoom badge and all children track with it
-            const activeLayer = document.querySelector('.overlay-layer.active');
-            if (activeLayer) {
-                const vw = activeLayer.querySelector('.video-wrapper');
-                if (vw) {
-                    const centerTop = parseFloat(vw.dataset.centerTop || 0);
-                    const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
-                    vw.style.top = (centerTop + panOffsetY) + 'px';
-                    vw.style.left = (centerLeft + panOffsetX) + 'px';
-                }
-                // Move info bar in lockstep
-                const infoBar = activeLayer.querySelector('.asset-info-bar');
-                if (infoBar) {
-                    const ibH = infoBar.offsetHeight || 28;
-                    const barCenterTop = parseFloat(infoBar.dataset.centerTop || HEADER_OVERLAP);
-                    const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
-                    const barW = parseFloat(infoBar.dataset.scaledW || infoBar.offsetWidth);
-                    const barHeaderH = parseFloat(infoBar.dataset.headerH || HEADER_OVERLAP);
-                    const pannedTop = barCenterTop + panOffsetY;
-                    const pannedLeft = barCenterLeft + panOffsetX;
-                    const clampedLeft = Math.max(0, pannedLeft);
-                    infoBar.style.top = Math.max(barHeaderH, pannedTop - ibH) + 'px';
-                    infoBar.style.left = clampedLeft + 'px';
-                    infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
-                }
+            // Move the wrapper using cached refs set in handlePanStart — no DOM queries
+            const vw = _panVw;
+            if (vw) {
+                const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
+                const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
+                vw.style.top  = (centerTop  + panOffsetY) + 'px';
+                vw.style.left = (centerLeft + panOffsetX) + 'px';
+            }
+            // Move info bar in lockstep
+            const infoBar = _panInfoBar;
+            if (infoBar) {
+                const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                const barCenterTop  = parseFloat(infoBar.dataset.centerTop  || HEADER_OVERLAP);
+                const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
+                const barW          = parseFloat(infoBar.dataset.scaledW    || infoBar.offsetWidth);
+                const barHeaderH    = parseFloat(infoBar.dataset.headerH    || HEADER_OVERLAP);
+                const pannedTop  = barCenterTop  + panOffsetY;
+                const pannedLeft = barCenterLeft + panOffsetX;
+                const clampedLeft = Math.max(0, pannedLeft);
+                infoBar.style.top   = Math.max(barHeaderH, pannedTop - ibH) + 'px';
+                infoBar.style.left  = clampedLeft + 'px';
+                infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
             }
         }
 
         function handlePanEnd(e) {
             isPanning = false;
+            _panVw = null; _panInfoBar = null; _panLayer = null; // release cached refs
             document.getElementById('overlayContainer').classList.remove('panning');
             applyZoom(); // re-anchor info bars to the settled pan position
         }
@@ -2100,6 +2248,7 @@
             expectedFileCount = 0;
             hasVideos = false;
             zoomLevel = 1;
+            splitZoomLevel = null;
             fitZoom = 1;
             panOffsetX = 0;
             panOffsetY = 0;
@@ -2309,8 +2458,8 @@
             });
         }
         
-        // Update zoom indicators when window resizes
-        window.addEventListener('resize', updateSplitViewZoomIndicators);
+        // Zoom indicators are updated inside positionLabelsToMedia (split) / applyZoom (overlay),
+        // both of which are debounced on resize below — no separate listener needed.
 
         // Positions the video-wrapper and info bar to exactly match the rendered media bounds.
         // Works in all modes: overlay, horizontal split, and vertical split.
@@ -2330,6 +2479,18 @@
             const isVertical = document.body.classList.contains('vertical-stack');
             const isTripartite = document.body.classList.contains('tripartite');
             const isOverlay = !isSideBySide && !isVertical;
+
+            // In vertical-stack 100%-cap mode we shrink each layer to its video height and
+            // center the group. Clear those overrides first so offsetHeight reads CSS values.
+            if (isVertical) {
+                slots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    if (layer) { layer.style.height = ''; layer.style.marginTop = ''; }
+                });
+                const container = document.querySelector('.overlay-container');
+                if (container) container.style.paddingTop = '';
+            }
 
             // In tripartite mode, compute a shared rendered dimension so all three assets
             // appear the same size. Portrait assets (nw < nh) share rendered WIDTH;
@@ -2403,6 +2564,9 @@
                 overlayRefLong = minLong === Infinity ? 0 : minLong;
             }
 
+            // Track rendered heights so the vertical-stack group-centering pass can use them.
+            const slotRenderedH = {}; // slot → rendered px height (for loaded slots only)
+
             slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2425,7 +2589,12 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
-                const fitH = containerH;
+                // In vertical-stack, reserve the top of each cell for the info bar so the
+                // video is always fitted below it — no overlap, no gap between cells.
+                const ibReserve = (isVertical && infoBar)
+                    ? (infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28))
+                    : 0;
+                const fitH = containerH - ibReserve;
 
                 let renderedW, renderedH, offsetX, offsetY;
                 if (isOverlay && overlayRefLong > 0) {
@@ -2450,20 +2619,24 @@
                     offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
                     offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
                 } else {
-                    // Split modes: contain-fit to fill the available area
+                    // Split modes: contain-fit, optionally capped at 100% actual pixels
                     const mediaAspect = naturalWidth / naturalHeight;
                     const containerAspect = containerW / fitH;
+                    let fitScale;
                     if (containerAspect > mediaAspect) {
-                        renderedH = fitH;
-                        renderedW = renderedH * mediaAspect;
-                        offsetX = (containerW - renderedW) / 2;
-                        offsetY = 0;
+                        fitScale = fitH / naturalHeight;
                     } else {
-                        renderedW = containerW;
-                        renderedH = renderedW / mediaAspect;
-                        offsetX = 0;
-                        offsetY = (containerH - renderedH) / 2;
+                        fitScale = containerW / naturalWidth;
                     }
+                    // Cap at 1.0 if 100% mode active (no upscaling past actual pixels)
+                    const scale = splitZoomLevel === 1 ? Math.min(fitScale, 1) : fitScale;
+                    renderedW = naturalWidth * scale;
+                    renderedH = naturalHeight * scale;
+                    offsetX = (containerW - renderedW) / 2;
+                    // Center within the video area (below the reserved info-bar strip)
+                    offsetY = ibReserve + (fitH - renderedH) / 2;
+                    // Record for vertical-stack group-centering pass below
+                    if (isVertical) slotRenderedH[slot] = Math.round(renderedH);
                 }
 
                 // In tripartite mode: use the shared zoom dimensions computed in the pre-pass.
@@ -2553,18 +2726,63 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar flush above the asset, matching its width and x-position.
+                // Position the info bar flush above the video, matching its width and x-position.
+                // In vertical-stack the reserved ibReserve strip guarantees space so the bar
+                // never overlaps the video — no special-casing needed.
                 if (infoBar) {
                     infoBar.style.position = ''; // clear fixed positioning from overlay mode
-                    const ibH = infoBar.offsetHeight || 28;
-                    infoBar.style.left = Math.round(offsetX) + 'px';
-                    infoBar.style.top = Math.round(Math.max(0, offsetY - ibH)) + 'px';
                     infoBar.style.bottom = '';
-                    infoBar.style.right = '';
-                    infoBar.style.width = Math.round(renderedW) + 'px';
                     infoBar.style.height = '';
+                    infoBar.style.right  = '';
+                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    infoBar.style.left  = Math.round(offsetX) + 'px';
+                    infoBar.style.top   = Math.round(offsetY - ibH) + 'px';
+                    infoBar.style.width = Math.round(renderedW) + 'px';
                 }
             });
+
+            // Vertical-stack 100%-cap: shrink each layer to info-bar + video height so there's
+            // no dead space, then center the whole group in the viewport.
+            if (isVertical && splitZoomLevel === 1 && Object.keys(slotRenderedH).length > 0) {
+                const headerEl = getHeaderEl();
+                const headerH = headerEl ? headerEl.offsetHeight : 39;
+                const availH = window.innerHeight - headerH;
+                // margin-bottom is now 0; no separator between cells
+                const loadedSlots = slots.filter(s => slotRenderedH[s] !== undefined);
+
+                // Compute total height: each cell = ibReserve + renderedVideoH
+                let totalH = 0;
+                loadedSlots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
+                    const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    const ibH = ib ? (ib._cachedH || (ib._cachedH = ib.offsetHeight || 28)) : 0;
+                    totalH += ibH + slotRenderedH[slot];
+                });
+                const topPad = Math.max(0, Math.round((availH - totalH) / 2));
+
+                // Apply per-slot: shrink layer to ibReserve + video height; video stays at ibReserve
+                loadedSlots.forEach(slot => {
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    if (!layer) return;
+                    const mediaContainer = layer.querySelector('.media-container');
+                    const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
+                    const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    const ibH = ib ? (ib._cachedH || 28) : 0;
+                    layer.style.height = (ibH + slotRenderedH[slot]) + 'px';
+                    // Video positioned below the bar strip
+                    if (videoWrapper) videoWrapper.style.top = ibH + 'px';
+                    // Bar top: main loop already set correct left/width; just pin top to 0
+                    if (ib) ib.style.top = '0px';
+                });
+
+                // Shift the first layer down to center the group
+                const firstSlot = loadedSlots[0];
+                const firstLayer = document.getElementById(`layer${firstSlot.charAt(0).toUpperCase() + firstSlot.slice(1)}`);
+                if (firstLayer) firstLayer.style.marginTop = topPad + 'px';
+            }
 
             // If any loaded slot had a zero-dimension container (layout not yet committed),
             // retry after the next paint so those slots get positioned correctly.
@@ -2574,18 +2792,26 @@
             }
         }
 
+        // Debounced applyZoom for resize events — avoids running the full reposition
+        // pipeline on every pixel of a window drag (fires 100+ times/sec).
+        let _applyZoomResizeTimer = null;
+        function applyZoomDebounced() {
+            clearTimeout(_applyZoomResizeTimer);
+            _applyZoomResizeTimer = setTimeout(applyZoom, 60);
+        }
+
         // Call positioning on resize
         window.addEventListener('resize', () => {
             if (isSideBySide) {
                 positionLabelsToMediaDebounced(); // debounced: expensive 3-pass layout
             } else {
-                applyZoom(); // overlay mode: refit/reposition using zoom level
+                applyZoomDebounced(); // debounced: avoid per-pixel reflow during window drag
             }
         });
 
         function setViewMode(mode) {
             saveState(); // Save state before changing view
-            
+
             // Update view mode
             if (mode === 'overlay') {
                 // Return to overlay mode
@@ -2594,7 +2820,9 @@
                     document.body.classList.remove('vertical-stack');
                     document.body.classList.remove('tripartite');
                     document.body.classList.remove('two-asset');
+                    document.body.classList.remove('zoom-100');
                     isSideBySide = false;
+                    splitZoomLevel = null;
 
                     // Restore all layers to visible so overlay mode can show them
                     document.querySelectorAll('.overlay-layer').forEach(layer => {
@@ -2636,11 +2864,16 @@
                         layer.classList.remove('active-audio');
                     });
                     switchToAsset(currentAssetIndex);
-                    // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport
-                    requestAnimationFrame(() => requestAnimationFrame(() => applyZoom()));
+                    // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport.
+                    // resetFitZoom() computes fitZoom then snaps zoomLevel to it, same as pressing 0.
+                    // This ensures portrait/tall assets fit the viewport instead of rendering at 1:1.
+                    requestAnimationFrame(() => requestAnimationFrame(() => resetFitZoom()));
                 }
             } else {
-                // Enable split view
+                // Enable split view — reset any compare-mode 100% cap
+                splitZoomLevel = null;
+                document.body.classList.remove('zoom-100');
+
                 if (!isSideBySide) {
                     isSideBySide = true;
                     document.querySelectorAll('.overlay-layer').forEach(layer => {
@@ -2696,6 +2929,10 @@
 
                 // Clear any inline styles set by positionLabelsToMedia() so CSS takes over.
                 // Done AFTER the body class change so the layout is already live.
+                document.querySelectorAll('.overlay-layer').forEach(layer => {
+                    layer.style.height = '';    // clear vertical-stack 100%-cap height override
+                    layer.style.marginTop = ''; // clear vertical-stack 100%-cap centering offset
+                });
                 document.querySelectorAll('.video-wrapper').forEach(vw => {
                     vw.style.position = ''; // clear fixed positioning set by applyZoom()
                     vw.style.width = '';
@@ -2748,20 +2985,24 @@
             strip.style.display = 'flex';
             strip.innerHTML = '';
 
-            // 3-asset → OVERLAY + 3-UP; 2-asset → OVERLAY + COMPARE
+            // Split mode first, OVERLAY last: 3-UP / OVERLAY or COMPARE / OVERLAY
             const modes = loadedCount === 3
-                ? [['overlay', 'OVERLAY'], ['tripartite', '3-UP']]
-                : [['overlay', 'OVERLAY'], ['compare', 'COMPARE']];
+                ? [['tripartite', '3-UP'], ['overlay', 'OVERLAY']]
+                : [['compare', 'COMPARE'], ['overlay', 'OVERLAY']];
 
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
             const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
+
+            // Wrap mode buttons in a flex group so they slide together
+            const modeCore = document.createElement('div');
+            modeCore.className = 'mode-core';
 
             modes.forEach(([mode, label], i) => {
                 if (i > 0) {
                     const sep = document.createElement('span');
                     sep.className = 'strip-sep';
                     sep.textContent = '/';
-                    strip.appendChild(sep);
+                    modeCore.appendChild(sep);
                 }
                 const btn = document.createElement('button');
                 btn.className = 'mode-btn' + (mode === normalised ? ' active' : '');
@@ -2770,53 +3011,138 @@
                     if (mode === 'compare') setViewMode(layoutMode); // use auto-picked H/V
                     else setViewMode(mode);
                 };
-                strip.appendChild(btn);
+                modeCore.appendChild(btn);
             });
+            strip.appendChild(modeCore);
+
+            // When overlay is active, build the asset group and animate it sliding in
+            if (normalised === 'overlay') {
+                const loaded = assetOrder.filter(slot => mediaData[slot]);
+
+                const assetGroup = document.createElement('div');
+                // Render invisible but in-flow so we can measure its width before animating
+                assetGroup.className = 'asset-group';
+
+                loaded.forEach((slot, i) => {
+                    const sep = document.createElement('span');
+                    sep.className = 'strip-sep asset-sep';
+                    sep.textContent = '·';
+                    assetGroup.appendChild(sep);
+
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const nameEl = document.querySelector(`#layer${slotName} .asset-name`);
+                    const label = nameEl ? nameEl.textContent : slotName;
+                    const btn = document.createElement('button');
+                    const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
+                    const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
+                    btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
+                    btn.textContent = label;
+                    btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
+                    assetGroup.appendChild(btn);
+                });
+                strip.appendChild(assetGroup);
+
+                // Create (or reuse) the sliding underline bar
+                let underline = document.getElementById('assetUnderline');
+                if (!underline) {
+                    underline = document.createElement('div');
+                    underline.id = 'assetUnderline';
+                }
+                strip.appendChild(underline);
+
+                // After layout: measure asset group width, set it as a CSS custom property
+                // so the @keyframe animation slides mode-core left by exactly that amount.
+                requestAnimationFrame(() => {
+                    const groupW = assetGroup.offsetWidth;
+
+                    // Tell the keyframe animation how far to slide
+                    modeCore.style.setProperty('--asset-group-width', `${groupW}px`);
+                    modeCore.classList.add('sliding');
+
+                    // Snap underline into place (offsetLeft-based, immune to transforms)
+                    underline.style.transition = 'none';
+                    positionAssetUnderline();
+
+                    // Trigger asset group reveal animation
+                    assetGroup.classList.add('visible');
+
+                    // Re-enable underline slide transition after it's been placed
+                    requestAnimationFrame(() => {
+                        underline.style.transition = '';
+                    });
+                });
+            } else {
+                // Hide underline when not in overlay mode
+                const underline = document.getElementById('assetUnderline');
+                if (underline) underline.classList.remove('visible');
+            }
         }
 
-        // Rebuilds the asset strip in the header. Shown in overlay mode only.
+        // Moves the sliding underline to sit beneath the currently active asset button.
+        // Uses offsetLeft traversal (not getBoundingClientRect) so CSS transforms on
+        // parent elements don't skew the measurement.
+        function positionAssetUnderline() {
+            const strip = document.getElementById('modeStrip');
+            const underline = document.getElementById('assetUnderline');
+            if (!strip || !underline) return;
+
+            const activeBtn = strip.querySelector('.asset-btn.active');
+            if (!activeBtn) { underline.classList.remove('visible'); return; }
+
+            // Walk up offsetParent chain to sum offsetLeft relative to the strip
+            let left = 0;
+            let el = activeBtn;
+            while (el && el !== strip) {
+                left += el.offsetLeft;
+                el = el.offsetParent;
+            }
+
+            // Size the underline to the text content, not the full padded button width,
+            // then offset it to sit centered under the text (skipping the 8px padding).
+            const paddingLeft = parseFloat(getComputedStyle(activeBtn).paddingLeft);
+            const paddingRight = parseFloat(getComputedStyle(activeBtn).paddingRight);
+            const textWidth = activeBtn.offsetWidth - paddingLeft - paddingRight;
+
+            underline.style.left = (left + paddingLeft) + 'px';
+            underline.style.width = textWidth + 'px';
+            underline.classList.add('visible');
+        }
+
+        // Asset buttons are now inlined into the mode strip when overlay is active.
+        // This function is kept as a no-op so existing call sites don't break.
         function updateAssetStrip() {
-            const strip = document.getElementById('assetStrip');
-            if (isSideBySide) { strip.style.display = 'none'; return; }
+            document.getElementById('assetStrip').style.display = 'none';
+        }
 
+        // Updates the active class on inline asset buttons without rebuilding the strip,
+        // then slides the underline to the newly active button.
+        function refreshAssetButtons() {
+            const strip = document.getElementById('modeStrip');
+            if (!strip) return;
+            const assetBtns = strip.querySelectorAll('.asset-btn');
+            if (!assetBtns.length) return;
+
+            // Re-sync .active class based on current assetOrder / currentAssetIndex
             const loaded = assetOrder.filter(slot => mediaData[slot]);
-            if (loaded.length === 0) { strip.style.display = 'none'; return; }
-
-            strip.style.display = 'flex';
-            strip.innerHTML = '';
-
-            loaded.forEach((slot, i) => {
-                if (i > 0) {
-                    const sep = document.createElement('span');
-                    sep.className = 'strip-sep';
-                    sep.textContent = '·';
-                    strip.appendChild(sep);
-                }
-                const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
-                const nameEl = document.querySelector(`#layer${slotName} .asset-name`);
-                const label = nameEl ? nameEl.textContent : slotName;
-                const btn = document.createElement('button');
-                const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
-                btn.className = 'asset-btn' + (isActive ? ' active' : '');
-                btn.textContent = label;
-                btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
-                strip.appendChild(btn);
+            assetBtns.forEach((btn, i) => {
+                const slot = loaded[i];
+                const isActive = slot && assetOrder.indexOf(slot) === currentAssetIndex;
+                btn.classList.toggle('active', !!isActive);
             });
+
+            // Slide underline to new position
+            positionAssetUnderline();
         }
 
         // Update checkAllLoaded to show view mode buttons
         function checkAllLoaded() {
-            console.log('=== checkAllLoaded called ===');
             const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
-            console.log('Loaded count:', loadedCount);
-            console.log('hasVideos:', hasVideos);
             
             // Wait until all expected files are loaded before activating the view.
             // Firing early (e.g. at loadedCount=2 during a 3-file load) causes
             // setViewMode('horizontal') to hide the not-yet-loaded third layer,
             // resulting in a black screen when tripartite mode is set moments later.
             if (loadedCount < expectedFileCount) {
-                console.log(`Waiting for all files: ${loadedCount}/${expectedFileCount} loaded`);
                 return;
             }
 
@@ -2828,7 +3154,6 @@
             // NOTE: we cannot check comparisonView.classList.contains('active') here
             // because clearAllMedia() removes that class before new files start loading.
             if (viewActivating) {
-                console.log('checkAllLoaded: activation already in progress, repositioning only');
                 positionLabelsToMediaDebounced();
                 return;
             }
@@ -2836,25 +3161,21 @@
             // Need at least 2 files loaded (Edit A and Edit B minimum)
             if (loadedCount >= 2) {
                 viewActivating = true; // prevent re-entry from subsequent img.load events
-                console.log('2+ files loaded, activating comparison view');
                 
                 // Hide quick start popup if showing
                 document.getElementById('quickStartPopup').classList.remove('show');
 
                 document.getElementById('comparisonView').classList.add('active');
-                console.log('comparisonView activated');
 
                 document.getElementById('resetBtn').style.display = 'block';
 
                 // Show view mode buttons (initial state is overlay mode)
                 // (updateViewModeButtons will set correct visibility based on asset count)
-                console.log('View mode buttons shown');
 
                 // Show/hide audio source buttons based on what's loaded
                 document.getElementById('audioOriginal').style.display = mediaData.original ? 'inline-block' : 'none';
                 document.getElementById('audioEditA').style.display = mediaData.editA ? 'inline-block' : 'none';
                 document.getElementById('audioEditB').style.display = mediaData.editB ? 'inline-block' : 'none';
-                console.log('Audio buttons configured');
 
                 // Set initial audio source to first loaded video
                 if (mediaData.original) {
@@ -2864,21 +3185,16 @@
                 } else {
                     selectAudioSource('editB');
                 }
-                console.log('Audio source selected');
 
                 // Check for identical assets
                 checkForIdenticalAssets();
                 
                 // Start with first loaded asset
-                console.log('About to switch to asset...');
                 if (mediaData.original) {
-                    console.log('Switching to Original (index 0)');
                     switchToAsset(0); // Start with original
                 } else if (mediaData.editA) {
-                    console.log('Switching to Edit A (index 1)');
                     switchToAsset(1); // Start with Edit A if no original
                 } else {
-                    console.log('Switching to Edit B (index 2)');
                     switchToAsset(2); // Start with Edit B
                 }
 
@@ -2900,20 +3216,13 @@
                 }
 
                 // Show video controls if any videos
-                console.log('Checking for video controls, hasVideos =', hasVideos);
                 if (hasVideos) {
-                    console.log('Activating video controls');
                     const videoControls = document.getElementById('videoControls');
-                    console.log('videoControls element:', videoControls);
                     videoControls.classList.add('active');
-                    console.log('videoControls classes:', videoControls.className);
                 } else {
-                    console.log('No videos, controls will not show');
                 }
                 
-                console.log('=== checkAllLoaded complete ===');
             } else {
-                console.log('Not enough files loaded yet');
             }
         }
 
@@ -2961,7 +3270,6 @@
 
         function undo() {
             if (undoStack.length === 0) {
-                console.log('Nothing to undo');
                 return;
             }
             
@@ -2975,7 +3283,6 @@
 
         function redo() {
             if (redoStack.length === 0) {
-                console.log('Nothing to redo');
                 return;
             }
             
@@ -3045,7 +3352,6 @@
             document.getElementById('muteBtn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
             document.getElementById('zoomIndicator').textContent = zoomLevel.toFixed(2) + '×';
             
-            console.log('State restored');
         }
 
         function toggleMute() {
@@ -3140,6 +3446,21 @@
             } else if (e.key === '0') {
                 e.preventDefault();
                 resetFitZoom();
+            } else if (e.key === '1') {
+                // Snap to 100% actual pixels
+                e.preventDefault();
+                if (!isSideBySide) {
+                    // Overlay: snap to 100% actual pixels, reset pan
+                    zoomLevel = 1;
+                    panOffsetX = 0;
+                    panOffsetY = 0;
+                    applyZoom();
+                } else {
+                    // Compare: toggle between fit-to-panel and 100%-capped (no upscaling)
+                    splitZoomLevel = splitZoomLevel === 1 ? null : 1;
+                    document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
+                    positionLabelsToMedia();
+                }
             } else if (e.key === ' ') {
                 // Spacebar toggles play/pause for videos
                 e.preventDefault();
@@ -3223,7 +3544,8 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Reset zoom to fit</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Zoom to fit</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>1</kbd></span><span class="shortcut-desc">Zoom to 100%</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
