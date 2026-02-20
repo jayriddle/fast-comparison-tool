@@ -567,7 +567,7 @@
             pointer-events: none;
             z-index: 10;
             color: rgb(160, 160, 160);
-            font-family: monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: block; /* Always show in all modes */
         }
 
@@ -766,7 +766,7 @@
 
         .video-timecode,
         .video-duration {
-            font-family: monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 12px;
             font-weight: 600;
             color: rgb(160, 160, 160);
@@ -1894,6 +1894,12 @@
             let pendingScrubPct = null; // latest scrub position waiting for next rAF
             let scrubRafId = null;      // rAF handle for pending seek
 
+            // Cached scrub targets — populated at mousedown, zero DOM queries during drag
+            let _scrubVideo = null;       // primary (active) video element
+            let _scrubAllVideos = null;   // all video elements (for sync)
+            let _scrubContainerRect = null; // progress bar bounding rect (stable during drag)
+            let _seekInFlight = false;    // true while the decoder is processing a seek
+
             // Seek a single video, preferring fastSeek() for keyframe-level speed.
             function seekVideo(v, time) {
                 if (v.fastSeek) {
@@ -1903,27 +1909,41 @@
                 }
             }
 
-            // Flush the pending scrub: seek all videos and update the UI.
-            // Called at most once per animation frame to drain the seek backlog.
+            // Flush the pending scrub: seek video(s) and update the UI.
+            // Only fires when the decoder is idle (_seekInFlight === false) so seeks
+            // never queue up inside the browser's media pipeline.
+            // In overlay mode only the active (visible) video is seeked during drag;
+            // hidden videos are synced on mouseup so they don't compete for the decoder.
             function flushScrub() {
                 scrubRafId = null;
                 if (pendingScrubPct === null) return;
+                if (_seekInFlight) return; // decoder busy — drop stale position, next seeked event will retry
                 const pct = pendingScrubPct;
                 pendingScrubPct = null;
 
-                const activeLayer = document.querySelector('.overlay-layer.active');
-                if (!activeLayer) return;
-                const video = activeLayer.querySelector('video');
+                const video = _scrubVideo;
                 if (!video || isNaN(video.duration)) return;
 
                 // Update the progress bar immediately from mouse position (no seek lag)
-                document.getElementById('videoProgressBar').style.width = (pct * 100) + '%';
+                getProgressEls();
+                if (_elProgressBar) _elProgressBar.style.width = (pct * 100) + '%';
 
-                // Seek all videos to the proportional position
+                // Mark seek in-flight; cleared by the 'seeked' event on the primary video
+                _seekInFlight = true;
+
+                // Overlay mode: only seek the visible video during drag — hidden videos
+                // would compete for the decoder and slow down the one you're watching.
+                // Compare/split modes: seek all videos in real time for sync preview.
                 seekVideo(video, pct * video.duration);
-                document.querySelectorAll('.overlay-layer video').forEach(v => {
-                    if (v !== video) seekVideo(v, pct * v.duration);
-                });
+                if (isSideBySide) {
+                    const all = _scrubAllVideos;
+                    if (all) {
+                        for (let i = 0; i < all.length; i++) {
+                            const v = all[i];
+                            if (v !== video) seekVideo(v, pct * v.duration);
+                        }
+                    }
+                }
 
                 // Update timecode display from the seek target, not video.currentTime
                 // (currentTime lags until the seek completes)
@@ -1931,31 +1951,54 @@
             }
 
             function scrubToPosition(e) {
-                const rect = progressContainer.getBoundingClientRect();
+                const rect = _scrubContainerRect;
                 const clickX = e.clientX - rect.left;
                 pendingScrubPct = Math.max(0, Math.min(1, clickX / rect.width));
 
                 // Immediately update progress bar so it tracks the cursor without waiting
-                document.getElementById('videoProgressBar').style.width = (pendingScrubPct * 100) + '%';
+                getProgressEls();
+                if (_elProgressBar) _elProgressBar.style.width = (pendingScrubPct * 100) + '%';
 
-                // Schedule one seek per animation frame — rapid mousemoves collapse into one seek
+                // Schedule one flush per animation frame — rapid mousemoves collapse into one seek.
+                // If a seek is already in-flight the rAF will find _seekInFlight=true and drop it;
+                // the 'seeked' handler will schedule a fresh rAF to pick up whatever is pending.
                 if (scrubRafId === null) {
                     scrubRafId = requestAnimationFrame(flushScrub);
                 }
             }
 
+            // Called when the primary video finishes a seek — clears the in-flight flag
+            // and immediately schedules another flush if the user moved the scrubber
+            // while the decoder was busy (pendingScrubPct will be non-null in that case).
+            function onScrubSeeked() {
+                _seekInFlight = false;
+                if (isDragging && pendingScrubPct !== null) {
+                    if (scrubRafId === null) {
+                        scrubRafId = requestAnimationFrame(flushScrub);
+                    }
+                }
+            }
+
             progressContainer.addEventListener('mousedown', function(e) {
                 isDragging = true;
+                _seekInFlight = false;
+
+                // Cache all scrub targets once at drag-start — zero DOM queries during drag
+                const activeLayer = document.querySelector('.overlay-layer.active');
+                _scrubVideo = activeLayer ? activeLayer.querySelector('video') : null;
+                _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer video'));
+                _scrubContainerRect = progressContainer.getBoundingClientRect();
+
+                // Listen for seek completion on the primary video to pace the next seek
+                if (_scrubVideo) {
+                    _scrubVideo.addEventListener('seeked', onScrubSeeked);
+                }
 
                 // Pause video during scrubbing for smooth experience
-                const activeLayer = document.querySelector('.overlay-layer.active');
-                if (activeLayer) {
-                    const video = activeLayer.querySelector('video');
-                    if (video) {
-                        wasPlaying = !video.paused;
-                        if (wasPlaying) {
-                            pauseAllVideos();
-                        }
+                if (_scrubVideo) {
+                    wasPlaying = !_scrubVideo.paused;
+                    if (wasPlaying) {
+                        pauseAllVideos();
                     }
                 }
 
@@ -1977,6 +2020,29 @@
                         scrubRafId = null;
                         flushScrub();
                     }
+
+                    // Remove the seeked listener and clear in-flight flag
+                    if (_scrubVideo) {
+                        _scrubVideo.removeEventListener('seeked', onScrubSeeked);
+                    }
+                    _seekInFlight = false;
+
+                    // In overlay mode, hidden videos weren't seeked during drag —
+                    // sync them now to the final position before resuming playback.
+                    if (!isSideBySide && _scrubVideo && _scrubAllVideos) {
+                        const finalPct = _scrubVideo.duration
+                            ? _scrubVideo.currentTime / _scrubVideo.duration
+                            : 0;
+                        for (let i = 0; i < _scrubAllVideos.length; i++) {
+                            const v = _scrubAllVideos[i];
+                            if (v !== _scrubVideo) seekVideo(v, finalPct * v.duration);
+                        }
+                    }
+
+                    // Clear cached scrub targets
+                    _scrubVideo = null;
+                    _scrubAllVideos = null;
+                    _scrubContainerRect = null;
 
                     // Resume playback if it was playing before
                     if (wasPlaying) {
@@ -2003,38 +2069,52 @@
             const headerEl = getHeaderEl();
             const headerH = headerEl ? headerEl.offsetHeight : HEADER_OVERLAP;
 
-            // Compute fitZoom and refW/refH using the asset whose longest side is smallest.
-            // All assets are then scaled to fit within that reference bounding box, preserving
-            // their own aspect ratio — so portrait and landscape assets stay comparable.
-            let refW = 0, refH = 0;
+            // Compute a shared scale anchored to the narrowest asset's width.
+            // Every asset is rendered so its width = minNW * sharedScale, giving identical
+            // rendered widths for same-width assets and scaling wider ones down to match.
+            // fitZoom is set so the widest rendered asset just fits the viewport at zoomLevel=1.
+            let minNW = Infinity;
             {
-                let minLongest = Infinity;
                 ['original', 'editA', 'editB'].forEach(slot => {
                     if (mediaData[slot]) {
                         const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
                         const media = layer && layer.querySelector('img, video');
                         if (media) {
                             const nw = media.naturalWidth || media.videoWidth || 0;
-                            const nh = media.naturalHeight || media.videoHeight || 0;
-                            const longest = Math.max(nw, nh);
-                            if (longest > 0 && longest < minLongest) {
-                                minLongest = longest;
-                                refW = nw;
-                                refH = nh;
-                            }
+                            if (nw > 0 && nw < minNW) minNW = nw;
                         }
                     }
                 });
+                if (minNW === Infinity) minNW = 0;
+                // fitZoom: scale so the narrowest (reference) asset fits the viewport
                 const viewW = window.innerWidth;
                 const viewH = window.innerHeight - headerH;
-                if (refW > 0 && refH > 0) {
-                    fitZoom = Math.min(viewW / refW, viewH / refH);
+                if (minNW > 0) {
+                    // fitZoom = scale that makes the narrowest asset's width fill the viewport.
+                    // Height is also clamped: find the tallest rendered height across all assets
+                    // at width-fit scale and ensure that fits vertically too.
+                    let maxRenderedH = 0;
+                    ['original', 'editA', 'editB'].forEach(slot => {
+                        if (mediaData[slot]) {
+                            const layer = document.getElementById(`layer${slot.charAt(0).toUpperCase() + slot.slice(1)}`);
+                            const media = layer && layer.querySelector('img, video');
+                            if (media) {
+                                const nw = media.naturalWidth || media.videoWidth || 0;
+                                const nh = media.naturalHeight || media.videoHeight || 0;
+                                if (nw > 0 && nh > 0) {
+                                    // rendered height at width-fit scale = nh * (minNW/nw)
+                                    const rh = nh * (minNW / nw);
+                                    if (rh > maxRenderedH) maxRenderedH = rh;
+                                }
+                            }
+                        }
+                    });
+                    fitZoom = Math.min(viewW / minNW, maxRenderedH > 0 ? viewH / maxRenderedH : Infinity);
                 }
             }
 
-            // Position each asset wrapper. Each asset is scaled to fit within the reference
-            // bounding box (refW × refH) at the current zoomLevel, preserving its own aspect ratio.
-            // This keeps all assets the same on-screen size regardless of native resolution or orientation.
+            // Position each asset wrapper. Every asset is scaled so its rendered width equals
+            // minNW * sharedScale — same-width assets appear identically wide on screen.
             const availH = window.innerHeight - headerH;
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
@@ -2049,10 +2129,10 @@
                 const nh = media.naturalHeight || media.videoHeight || 0;
                 if (!nw || !nh) return;
 
-                // Scale this asset to fit within the reference bounding box, preserving aspect ratio
-                const perAssetScale = refW > 0 && refH > 0
-                    ? Math.min(refW / nw, refH / nh) * zoomLevel
-                    : zoomLevel;
+                // Scale this asset so its rendered width matches the narrowest asset's width.
+                // (minNW/nw) normalises wider assets down; zoomLevel is already in px/naturalPx
+                // units (fitZoom at fit-to-viewport, 1 at 100% actual pixels).
+                const perAssetScale = minNW > 0 ? (minNW / nw) * zoomLevel : zoomLevel;
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
                 const centerTop = headerH + Math.max(0, Math.round((availH - scaledH) / 2));
@@ -2084,15 +2164,19 @@
                 media.style.objectFit = 'contain';
                 media.style.transform = '';
 
-                // Update per-asset zoom badge (actual ratio for this asset)
+                // Update per-asset zoom badge (actual pixel ratio for this specific asset)
                 const badge = vw.querySelector('.split-zoom-indicator');
-                if (badge) badge.textContent = zoomLevel.toFixed(2) + '×';
+                if (badge) badge.textContent = perAssetScale.toFixed(2) + '×';
 
                 // Position info bar flush above the wrapper.
                 // Store base (un-panned) coords so handlePanMove() can update cheaply.
                 const infoBar = layer.querySelector('.asset-info-bar');
                 if (infoBar) {
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    // Always read live offsetHeight here (not cached) — the bar height can
+                    // change on first render (font load, initial layout) and a stale cache
+                    // causes the bar to separate from the video's top edge.
+                    const ibH = infoBar.offsetHeight || 28;
+                    infoBar._cachedH = ibH; // update cache for handlePanMove hot path
                     infoBar.dataset.centerTop = centerTop;
                     infoBar.dataset.centerLeft = centerLeft;
                     infoBar.dataset.scaledW = scaledW;
@@ -2567,6 +2651,40 @@
             // Track rendered heights so the vertical-stack group-centering pass can use them.
             const slotRenderedH = {}; // slot → rendered px height (for loaded slots only)
 
+            // Vertical-stack pre-pass: compute the minimum contain-fit scale across all loaded
+            // slots so every video renders at the same scale (same rendered width for same
+            // natural width). Without this each cell fits independently to its own height,
+            // and tiny height differences (e.g. 400 vs 416px video) produce different scales.
+            let verticalSharedScale = null;
+            if (isVertical) {
+                slots.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
+                    const layer = document.getElementById(`layer${slotName}`);
+                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
+                    const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
+                    const infoBar = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
+                    if (!media || !mediaContainer) return;
+                    const nw = media.naturalWidth || media.videoWidth || 0;
+                    const nh = media.naturalHeight || media.videoHeight || 0;
+                    if (!nw || !nh) return;
+                    const cw = mediaContainer.offsetWidth;
+                    const ch = mediaContainer.offsetHeight;
+                    if (!cw || !ch) return;
+                    const ibH = infoBar
+                        ? (infoBar._cachedH = infoBar.offsetHeight || 28)
+                        : 0;
+                    const availH = ch - ibH;
+                    const fitScale = (cw / nw) < (availH / nh) ? cw / nw : availH / nh;
+                    if (verticalSharedScale === null || fitScale < verticalSharedScale) {
+                        verticalSharedScale = fitScale;
+                    }
+                });
+                if (splitZoomLevel === 1 && verticalSharedScale !== null) {
+                    verticalSharedScale = Math.min(verticalSharedScale, 1);
+                }
+            }
+
             slots.forEach(slot => {
                 if (!mediaData[slot]) return;
 
@@ -2592,7 +2710,7 @@
                 // In vertical-stack, reserve the top of each cell for the info bar so the
                 // video is always fitted below it — no overlap, no gap between cells.
                 const ibReserve = (isVertical && infoBar)
-                    ? (infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28))
+                    ? (infoBar._cachedH = infoBar.offsetHeight || 28)
                     : 0;
                 const fitH = containerH - ibReserve;
 
@@ -2619,17 +2737,24 @@
                     offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
                     offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
                 } else {
-                    // Split modes: contain-fit, optionally capped at 100% actual pixels
-                    const mediaAspect = naturalWidth / naturalHeight;
-                    const containerAspect = containerW / fitH;
-                    let fitScale;
-                    if (containerAspect > mediaAspect) {
-                        fitScale = fitH / naturalHeight;
+                    // Split modes: contain-fit, optionally capped at 100% actual pixels.
+                    // Vertical-stack uses a shared scale (pre-pass above) so all videos
+                    // render at the same zoom regardless of per-cell height differences.
+                    let scale;
+                    if (isVertical && verticalSharedScale !== null) {
+                        scale = verticalSharedScale;
                     } else {
-                        fitScale = containerW / naturalWidth;
+                        const mediaAspect = naturalWidth / naturalHeight;
+                        const containerAspect = containerW / fitH;
+                        let fitScale;
+                        if (containerAspect > mediaAspect) {
+                            fitScale = fitH / naturalHeight;
+                        } else {
+                            fitScale = containerW / naturalWidth;
+                        }
+                        // Cap at 1.0 if 100% mode active (no upscaling past actual pixels)
+                        scale = splitZoomLevel === 1 ? Math.min(fitScale, 1) : fitScale;
                     }
-                    // Cap at 1.0 if 100% mode active (no upscaling past actual pixels)
-                    const scale = splitZoomLevel === 1 ? Math.min(fitScale, 1) : fitScale;
                     renderedW = naturalWidth * scale;
                     renderedH = naturalHeight * scale;
                     offsetX = (containerW - renderedW) / 2;
@@ -2734,7 +2859,7 @@
                     infoBar.style.bottom = '';
                     infoBar.style.height = '';
                     infoBar.style.right  = '';
-                    const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
+                    const ibH = infoBar._cachedH = infoBar.offsetHeight || 28;
                     infoBar.style.left  = Math.round(offsetX) + 'px';
                     infoBar.style.top   = Math.round(offsetY - ibH) + 'px';
                     infoBar.style.width = Math.round(renderedW) + 'px';
@@ -3484,8 +3609,8 @@
                 } else {
                     setViewMode(layoutMode);
                 }
-            } else if (e.key === 's' || e.key === 'S') {
-                // S key cycles through view modes depending on asset count.
+            } else if (e.key === 'c' || e.key === 'C') {
+                // C key toggles compare mode depending on asset count.
                 e.preventDefault();
                 const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
                 if (allThreeLoaded) {
@@ -3540,7 +3665,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>S</kbd></span><span class="shortcut-desc">Cycle split mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>C</kbd></span><span class="shortcut-desc">Toggle compare mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
