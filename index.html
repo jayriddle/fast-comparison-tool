@@ -1960,7 +1960,7 @@
                     }
                 });
                 const viewW = window.innerWidth;
-                const viewH = window.innerHeight - HEADER_OVERLAP;
+                const viewH = window.innerHeight - headerH;
                 if (refW > 0 && refH > 0) {
                     fitZoom = Math.min(viewW / refW, viewH / refH);
                 }
@@ -1969,7 +1969,7 @@
             // Position each asset wrapper. Each asset is scaled to fit within the reference
             // bounding box (refW × refH) at the current zoomLevel, preserving its own aspect ratio.
             // This keeps all assets the same on-screen size regardless of native resolution or orientation.
-            const availH = window.innerHeight - HEADER_OVERLAP;
+            const availH = window.innerHeight - headerH;
             ['original', 'editA', 'editB'].forEach(slot => {
                 if (!mediaData[slot]) return;
                 const slotName = slot.charAt(0).toUpperCase() + slot.slice(1);
@@ -1989,7 +1989,7 @@
                     : zoomLevel;
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
-                const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
+                const centerTop = headerH + Math.max(0, Math.round((availH - scaledH) / 2));
                 const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
 
                 // Pan is applied to the wrapper position directly (not as a media transform)
