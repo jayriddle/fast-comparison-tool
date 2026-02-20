@@ -1783,11 +1783,9 @@
                 updateVideoProgress(video);
             }
 
-            // Apply current pan offset
-            const mediaEl = activeLayer.querySelector('img, video');
-            if (mediaEl) {
-                mediaEl.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
-            }
+            // Pan is now on the wrapper position, not a media transform — call applyZoom()
+            // to reposition the newly active layer's wrapper with the current pan offset.
+            applyZoom();
 
             // Refresh asset strip highlight in header
             updateAssetStrip();
@@ -1925,41 +1923,46 @@
                 const centerTop = HEADER_OVERLAP + Math.max(0, Math.round((availH - scaledH) / 2));
                 const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
 
+                // Pan is applied to the wrapper position directly (not as a media transform)
+                // so the zoom badge and all wrapper children move with the image automatically.
+                const pannedTop = centerTop + panOffsetY;
+                const pannedLeft = centerLeft + panOffsetX;
+
+                // Stash base (un-panned) coords for handlePanMove() to use
+                vw.dataset.centerTop = centerTop;
+                vw.dataset.centerLeft = centerLeft;
+
                 vw.style.position = 'fixed';
-                vw.style.top = centerTop + 'px';
-                vw.style.left = centerLeft + 'px';
+                vw.style.top = pannedTop + 'px';
+                vw.style.left = pannedLeft + 'px';
                 vw.style.width = scaledW + 'px';
                 vw.style.height = scaledH + 'px';
 
-                // Media fills its wrapper
+                // Media fills its wrapper; no transform needed — pan is on the wrapper
                 media.style.imageRendering = zoomLevel >= 2 ? 'pixelated' : '';
                 media.style.width = '100%';
                 media.style.height = '100%';
                 media.style.maxWidth = 'none';
                 media.style.maxHeight = 'none';
                 media.style.objectFit = 'contain';
-
-                // Apply pan offset
-                media.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+                media.style.transform = '';
 
                 // Update per-asset zoom badge (actual ratio for this asset)
                 const badge = vw.querySelector('.split-zoom-indicator');
                 if (badge) badge.textContent = zoomLevel.toFixed(2) + '×';
 
-                // Position info bar flush above the wrapper, tracking pan offset.
-                // Store the unshifted base coords as data attributes so handlePanMove()
-                // can compute deltas without calling the full applyZoom() on every mousemove.
+                // Position info bar flush above the wrapper.
+                // Store base (un-panned) coords so handlePanMove() can update cheaply.
                 const infoBar = layer.querySelector('.asset-info-bar');
                 if (infoBar) {
                     const ibH = infoBar.offsetHeight || 28;
-                    // Stash base (un-panned) position for use by handlePanMove()
                     infoBar.dataset.centerTop = centerTop;
                     infoBar.dataset.centerLeft = centerLeft;
                     infoBar.dataset.scaledW = scaledW;
-                    const clampedLeft = Math.max(0, centerLeft + panOffsetX);
+                    const clampedLeft = Math.max(0, pannedLeft);
                     infoBar.style.position = 'fixed';
                     infoBar.style.left = clampedLeft + 'px';
-                    infoBar.style.top = Math.max(HEADER_OVERLAP, centerTop + panOffsetY - ibH) + 'px';
+                    infoBar.style.top = Math.max(HEADER_OVERLAP, pannedTop - ibH) + 'px';
                     infoBar.style.width = Math.min(scaledW, window.innerWidth - clampedLeft) + 'px';
                     infoBar.style.right = '';
                     infoBar.style.bottom = '';
@@ -2028,26 +2031,28 @@
             panOffsetX = e.clientX - panStartX;
             panOffsetY = e.clientY - panStartY;
 
-            // Apply transform to the active image and track the info bar in real time
+            // Move the wrapper (not the media) so zoom badge and all children track with it
             const activeLayer = document.querySelector('.overlay-layer.active');
             if (activeLayer) {
-                const img = activeLayer.querySelector('img, video');
-                if (img) {
-                    img.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+                const vw = activeLayer.querySelector('.video-wrapper');
+                if (vw) {
+                    const centerTop = parseFloat(vw.dataset.centerTop || 0);
+                    const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
+                    vw.style.top = (centerTop + panOffsetY) + 'px';
+                    vw.style.left = (centerLeft + panOffsetX) + 'px';
                 }
-                // Move info bar with the image so it never lags
+                // Move info bar in lockstep
                 const infoBar = activeLayer.querySelector('.asset-info-bar');
                 if (infoBar) {
                     const ibH = infoBar.offsetHeight || 28;
-                    const barTop = parseFloat(infoBar.dataset.centerTop || HEADER_OVERLAP);
-                    const barLeft = parseFloat(infoBar.dataset.centerLeft || 0);
+                    const barCenterTop = parseFloat(infoBar.dataset.centerTop || HEADER_OVERLAP);
+                    const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
                     const barW = parseFloat(infoBar.dataset.scaledW || infoBar.offsetWidth);
-                    // top: track image top, clamped so bar stays visible below header
-                    infoBar.style.top = Math.max(HEADER_OVERLAP, barTop + panOffsetY - ibH) + 'px';
-                    // left: track image left, clamped so bar never scrolls off-screen left
-                    infoBar.style.left = Math.max(0, barLeft + panOffsetX) + 'px';
-                    // width: shrink bar if image+pan extends past right viewport edge, but never wider than scaledW
-                    const clampedLeft = Math.max(0, barLeft + panOffsetX);
+                    const pannedTop = barCenterTop + panOffsetY;
+                    const pannedLeft = barCenterLeft + panOffsetX;
+                    const clampedLeft = Math.max(0, pannedLeft);
+                    infoBar.style.top = Math.max(HEADER_OVERLAP, pannedTop - ibH) + 'px';
+                    infoBar.style.left = clampedLeft + 'px';
                     infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
                 }
             }
