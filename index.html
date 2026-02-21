@@ -650,7 +650,7 @@
             z-index: 10;
             font-size: 11px;
             color: #a0a0a0;
-            border-radius: 3px;
+            border-radius: 3px 3px 0 0;
             pointer-events: none;
             white-space: nowrap;
             overflow: hidden;
@@ -707,7 +707,7 @@
         .shortcuts-backdrop {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.3);
             z-index: 1999;
             opacity: 0;
             pointer-events: none;
@@ -729,6 +729,7 @@
             background: #1a1a1a;
             border: 1px solid #333;
             border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             z-index: 2000;
             display: flex;
             flex-direction: column;
