@@ -1075,7 +1075,7 @@
     <div class="container">
         <div class="header">
             <div style="position: relative; display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 16px; font-weight: 600;">WarpDiff</span>
+                <span style="font-size: 16px; font-weight: 600;">WarpDiff</span><span id="appVersion" style="font-size: 11px; color: #666; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
                 <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 2–3 files to compare (or press L)" style="margin-left: 16px;">
                     Load
                     <div class="help-tooltip">Select 2–3 files to compare (auto-sorts by save time). Shortcut: L</div>
@@ -1195,6 +1195,9 @@
     </div>
 
     <script>
+        const APP_VERSION = '1';
+        document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
+
         const mediaData = {
             original: null,
             editA: null,
