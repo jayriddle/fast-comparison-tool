@@ -1667,28 +1667,34 @@
             const resolution = `${width}×${height}`;
             const ratio = width / height;
             const standardRatios = [
-                { value: 16/9, label: '16:9' },
-                { value: 9/16, label: '9:16' },
-                { value: 4/3, label: '4:3' },
-                { value: 3/4, label: '3:4' },
-                { value: 3/2, label: '3:2' },
-                { value: 2/3, label: '2:3' },
-                { value: 1.85, label: '1.85:1' },
-                { value: 2.39, label: '2.39:1' },
-                { value: 21/9, label: '21:9' },
-                { value: 1, label: '1:1' }
+                { value: 16/9,  label: '16:9' },
+                { value: 9/16,  label: '9:16' },
+                { value: 4/3,   label: '4:3' },
+                { value: 3/4,   label: '3:4' },
+                { value: 3/2,   label: '3:2' },
+                { value: 2/3,   label: '2:3' },
+                { value: 4/5,   label: '4:5' },
+                { value: 5/4,   label: '5:4' },
+                { value: 2/1,   label: '2:1' },
+                { value: 1/2,   label: '1:2' },
+                { value: 1.85,  label: '1.85:1' },
+                { value: 2.39,  label: '2.39:1' },
+                { value: 21/9,  label: '21:9' },
+                { value: 1,     label: '1:1' }
             ];
 
             // Find closest standard ratio (within 1% tolerance)
             let aspectRatio = `${ratio.toFixed(2)}:1`;
+            let nonStandardAspect = true;
             for (const std of standardRatios) {
                 if (Math.abs(ratio - std.value) / std.value < 0.01) {
                     aspectRatio = std.label;
+                    nonStandardAspect = false;
                     break;
                 }
             }
 
-            updateAssetInfoBar(slot, { resolution, aspectRatio });
+            updateAssetInfoBar(slot, { resolution, aspectRatio, nonStandardAspect });
         }
 
         function updateDurationDisplay(slot, duration) {
@@ -1715,7 +1721,10 @@
             // Update aspect ratio
             if (data.aspectRatio) {
                 const aspectElement = infoBar.querySelector('.asset-aspect');
-                if (aspectElement) aspectElement.textContent = data.aspectRatio;
+                if (aspectElement) {
+                    aspectElement.textContent = data.aspectRatio;
+                    aspectElement.style.color = data.nonStandardAspect ? '#c8932a' : '';
+                }
             }
 
             // Update duration
