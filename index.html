@@ -403,9 +403,12 @@
             object-fit: contain;
         }
 
-        /* Info bar: JS positions it per mode (above video in overlay/horizontal, left in vertical) */
-        .media-container > .asset-info-bar {
+        /* Info bar: CSS child of video-wrapper, always flush above it via bottom:100% */
+        .video-wrapper > .asset-info-bar {
             position: absolute;
+            bottom: 100%;
+            left: 0;
+            width: 100%;
         }
 
         /* In overlay mode, only show info bar and zoom for the active layer */
@@ -1637,10 +1640,10 @@
 
                 // Build the asset structure:
                 //   media-container (position:relative, fills layer)
-                //     ├── asset-info-bar  ← JS-positioned per mode
                 //     └── video-wrapper   ← JS-sized to exact rendered video bounds
                 //           ├── video/img
-                //           └── split-zoom-indicator  ← always bottom-right of wrapper
+                //           ├── split-zoom-indicator  ← always bottom-right of wrapper
+                //           └── asset-info-bar        ← CSS-positioned flush above (bottom:100%)
 
                 const videoWrapper = document.createElement('div');
                 videoWrapper.className = 'video-wrapper';
@@ -1652,8 +1655,8 @@
                 // Zoom indicator lives inside the wrapper — always at bottom-right of video bounds
                 videoWrapper.appendChild(zoomIndicator);
 
-                // Info bar is a sibling of video-wrapper — JS positions it per mode
-                mediaContainer.appendChild(infoBar);
+                // Info bar lives inside video-wrapper — CSS positions it flush above via bottom:100%
+                videoWrapper.appendChild(infoBar);
                 mediaContainer.appendChild(videoWrapper);
 
                 layer.appendChild(mediaContainer);
