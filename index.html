@@ -1809,7 +1809,7 @@
                 drainFpsQueue(); // process next in queue
             }
 
-            if (typeof video.requestVideoFrameCallback !== 'function' || video.duration <= 1) {
+            if (typeof video.requestVideoFrameCallback !== 'function') {
                 finalize(30);
                 return;
             }
@@ -1859,8 +1859,8 @@
             if (fpsDetectionQueue.length === 1) drainFpsQueue();
             
             video.addEventListener('play', function() {
-                // Suppress sync during fps sampling
-                if (video._samplingFps) return;
+                // Suppress sync while any video is being sampled for fps
+                if (fpsDetectionQueue.length > 0) return;
                 // Sync all videos when any video plays
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video) {
@@ -1876,8 +1876,8 @@
             });
 
             video.addEventListener('pause', function() {
-                // Suppress sync during fps sampling
-                if (video._samplingFps) return;
+                // Suppress sync while any video is being sampled for fps
+                if (fpsDetectionQueue.length > 0) return;
                 // Sync pause to all other videos
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video && !v.paused) {
@@ -2646,9 +2646,10 @@
             const muteBtn = document.getElementById('muteBtn');
             if (muteBtn) muteBtn.textContent = '🔊';
 
-            // Reset timecode display mode and stale fps cache
+            // Reset timecode display mode, stale fps cache, and sampling queue
             timecodeMode = 'time';
             videoFrameRates = {};
+            fpsDetectionQueue.length = 0;
 
             document.body.classList.remove('fullscreen');
             document.body.classList.remove('side-by-side');
