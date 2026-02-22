@@ -1837,24 +1837,21 @@
                     }
                 }
 
-                video.addEventListener('loadedmetadata', function() {
-                    wasPlaying = !video.paused;
-                    // Need video playing to get frame callbacks; hide sampling from user
-                    if (video.paused) {
-                        video._samplingFps = true;
-                        video.muted = true;
-                        video.playbackRate = 1; // normal rate for accurate frame intervals
-                        video.play().catch(() => { video._samplingFps = false; });
-                    }
-                    video.requestVideoFrameCallback(onFrame);
-                }, { once: true });
+                // setupVideoHandlers is called from inside loadedmetadata, so
+                // metadata is already available — start sampling immediately
+                wasPlaying = !video.paused;
+                if (video.paused) {
+                    video._samplingFps = true;
+                    video.muted = true;
+                    video.playbackRate = 1;
+                    video.play().catch(() => { video._samplingFps = false; });
+                }
+                video.requestVideoFrameCallback(onFrame);
             } else {
-                // Fallback: assume 30fps
-                video.addEventListener('loadedmetadata', function() {
-                    videoFrameRates[video.src] = 30;
-                    updateAssetInfoBar(slot, { fps: '30 fps' });
-                    updateDurationDisplay(slot, video.duration, 30);
-                }, { once: true });
+                // Fallback: assume 30fps (metadata already available at this point)
+                videoFrameRates[video.src] = 30;
+                updateAssetInfoBar(slot, { fps: '30 fps' });
+                updateDurationDisplay(slot, video.duration, 30);
             }
             
             video.addEventListener('play', function() {
