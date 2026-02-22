@@ -1798,6 +1798,20 @@
             if (fpsDetectionQueue.length === 0) return;
             const { video, slot } = fpsDetectionQueue[0];
 
+            // Delay first drain until layout has fully settled after load
+            if (fpsDetectionQueue._delayPending) return;
+            if (fpsDetectionQueue._initialDrain) {
+                // Already past the delay — proceed immediately
+            } else {
+                fpsDetectionQueue._delayPending = true;
+                setTimeout(() => {
+                    fpsDetectionQueue._delayPending = false;
+                    fpsDetectionQueue._initialDrain = true;
+                    drainFpsQueue();
+                }, 800);
+                return;
+            }
+
             const SAMPLE_COUNT = 10;
             const standardRates = [23.976, 24, 25, 29.97, 30, 48, 59.94, 60];
 
@@ -2653,6 +2667,8 @@
             timecodeMode = 'time';
             videoFrameRates = {};
             fpsDetectionQueue.length = 0;
+            fpsDetectionQueue._delayPending = false;
+            fpsDetectionQueue._initialDrain = false;
 
             document.body.classList.remove('fullscreen');
             document.body.classList.remove('side-by-side');
