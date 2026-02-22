@@ -133,4 +133,4 @@ In split modes, the info bar of the asset whose audio is currently playing is hi
 - **Images and videos only** — other file types are ignored
 - **Pan available in Overlay mode only**
 - **Audio:** one track at a time; others are automatically muted
-- **Frame counter** assumes 30 fps
+- **Frame counter** detects frame rate automatically; snaps to nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60)

@@ -1773,12 +1773,66 @@
             // Enable native looping
             video.loop = true;
             
-            // Detect framerate from video metadata
-            video.addEventListener('loadedmetadata', function() {
-                videoFrameRates[video.src] = 30;
-            });
+            // Detect framerate by sampling frames via requestVideoFrameCallback
+            // Falls back to 30fps if API unavailable or sampling fails
+            if (typeof video.requestVideoFrameCallback === 'function') {
+                const SAMPLE_COUNT = 10;
+                const timestamps = [];
+                let wasPlaying = false;
+                video._samplingFps = false; // flag to suppress sync during sampling
+
+                function onFrame(now, metadata) {
+                    timestamps.push(metadata.mediaTime);
+                    if (timestamps.length < SAMPLE_COUNT + 1) {
+                        video.requestVideoFrameCallback(onFrame);
+                    } else {
+                        // Compute average interval between frames
+                        let totalInterval = 0;
+                        for (let i = 1; i < timestamps.length; i++) {
+                            totalInterval += timestamps[i] - timestamps[i - 1];
+                        }
+                        const avgInterval = totalInterval / SAMPLE_COUNT;
+                        const rawFps = 1 / avgInterval;
+
+                        // Snap to nearest standard frame rate
+                        const standardRates = [23.976, 24, 25, 29.97, 30, 48, 59.94, 60];
+                        const snapped = standardRates.reduce((a, b) =>
+                            Math.abs(b - rawFps) < Math.abs(a - rawFps) ? b : a
+                        );
+                        videoFrameRates[video.src] = snapped;
+
+                        // Restore state and pause if we started playback only for sampling
+                        video._samplingFps = false;
+                        if (!wasPlaying) {
+                            video.pause();
+                            video.currentTime = 0; // rewind so user sees frame 0
+                        }
+                        // Restore mute to match the app's actual mute state
+                        video.muted = audioMuteStates[slot] !== false;
+                    }
+                }
+
+                video.addEventListener('loadedmetadata', function() {
+                    wasPlaying = !video.paused;
+                    // Need video playing to get frame callbacks; hide sampling from user
+                    if (video.paused) {
+                        video._samplingFps = true;
+                        video.muted = true;
+                        video.playbackRate = 1; // normal rate for accurate frame intervals
+                        video.play().catch(() => { video._samplingFps = false; });
+                    }
+                    video.requestVideoFrameCallback(onFrame);
+                }, { once: true });
+            } else {
+                // Fallback: assume 30fps
+                video.addEventListener('loadedmetadata', function() {
+                    videoFrameRates[video.src] = 30;
+                }, { once: true });
+            }
             
             video.addEventListener('play', function() {
+                // Suppress sync during fps sampling
+                if (video._samplingFps) return;
                 // Sync all videos when any video plays
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video) {
@@ -1794,6 +1848,8 @@
             });
 
             video.addEventListener('pause', function() {
+                // Suppress sync during fps sampling
+                if (video._samplingFps) return;
                 // Sync pause to all other videos
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video && !v.paused) {
@@ -4004,7 +4060,7 @@
                 <li><strong>Images and videos only</strong> — other file types are ignored</li>
                 <li><strong>Pan available in Overlay mode only</strong></li>
                 <li><strong>Audio:</strong> one track at a time; others are automatically muted</li>
-                <li><strong>Frame counter</strong> assumes 30 fps</li>
+                <li><strong>Frame counter</strong> detects frame rate automatically; snaps to nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60)</li>
             </ul>
         </div>
     </div>
