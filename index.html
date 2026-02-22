@@ -1266,6 +1266,7 @@
                         <span class="asset-name">ORIGINAL</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1275,6 +1276,7 @@
                         <span class="asset-name">EDIT A</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1284,6 +1286,7 @@
                         <span class="asset-name">EDIT B</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1619,6 +1622,7 @@
                         <span class="asset-name">${slotLabel}</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     `;
                 }
@@ -1697,11 +1701,13 @@
             updateAssetInfoBar(slot, { resolution, aspectRatio, nonStandardAspect });
         }
 
-        function updateDurationDisplay(slot, duration) {
+        function updateDurationDisplay(slot, duration, fps) {
             if (!duration) return;
             const minutes = Math.floor(duration / 60);
             const seconds = Math.floor(duration % 60);
-            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            const useFps = fps || 30;
+            const frames = Math.floor((duration % 1) * useFps);
+            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
@@ -1725,6 +1731,12 @@
                     aspectElement.textContent = data.aspectRatio;
                     aspectElement.style.color = data.nonStandardAspect ? '#c8932a' : '';
                 }
+            }
+
+            // Update fps
+            if (data.fps !== undefined) {
+                const fpsElement = infoBar.querySelector('.asset-fps');
+                if (fpsElement) fpsElement.textContent = data.fps;
             }
 
             // Update duration
@@ -1810,6 +1822,10 @@
                         );
                         videoFrameRates[video.src] = snapped;
 
+                        // Update info bar now that fps is known
+                        updateAssetInfoBar(slot, { fps: `${snapped} fps` });
+                        updateDurationDisplay(slot, video.duration, snapped);
+
                         // Restore state and pause if we started playback only for sampling
                         video._samplingFps = false;
                         if (!wasPlaying) {
@@ -1836,6 +1852,8 @@
                 // Fallback: assume 30fps
                 video.addEventListener('loadedmetadata', function() {
                     videoFrameRates[video.src] = 30;
+                    updateAssetInfoBar(slot, { fps: '30 fps' });
+                    updateDurationDisplay(slot, video.duration, 30);
                 }, { once: true });
             }
             
