@@ -3694,6 +3694,9 @@
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
+            // Let browser-native shortcuts (Cmd+R, Ctrl+R, etc.) pass through
+            if (e.metaKey || e.ctrlKey) return;
+
             // L key opens file picker — works at any time
             if (e.key === 'l' || e.key === 'L') {
                 e.preventDefault();
