@@ -3193,17 +3193,18 @@
             }
         }
 
-        // Debounced applyZoom for resize events — avoids running the full reposition
-        // pipeline on every pixel of a window drag (fires 100+ times/sec).
-        let _applyZoomResizeTimer = null;
-        function applyZoomDebounced() {
-            clearTimeout(_applyZoomResizeTimer);
-            _applyZoomResizeTimer = setTimeout(applyZoom, 60);
+        // rAF-throttled resize handlers — run once per frame so positioning tracks
+        // the window size in real time during drag without running on every pixel.
+        let _applyZoomRafPending = false;
+        function applyZoomRaf() {
+            if (_applyZoomRafPending) return;
+            _applyZoomRafPending = true;
+            requestAnimationFrame(() => {
+                _applyZoomRafPending = false;
+                applyZoom();
+            });
         }
 
-        // rAF-throttled positionLabelsToMedia for resize — runs once per frame so
-        // JS-positioned wrappers track the CSS grid in real time without the 150ms
-        // debounce delay that causes jitter during window drag.
         let _positionRafPending = false;
         function positionLabelsToMediaRaf() {
             if (_positionRafPending) return;
@@ -3217,9 +3218,9 @@
         // Call positioning on resize
         window.addEventListener('resize', () => {
             if (isSplitMode) {
-                positionLabelsToMediaRaf(); // rAF-throttled: smooth during window drag
+                positionLabelsToMediaRaf();
             } else {
-                applyZoomDebounced(); // debounced: avoid per-pixel reflow during window drag
+                applyZoomRaf();
             }
         });
 
