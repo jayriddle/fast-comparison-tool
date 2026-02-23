@@ -2288,7 +2288,7 @@
                 if (minNW === Infinity) minNW = 0;
                 // fitZoom: scale so the narrowest (reference) asset fits the viewport
                 const viewW = window.innerWidth;
-                const sampleBarFit = document.querySelector('.video-wrapper > .asset-info-bar');
+                const sampleBarFit = document.querySelector('.overlay-layer.active .video-wrapper > .asset-info-bar');
                 const infoBarHFit = sampleBarFit ? sampleBarFit.offsetHeight : 0;
                 const viewH = window.innerHeight - headerH - infoBarHFit;
                 if (minNW > 0) {
@@ -2318,8 +2318,8 @@
             // Position each asset wrapper. Every asset is scaled so its rendered width equals
             // minNW * sharedScale — same-width assets appear identically wide on screen.
             // Reserve space for the info bar above the media so it sits below the header.
-            // Measure from the active layer's info bar (they're all the same height).
-            const sampleBar = document.querySelector('.video-wrapper > .asset-info-bar');
+            // Measure from the active layer's info bar (non-active ones are display:none → offsetHeight 0).
+            const sampleBar = document.querySelector('.overlay-layer.active .video-wrapper > .asset-info-bar');
             const infoBarH = sampleBar ? sampleBar.offsetHeight : 0;
             const availH = window.innerHeight - headerH - infoBarH;
             ['original', 'editA', 'editB'].forEach(slot => {
