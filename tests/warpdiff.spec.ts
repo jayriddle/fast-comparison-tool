@@ -170,6 +170,9 @@ test.describe('Page Load & Initial State', () => {
   });
 
   test('quick start popup is hidden initially', async ({ page }) => {
+    // Set flag so the first-visit auto-show doesn't trigger
+    await page.goto('/');
+    await page.evaluate(() => localStorage.setItem('hasVisitedBefore', 'true'));
     await page.goto('/');
     await expect(page.locator('#quickStartPopup')).not.toBeVisible();
   });
@@ -417,6 +420,9 @@ test.describe('Zoom & Pan (Overlay Mode)', () => {
 
 test.describe('UI Elements', () => {
   test('help popup toggles on button click', async ({ page }) => {
+    // Set flag so the first-visit auto-show doesn't trigger
+    await page.goto('/');
+    await page.evaluate(() => localStorage.setItem('hasVisitedBefore', 'true'));
     await page.goto('/');
     const popup = page.locator('#quickStartPopup');
     await expect(popup).not.toBeVisible();
