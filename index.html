@@ -2267,6 +2267,7 @@
             // Every asset is rendered so its width = minNW * sharedScale, giving identical
             // rendered widths for same-width assets and scaling wider ones down to match.
             // fitZoom is set so the widest rendered asset just fits the viewport at zoomLevel=1.
+            const prevFitZoom = fitZoom;
             let minNW = Infinity;
             {
                 ['original', 'editA', 'editB'].forEach(slot => {
@@ -2307,6 +2308,11 @@
                     });
                     fitZoom = Math.min(viewW / minNW, maxRenderedH > 0 ? viewH / maxRenderedH : Infinity);
                 }
+            }
+
+            // If the user was at fit-to-viewport zoom, track the new fitZoom on resize.
+            if (zoomLevel === prevFitZoom) {
+                zoomLevel = fitZoom;
             }
 
             // Position each asset wrapper. Every asset is scaled so its rendered width equals
