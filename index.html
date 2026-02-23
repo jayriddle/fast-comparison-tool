@@ -2748,6 +2748,7 @@
                 // splitZoomLevel===1 means "smallest-resolution asset at 100% native pixels,
                 // others scaled down to match its physical size" — compute the multiplier
                 // that achieves this using a longest-side anchor, then apply splitStepZoom on top.
+                let tripartiteBaseZoom = 1;
                 let tripartiteEffectiveZoom = splitStepZoom;
                 if (splitZoomLevel === 1) {
                     // Find the smallest longest-side (= smallest-resolution asset's reference dim).
@@ -2765,11 +2766,11 @@
                     // For portrait (share width): target = tripartiteRefLong px of width
                     //   → multiplier = tripartiteRefLong / minW
                     if (widthConstrained && minW < Infinity) {
-                        tripartiteEffectiveZoom = tripartiteRefLong / minW;
+                        tripartiteBaseZoom = tripartiteRefLong / minW;
                     } else if (!widthConstrained && minH < Infinity) {
-                        tripartiteEffectiveZoom = tripartiteRefLong / minH;
+                        tripartiteBaseZoom = tripartiteRefLong / minH;
                     }
-                    tripartiteEffectiveZoom *= splitStepZoom;
+                    tripartiteEffectiveZoom = tripartiteBaseZoom * splitStepZoom;
                 }
 
                 // Clamp tripartiteEffectiveZoom so no asset overflows its cell.
@@ -2813,6 +2814,11 @@
                     if (maxAllowed < Infinity) {
                         _tripartiteZoomWasCapped = tripartiteEffectiveZoom > maxAllowed - 0.001;
                         tripartiteEffectiveZoom = Math.min(tripartiteEffectiveZoom, maxAllowed);
+                        // Clamp splitStepZoom so it doesn't accumulate past the layout cap.
+                        // Without this, pressing '+' at the limit inflates splitStepZoom invisibly,
+                        // requiring many '-' presses before the zoom visually decreases.
+                        const maxStep = maxAllowed / (tripartiteBaseZoom || 1);
+                        if (splitStepZoom > maxStep) splitStepZoom = maxStep;
                     } else {
                         _tripartiteZoomWasCapped = false;
                     }
