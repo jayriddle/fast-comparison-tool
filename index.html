@@ -1313,6 +1313,51 @@
                    document.body.classList.contains('tripartite-rows');
         }
 
+        // Updates the mute button appearance for a given audio slot.
+        function updateAudioButton(slot, isMuted) {
+            const btn = document.getElementById(`audio${capitalize(slot)}`);
+            if (!btn) return;
+            btn.classList.toggle('muted', isMuted);
+            const icon = btn.querySelector('.audio-mute-icon');
+            if (icon) icon.textContent = isMuted ? '🔇' : '🔊';
+        }
+
+        function getLoadedSlotCount() {
+            return Object.values(mediaData).filter(m => m !== null).length;
+        }
+
+        // Returns the smallest "longest dimension" across all loaded assets.
+        function computeMinLongest() {
+            let minLong = Infinity;
+            assetOrder.forEach(slot => {
+                if (!mediaData[slot]) return;
+                const layer = getLayer(slot);
+                const media = layer && layer.querySelector('img, video');
+                if (!media) return;
+                const { w, h } = mediaDims(media);
+                if (!w || !h) return;
+                minLong = Math.min(minLong, Math.max(w, h));
+            });
+            return minLong === Infinity ? 0 : minLong;
+        }
+
+        function clearVideoWrapperStyles(vw) {
+            vw.style.position = '';
+            vw.style.width = '';
+            vw.style.height = '';
+            vw.style.top = '';
+            vw.style.left = '';
+            vw.style.transform = '';
+            vw.style.transformOrigin = '';
+        }
+
+        // Runs an action on every <video> except the source video.
+        function syncVideos(sourceVideo, action) {
+            document.querySelectorAll('video').forEach(v => {
+                if (v !== sourceVideo) action(v);
+            });
+        }
+
         // Brief non-intrusive toast shown after file load. Auto-dismisses after `duration` ms.
         // Pass isWarning=true to tint the text amber (timestamp-collision advisory).
         let _toastTimer = null;
@@ -1824,12 +1869,10 @@
                 // Suppress sync while any video is being sampled for fps
                 if (fpsDetectionQueue.length > 0) return;
                 // Sync all videos when any video plays
-                document.querySelectorAll('video').forEach(v => {
-                    if (v !== video) {
-                        v.play();
-                        if (Math.abs(v.currentTime - video.currentTime) > 0.5) {
-                            v.currentTime = video.currentTime;
-                        }
+                syncVideos(video, v => {
+                    v.play();
+                    if (Math.abs(v.currentTime - video.currentTime) > 0.5) {
+                        v.currentTime = video.currentTime;
                     }
                 });
 
@@ -1841,11 +1884,7 @@
                 // Suppress sync while any video is being sampled for fps
                 if (fpsDetectionQueue.length > 0) return;
                 // Sync pause to all other videos
-                document.querySelectorAll('video').forEach(v => {
-                    if (v !== video && !v.paused) {
-                        v.pause();
-                    }
-                });
+                syncVideos(video, v => { if (!v.paused) v.pause(); });
             });
             
             video.addEventListener('seeked', function() {
@@ -1868,23 +1907,8 @@
             // Apply mute state IMMEDIATELY using volume (more reliable than muted property)
             applyAudioMuteImmediate(source);
             
-            // Update button appearance
-            const slotName = capitalize(source);
-            const button = document.getElementById(`audio${slotName}`);
-            if (!button) {
-                return;
-            }
-            
-            const icon = button.querySelector('.audio-mute-icon');
-            
-            if (audioMuteStates[source]) {
-                button.classList.add('muted');
-                icon.textContent = '🔇';
-            } else {
-                button.classList.remove('muted');
-                icon.textContent = '🔊';
-            }
-            
+            updateAudioButton(source, audioMuteStates[source]);
+
             // If this was the selected audio source, switch to an unmuted source
             if (source === currentAudioSource && audioMuteStates[source]) {
                 // Find first unmuted source
@@ -1907,42 +1931,25 @@
             currentAudioSource = source;
 
             // Update button states
-            document.getElementById('audioOriginal').classList.toggle('active', source === 'original');
-            document.getElementById('audioEditA').classList.toggle('active', source === 'editA');
-            document.getElementById('audioEditB').classList.toggle('active', source === 'editB');
+            assetOrder.forEach(s => {
+                const btn = document.getElementById(`audio${capitalize(s)}`);
+                if (btn) btn.classList.toggle('active', s === source);
+            });
 
             // Mute all videos except the selected source and update button icons
             assetOrder.forEach(slot => {
-                const slotName = capitalize(slot);
                 const layer = getLayer(slot);
-                const button = document.getElementById(`audio${slotName}`);
-                const icon = button ? button.querySelector('.audio-mute-icon') : null;
 
                 if (layer) {
                     const video = layer.querySelector('video');
                     if (video) {
-                        // Mute if not the selected source OR if individually muted
                         const shouldMute = (slot !== source) || audioMuteStates[slot];
                         video.muted = shouldMute;
-
-                        // Update mute icon to reflect actual state
-                        if (button && icon) {
-                            if (shouldMute) {
-                                button.classList.add('muted');
-                                icon.textContent = '🔇';
-                            } else {
-                                button.classList.remove('muted');
-                                icon.textContent = '🔊';
-                            }
-                        }
+                        updateAudioButton(slot, shouldMute);
                     }
 
                     // Add active-audio class to layer with unmuted audio in split views
-                    if (slot === source && !audioMuteStates[slot]) {
-                        layer.classList.add('active-audio');
-                    } else {
-                        layer.classList.remove('active-audio');
-                    }
+                    layer.classList.toggle('active-audio', slot === source && !audioMuteStates[slot]);
                 }
             });
         }
@@ -2480,13 +2487,7 @@
             // Reset audio mute state and button UI for all slots
             assetOrder.forEach(slot => {
                 audioMuteStates[slot] = false;
-                const slotName = capitalize(slot);
-                const btn = document.getElementById(`audio${slotName}`);
-                if (btn) {
-                    btn.classList.remove('muted');
-                    const icon = btn.querySelector('.audio-mute-icon');
-                    if (icon) icon.textContent = '🔊';
-                }
+                updateAudioButton(slot, false);
             });
             currentAudioSource = 'original';
 
@@ -2500,13 +2501,7 @@
             videoFrameRates = {};
             fpsDetectionQueue.length = 0;
 
-            document.body.classList.remove('fullscreen');
-            document.body.classList.remove('side-by-side');
-            document.body.classList.remove('vertical-stack');
-            document.body.classList.remove('tripartite');
-            document.body.classList.remove('tripartite-columns');
-            document.body.classList.remove('tripartite-rows');
-            document.body.classList.remove('two-asset');
+            document.body.classList.remove('fullscreen', ...splitModeClasses);
             isSplitMode = false;
             viewActivating = false;
             pendingViewActivation = false;
@@ -2804,18 +2799,7 @@
             // Each slot then clamps independently to its own cell dimensions.
             let compareRefLong = 0;
             if (!isVertical && !isTripartite && !isOverlay) {
-                let minLong = Infinity;
-                slots.forEach(slot => {
-                    if (!mediaData[slot]) return;
-                    const layer = getLayer(slot);
-                    const media = layer ? layer.querySelector('img, video') : null;
-                    if (!media) return;
-                    const { w: nw, h: nh } = mediaDims(media);
-                    if (!nw || !nh) return;
-                    const longest = Math.max(nw, nh);
-                    if (longest < minLong) minLong = longest;
-                });
-                compareRefLong = minLong === Infinity ? 0 : minLong;
+                compareRefLong = computeMinLongest();
             }
 
             // Overlay mode: find the smallest "longest side" across all loaded assets.
@@ -2823,18 +2807,7 @@
             // length — the smallest asset shows at 1:1, larger ones scale down to match.
             let overlayRefLong = 0;
             if (isOverlay) {
-                let minLong = Infinity;
-                slots.forEach(slot => {
-                    if (!mediaData[slot]) return;
-                    const layer = getLayer(slot);
-                    const media = layer ? layer.querySelector('img, video') : null;
-                    if (!media) return;
-                    const { w: nw, h: nh } = mediaDims(media);
-                    if (!nw || !nh) return;
-                    const longest = Math.max(nw, nh);
-                    if (longest < minLong) minLong = longest;
-                });
-                overlayRefLong = minLong === Infinity ? 0 : minLong;
+                overlayRefLong = computeMinLongest();
             }
 
             // Track rendered heights so the vertical-stack group-centering pass can use them.
@@ -2850,19 +2823,7 @@
             let verticalSharedScale = null;
             if (isVertical) {
                 // Step 1: find the smallest longest-side across all loaded assets.
-                let minLong = Infinity;
-                slots.forEach(slot => {
-                    if (!mediaData[slot]) return;
-                    const layer = getLayer(slot);
-                    const mediaContainer = layer ? layer.querySelector('.media-container') : null;
-                    const media = mediaContainer ? mediaContainer.querySelector('img, video') : null;
-                    if (!media || !mediaContainer) return;
-                    const { w: nw, h: nh } = mediaDims(media);
-                    if (!nw || !nh) return;
-                    const longest = Math.max(nw, nh);
-                    if (longest < minLong) minLong = longest;
-                });
-                verticalRefLong = minLong === Infinity ? 0 : minLong;
+                verticalRefLong = computeMinLongest();
 
                 // Step 2: find the largest scale such that every asset's normalised dimensions
                 // fit within its cell. The per-slot rendering then uses:
@@ -3173,30 +3134,16 @@
                     });
 
                     // Clear inline styles set by positionLabelsToMedia() so CSS takes over in overlay mode
-                    document.querySelectorAll('.video-wrapper').forEach(vw => {
-                        vw.style.position = ''; // clear fixed positioning set by applyZoom()
-                        vw.style.width = '';
-                        vw.style.height = '';
-                        vw.style.top = '';
-                        vw.style.left = '';
-                    });
+                    document.querySelectorAll('.video-wrapper').forEach(clearVideoWrapperStyles);
                     // Reset audio mute states and button icons when leaving split view
                     assetOrder.forEach(slot => {
                         audioMuteStates[slot] = false;
-                        const slotName = capitalize(slot);
                         const layer = getLayer(slot);
                         if (layer) {
                             const video = layer.querySelector('video');
-                            if (video) {
-                                video.muted = false;
-                            }
+                            if (video) video.muted = false;
                         }
-                        const button = document.getElementById(`audio${slotName}`);
-                        if (button) {
-                            button.classList.remove('muted');
-                            const icon = button.querySelector('.audio-mute-icon');
-                            if (icon) icon.textContent = '🔊';
-                        }
+                        updateAudioButton(slot, false);
                     });
 
                     // Hide all layers except current
@@ -3213,7 +3160,7 @@
                 }
             } else {
                 const targetMode = mode;
-                const loadedSlotCount = Object.values(mediaData).filter(m => m !== null).length;
+                const loadedSlotCount = getLoadedSlotCount();
 
                 splitZoomLevel = null;
                 splitStepZoom = 1.0;
@@ -3301,7 +3248,7 @@
         // 'horizontal', 'vertical', or 'compare' (the 2-asset auto-layout bucket).
         function updateModeStrip(activeMode) {
             const strip = document.getElementById('modeStrip');
-            const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
+            const loadedCount = getLoadedSlotCount();
             if (loadedCount === 0) { strip.style.display = 'none'; return; }
 
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
@@ -3473,7 +3420,7 @@
 
         // Update checkAllLoaded to show view mode buttons
         function checkAllLoaded() {
-            const loadedCount = Object.values(mediaData).filter(m => m !== null).length;
+            const loadedCount = getLoadedSlotCount();
             
             // Wait until all expected files are loaded before activating the view.
             // Firing early (e.g. at loadedCount=2 during a 3-file load) causes
@@ -3717,7 +3664,7 @@
             } else if (e.key === 'o' || e.key === 'O') {
                 // O key toggles overlay <-> split (tripartite for 3 assets, auto-layout for 2).
                 e.preventDefault();
-                const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
+                const allThreeLoaded = getLoadedSlotCount() === 3;
                 if (isSplitMode) {
                     setViewMode('overlay');
                 } else if (allThreeLoaded) {
@@ -3728,7 +3675,7 @@
             } else if (e.key === 'c' || e.key === 'C') {
                 // C key toggles compare mode depending on asset count.
                 e.preventDefault();
-                const allThreeLoaded = Object.values(mediaData).filter(m => m !== null).length === 3;
+                const allThreeLoaded = getLoadedSlotCount() === 3;
                 if (allThreeLoaded) {
                     // 3-asset cycle: overlay <-> tripartite
                     if (!isSplitMode) {
