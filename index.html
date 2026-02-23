@@ -3193,27 +3193,18 @@
             }
         }
 
-        // rAF-throttled resize handlers — run once per frame so positioning tracks
-        // the window size in real time during drag without running on every pixel.
-        let _applyZoomRafPending = false;
-        function applyZoomRaf() {
-            if (_applyZoomRafPending) return;
-            _applyZoomRafPending = true;
-            requestAnimationFrame(() => {
-                _applyZoomRafPending = false;
-                applyZoom();
-            });
+        // rAF throttle: collapse rapid calls into one per frame.
+        function rafThrottle(fn) {
+            let pending = false;
+            return () => {
+                if (pending) return;
+                pending = true;
+                requestAnimationFrame(() => { pending = false; fn(); });
+            };
         }
 
-        let _positionRafPending = false;
-        function positionLabelsToMediaRaf() {
-            if (_positionRafPending) return;
-            _positionRafPending = true;
-            requestAnimationFrame(() => {
-                _positionRafPending = false;
-                positionLabelsToMedia();
-            });
-        }
+        const applyZoomRaf = rafThrottle(applyZoom);
+        const positionLabelsToMediaRaf = rafThrottle(positionLabelsToMedia);
 
         // Call positioning on resize
         window.addEventListener('resize', () => {
