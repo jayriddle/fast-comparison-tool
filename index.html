@@ -2250,8 +2250,8 @@
                 // fitZoom: scale so the narrowest (reference) asset fits the viewport
                 const viewW = window.innerWidth;
                 const sampleBarFit = document.querySelector('.overlay-layer.active .video-wrapper > .asset-info-bar');
-                const infoBarHFit = sampleBarFit ? sampleBarFit.offsetHeight : 0;
-                const viewH = window.innerHeight - headerH - infoBarHFit;
+                const infoBarHFit = sampleBarFit && sampleBarFit.offsetHeight > 0 ? sampleBarFit.offsetHeight : 22;
+                const viewH = window.innerHeight - headerH - infoBarHFit - 1;
                 if (minNW > 0) {
                     // fitZoom = scale that makes the narrowest asset's width fill the viewport.
                     // Height is also clamped: find the tallest rendered height across all assets
@@ -2285,8 +2285,8 @@
             // Reserve space for the info bar above the media so it sits below the header.
             // Measure from the active layer's info bar (non-active ones are display:none → offsetHeight 0).
             const sampleBar = document.querySelector('.overlay-layer.active .video-wrapper > .asset-info-bar');
-            const infoBarH = sampleBar ? sampleBar.offsetHeight : 0;
-            const availH = window.innerHeight - headerH - infoBarH;
+            const infoBarH = sampleBar && sampleBar.offsetHeight > 0 ? sampleBar.offsetHeight : 22;
+            const availH = window.innerHeight - headerH - infoBarH - 1;
             assetOrder.forEach(slot => {
                 if (!mediaData[slot]) return;
                 const layer = getLayer(slot);
@@ -2305,7 +2305,9 @@
                 const scaledW = Math.round(nw * perAssetScale);
                 const scaledH = Math.round(nh * perAssetScale);
                 // Vertically center media in the available space below the header.
-                const centerTop = headerH + infoBarH + Math.max(0, Math.round((availH - scaledH) / 2));
+                // +1 ensures the info bar (positioned above the wrapper via bottom:100%)
+                // doesn't touch/overlap the header's bottom border.
+                const centerTop = headerH + infoBarH + 1 + Math.max(0, Math.round((availH - scaledH) / 2));
                 const centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
 
                 // Pan is applied to the wrapper position directly (not as a media transform)
