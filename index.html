@@ -32,7 +32,7 @@
         .header {
             padding: 8px 20px;
             background: #2a2a2a;
-            border-bottom: 2px solid #444;
+            border-bottom: 1px solid #444;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -356,6 +356,8 @@
         .overlay-container {
             width: 100%;
             height: 100%;
+            padding: 2px;
+            box-sizing: border-box;
             position: relative;
             display: flex;
             align-items: center;
@@ -479,6 +481,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
+            row-gap: 2px;
             height: calc(100vh - 39px);
             overflow: hidden;
             align-items: stretch;
@@ -490,7 +493,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             grid-template-rows: 1fr;
-            column-gap: 12px;
+            column-gap: 16px;
             height: calc(100vh - 39px);
             overflow: hidden;
             align-items: stretch;
@@ -728,7 +731,6 @@
             color: #fff;
             margin: 16px 0 6px;
             padding-bottom: 4px;
-            border-bottom: 1px solid #2a2a2a;
         }
         .manual-content h2:first-child { margin-top: 4px; }
         .manual-content p { margin: 0 0 8px; color: #aaa; }
@@ -749,13 +751,11 @@
             text-align: left;
             padding: 4px 8px;
             color: #888;
-            border-bottom: 1px solid #2a2a2a;
             font-weight: 600;
         }
         .manual-content td {
             padding: 4px 8px;
             color: #aaa;
-            border-bottom: 1px solid #222;
         }
         .manual-content th:first-child,
         .manual-content td:first-child {
@@ -1659,6 +1659,10 @@
                 mediaContainer.appendChild(videoWrapper);
 
                 layer.appendChild(mediaContainer);
+
+                // Hide layer until checkAllLoaded() triggers the staggered fade-in.
+                // This prevents videos (and images) from flashing before layout is ready.
+                layer.style.opacity = '0';
 
                 // NOTE: checkAllLoaded() is NOT called here. It is called from the
                 // img.load / video.loadedmetadata callbacks instead, after naturalWidth /
@@ -2600,6 +2604,21 @@
             });
         }
 
+        function stepFrame(direction) {
+            const videos = getAllVideos();
+            if (videos.length === 0) return;
+            // Pause all videos first — frame stepping only makes sense when paused
+            videos.forEach(v => { if (!v.paused) v.pause(); });
+            videos.forEach(v => {
+                const fps = videoFrameRates[v.src] || 30;
+                const frameDuration = 1 / fps;
+                v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + direction * frameDuration));
+            });
+            // Update progress display from the first video
+            const primary = videos[0];
+            if (primary) updateVideoProgressFromTime(primary, primary.currentTime);
+        }
+
         let isSplitMode = false;
         let viewActivating = false;    // true while checkAllLoaded() activation is in progress for current load batch
         let pendingViewActivation = false; // true when fps queue is still draining at the time checkAllLoaded() first completes
@@ -2764,15 +2783,18 @@
                         // For tripartite-rows, clamp so the total group height fits the
                         // combined container height. Per-cell clamping would leave each
                         // image tiny with large gaps; group clamping lets them tile tightly.
-                        let totalProjH = 0, totalAvailH = 0;
+                        let totalProjH = 0, totalAvailH = 0, rowSlotCount = 0;
                         slots.forEach(slot => {
                             const d = tripartiteLayout[slot];
                             if (!d) return;
+                            rowSlotCount++;
                             if (minW > 0) totalProjH += minW * d.nh / d.nw;
                             totalAvailH += d.ch - d.ibH;
                             if (minW > 0) maxAllowed = Math.min(maxAllowed, d.cw / minW);
                         });
-                        if (totalProjH > 0) maxAllowed = Math.min(maxAllowed, totalAvailH / totalProjH);
+                        // Subtract inter-row gap space (2px between each pair)
+                        const rowGaps = Math.max(0, rowSlotCount - 1) * 2;
+                        if (totalProjH > 0) maxAllowed = Math.min(maxAllowed, (totalAvailH - rowGaps) / totalProjH);
                     } else {
                         slots.forEach(slot => {
                             const d = tripartiteLayout[slot];
@@ -2814,11 +2836,22 @@
                     }
                 });
 
+                // In L-shaped mode, ensure Edit A and Edit B have identical rendered
+                // width so they align visually. Different native aspect ratios or
+                // rounding can cause slight differences — use the minimum of the two.
+                if (!isEqualLayout && tripartiteLayout['editA'] && tripartiteLayout['editB']) {
+                    const a = tripartiteLayout['editA'];
+                    const b = tripartiteLayout['editB'];
+                    const sharedW = Math.min(a.rw, b.rw);
+                    a.rw = sharedW;
+                    b.rw = sharedW;
+                }
+
                 // Group-centering for equal layouts: cluster images together and center
                 // the group in the viewport, so gaps don't grow between images when zooming out.
                 if (isEqualLayout) {
                     const isColumns = document.body.classList.contains('tripartite-columns');
-                    const gap = isColumns ? 12 : 0; // columns: 12px horizontal gap; rows: info bars provide separation
+                    const gap = isColumns ? 16 : 2; // columns: 16px horizontal gap; rows: 2px vertical gap
                     const loadedSlots = slots.filter(s => tripartiteLayout[s]);
                     if (isColumns && loadedSlots.length > 0) {
                         // Total rendered width of all images + gaps between them
@@ -3063,11 +3096,14 @@
                         } else {
                             ty = td.ibH || 0; // flush top, below the info bar
                         }
-                        // Original: flush right with 8px gap; A/B: flush left with 8px gap.
+                        // Original: flush right with 8px gap from centre; A/B: flush left with 8px gap.
                         // 16px total between the centre column edges, matching compare mode.
-                        tx = slot === 'original'
-                            ? Math.round(td.cw - td.rw) - 8
-                            : 8;
+                        // Clamp so images don't extend past the outer edge of their cell.
+                        if (slot === 'original') {
+                            tx = Math.max(0, Math.round(td.cw - td.rw) - 8);
+                        } else {
+                            tx = Math.min(8, Math.round(td.cw - td.rw));
+                        }
                     }
 
                     videoWrapper.style.position = '';
@@ -3802,6 +3838,12 @@
                 } else {
                     setViewMode(layoutMode);
                 }
+            } else if (e.key === ',') {
+                e.preventDefault();
+                stepFrame(-1);
+            } else if (e.key === '.') {
+                e.preventDefault();
+                stepFrame(1);
             } else if (e.key === 'c' || e.key === 'C') {
                 // C key toggles compare mode depending on asset count.
                 e.preventDefault();
@@ -3934,6 +3976,8 @@
                 <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
                 <tr><td><kbd>R</kbd></td><td>Restart from beginning</td></tr>
                 <tr><td><kbd>M</kbd></td><td>Mute / Unmute</td></tr>
+                <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
+                <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
             </table>
             <p>Only one audio track plays at a time. If the active source is muted, audio automatically switches to the next unmuted source.</p>
 
@@ -3953,6 +3997,8 @@
                 <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
                 <tr><td><kbd>R</kbd></td><td>Restart</td></tr>
                 <tr><td><kbd>M</kbd></td><td>Mute</td></tr>
+                <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
+                <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
                 <tr><td><kbd>K</kbd></td><td>Toggle shortcuts panel</td></tr>
             </table>
 
@@ -3984,7 +4030,7 @@
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>C</kbd></span><span class="shortcut-desc">Toggle compare mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">Toggle 3-UP layout</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">Toggle 3-up layout</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>
@@ -3992,6 +4038,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>1</kbd></span><span class="shortcut-desc">Zoom to 100%</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>,</kbd> <kbd>.</kbd></span><span class="shortcut-desc">Frame back / forward</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
             <hr class="shortcut-divider">
