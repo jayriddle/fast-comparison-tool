@@ -455,7 +455,7 @@
 
         /* Horizontal split: layer height */
         body.side-by-side .overlay-layer {
-            height: calc(100vh - 50px);
+            height: calc(100vh - 39px);
         }
 
         body.side-by-side .overlay-container {
@@ -471,7 +471,7 @@
         body.vertical-stack .overlay-layer {
             position: relative !important;
             width: 100%;
-            height: calc((100vh - 80px) / 3);
+            height: calc((100vh - 39px) / 3);
             display: block;
             margin-bottom: 0;
             overflow: hidden;
@@ -479,14 +479,13 @@
 
         /* 2-asset vertical: divide by 2 not 3 */
         body.vertical-stack.two-asset .overlay-layer {
-            height: calc((100vh - 70px) / 2);
+            height: calc((100vh - 39px) / 2);
         }
 
         body.vertical-stack .overlay-container {
             white-space: normal;
             overflow-y: visible;
             display: block;
-            padding-bottom: 20px;
         }
 
         /* Tripartite: Original left-half, Edit A top-right, Edit B bottom-right */
@@ -2374,13 +2373,7 @@
 
         function zoomIn() {
             if (isSplitMode) {
-                // Cap at 1.0: fit-to-viewport is the maximum for split modes.
-                // Going larger causes clipping with no pan to recover, so we stop at fit.
-                if (splitStepZoom >= 1.0) {
-                    showToast('Zoom limit reached');
-                    return;
-                }
-                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, 1.0);
+                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, ZOOM_MAX);
                 positionLabelsToMedia();
                 return;
             }
@@ -3033,7 +3026,8 @@
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
                     // offsetX is relative to each cell's own origin (cell i starts at i * containerW)
                     offsetX = groupLeft + slotIdx * (renderedW + gap) - slotIdx * containerW;
-                    offsetY = ibReserve + (fitH - renderedH) / 2;
+                    // Top-align: info bar at top, video below it, extra space at bottom.
+                    offsetY = ibReserve;
                 } else {
                     // Vertical-stack / tripartite / fallback: contain-fit per cell.
                     if (isVertical && verticalSharedScale !== null && verticalRefLong > 0) {
@@ -3060,8 +3054,8 @@
                         renderedH = naturalHeight * scale * splitStepZoom;
                     }
                     offsetX = (containerW - renderedW) / 2;
-                    // Center within the video area (below the reserved info-bar strip)
-                    offsetY = ibReserve + (fitH - renderedH) / 2;
+                    // Top-align: info bar at top, video below it, extra space at bottom.
+                    offsetY = ibReserve;
                     // Record for vertical-stack group-centering pass below
                     if (isVertical) slotRenderedH[slot] = Math.round(renderedH);
                 }
