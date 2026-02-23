@@ -480,7 +480,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
-            height: calc(100vh - 50px);
+            height: calc(100vh - 39px);
             overflow: hidden;
             align-items: stretch;
             justify-items: stretch;
@@ -492,7 +492,7 @@
             grid-template-columns: 1fr 1fr 1fr;
             grid-template-rows: 1fr;
             column-gap: 12px;
-            height: calc(100vh - 50px);
+            height: calc(100vh - 39px);
             overflow: hidden;
             align-items: stretch;
             justify-items: stretch;
@@ -505,7 +505,7 @@
             display: grid;
             grid-template-columns: 1fr;
             grid-template-rows: 1fr 1fr 1fr;
-            height: calc(100vh - 50px);
+            height: calc(100vh - 39px);
             overflow: hidden;
             align-items: stretch;
             justify-items: stretch;
@@ -523,7 +523,7 @@
             display: block !important;
             align-items: unset !important;
             justify-content: unset !important;
-            overflow: hidden;
+            overflow: visible;
         }
 
         body.tripartite .media-container,
@@ -534,6 +534,7 @@
             left: 0 !important;
             width: 100% !important;
             height: 100% !important;
+            overflow: visible !important;
         }
 
         /* In all split modes the video-wrapper is JS-sized to exact rendered bounds.
@@ -852,7 +853,7 @@
             bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.55);
             padding: 8px 16px;
             border-radius: 6px;
             z-index: 100;
@@ -2663,6 +2664,12 @@
                                   document.body.classList.contains('tripartite-rows');
             const isOverlay = !isSplitMode && !isVertical;
 
+            // Reset video controls position when not in vertical-stack (CSS takes over)
+            if (!isVertical) {
+                const controls = document.querySelector('.video-controls');
+                if (controls) controls.style.bottom = '';
+            }
+
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
             // center the group. Clear those overrides first so offsetHeight reads CSS values.
             if (isVertical) {
@@ -2790,6 +2797,52 @@
                         d.sharedZoom = d.rh / d.nh;
                     }
                 });
+
+                // Group-centering for equal layouts: cluster images together and center
+                // the group in the viewport, so gaps don't grow between images when zooming out.
+                if (isEqualLayout) {
+                    const isColumns = document.body.classList.contains('tripartite-columns');
+                    const gap = 12; // px between images in the group
+                    const loadedSlots = slots.filter(s => tripartiteLayout[s]);
+                    if (isColumns && loadedSlots.length > 0) {
+                        // Total rendered width of all images + gaps between them
+                        const totalGroupW = loadedSlots.reduce((sum, s) => sum + Math.round(tripartiteLayout[s].rw), 0)
+                            + (loadedSlots.length - 1) * gap;
+                        // Total container width = sum of cell widths + CSS column-gaps
+                        const totalContainerW = loadedSlots.reduce((sum, s) => sum + tripartiteLayout[s].cw, 0)
+                            + (loadedSlots.length - 1) * gap;
+                        // Where the group should start (in container coordinates)
+                        const groupStartX = Math.round((totalContainerW - totalGroupW) / 2);
+                        // Walk through cells and compute each image's tx within its cell
+                        let cellLeftEdge = 0;
+                        let imgX = groupStartX;
+                        loadedSlots.forEach(s => {
+                            const d = tripartiteLayout[s];
+                            d._tx = imgX - cellLeftEdge;
+                            // Vertically center the image in its cell
+                            d._ty = Math.round((d.ch - d.rh) / 2);
+                            imgX += Math.round(d.rw) + gap;
+                            cellLeftEdge += d.cw + gap;
+                        });
+                    } else if (!isColumns && loadedSlots.length > 0) {
+                        // tripartite-rows: cluster vertically, center the group
+                        const totalGroupH = loadedSlots.reduce((sum, s) => {
+                            const d = tripartiteLayout[s];
+                            return sum + d.ibH + Math.round(d.rh);
+                        }, 0) + (loadedSlots.length - 1) * gap;
+                        const totalContainerH = loadedSlots.reduce((sum, s) => sum + tripartiteLayout[s].ch, 0);
+                        const groupStartY = Math.max(0, Math.round((totalContainerH - totalGroupH) / 2));
+                        let cellTopEdge = 0;
+                        let imgY = groupStartY;
+                        loadedSlots.forEach(s => {
+                            const d = tripartiteLayout[s];
+                            d._ty = imgY - cellTopEdge + d.ibH;
+                            d._tx = Math.round((d.cw - d.rw) / 2);
+                            imgY += d.ibH + Math.round(d.rh) + gap;
+                            cellTopEdge += d.ch;
+                        });
+                    }
+                }
             }
 
             // Horizontal compare pre-pass: scale all assets so their longest side matches
@@ -2933,8 +2986,8 @@
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
                     // offsetX is relative to each cell's own origin (cell i starts at i * containerW)
                     offsetX = groupLeft + slotIdx * (renderedW + gap) - slotIdx * containerW;
-                    // Top-align: info bar at top, video below it, extra space at bottom.
-                    offsetY = ibReserve;
+                    // Vertically center the image in the available space.
+                    offsetY = Math.round((fitH - renderedH) / 2);
                 } else {
                     // Vertical-stack / tripartite / fallback: contain-fit per cell.
                     if (isVertical && verticalSharedScale !== null && verticalRefLong > 0) {
@@ -2978,9 +3031,9 @@
                     let ty, tx;
                     if (isEqualLayout) {
                         // Equal layout (tripartite-columns / tripartite-rows):
-                        // reserve info-bar height at top, center video in remaining space.
-                        tx = Math.round((td.cw - td.rw) / 2);
-                        ty = td.ibH + Math.round(((td.ch - td.ibH) - td.rh) / 2);
+                        // Use group-centered positions computed in the pre-pass.
+                        tx = td._tx !== undefined ? td._tx : Math.round((td.cw - td.rw) / 2);
+                        ty = td._ty !== undefined ? td._ty : td.ibH;
                     } else {
                         // L-shaped layout (tripartite):
                         // Original: vertically centered in its full-height cell.
@@ -3048,42 +3101,70 @@
 
             // Group-centering pass for vertical-stack: shrink each layer to its content height
             // (info-bar + video) and vertically center the whole group in the viewport.
-            // Runs whenever zoom is active so zoomed assets stay together as a unit.
-            if (isVertical && Object.keys(slotRenderedH).length > 0 &&
-                    (splitZoomLevel === 1 || splitStepZoom !== 1.0)) {
+            // Always runs so landscape videos don't have gaps between them.
+            if (isVertical && Object.keys(slotRenderedH).length > 0) {
                 const headerEl = getHeaderEl();
                 const headerH = headerEl ? headerEl.offsetHeight : 39;
                 const availH = window.innerHeight - headerH;
                 const loadedSlots = slots.filter(s => slotRenderedH[s] !== undefined);
 
-                // Compute total height: each cell = ibH + renderedVideoH
-                let totalH = 0;
+                // Compute total content height and total info bar height
+                let totalVideoH = 0;
+                let totalIbH = 0;
+                const slotIbH = {};
                 loadedSlots.forEach(slot => {
                     const layer = getLayer(slot);
                     const mediaContainer = layer ? layer.querySelector('.media-container') : null;
                     const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
                     const ibH = ib ? (ib._cachedH || (ib._cachedH = ib.offsetHeight || 28)) : 0;
-                    totalH += ibH + slotRenderedH[slot];
+                    slotIbH[slot] = ibH;
+                    totalIbH += ibH;
+                    totalVideoH += slotRenderedH[slot];
                 });
-                const topPad = Math.round((availH - totalH) / 2); // can be negative when zoomed in
+                const totalH = totalIbH + totalVideoH;
 
-                // Apply per-slot: shrink layer to ibReserve + video height; video stays at ibReserve
+                // At default fit zoom, scale up the group to fill the viewport height.
+                // This eliminates the gap at the bottom for landscape videos whose width
+                // constrains before height, leaving unused vertical space in each cell.
+                let fillScale = 1;
+                if (splitStepZoom === 1.0 && splitZoomLevel !== 1 && totalH < availH && totalVideoH > 0) {
+                    fillScale = (availH - totalIbH) / totalVideoH;
+                }
+
+                // Apply per-slot: shrink layer to ibReserve + scaled video height
                 loadedSlots.forEach(slot => {
                     const layer = getLayer(slot);
                     if (!layer) return;
                     const mediaContainer = layer.querySelector('.media-container');
                     const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
-                    const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
-                    const ibH = ib ? (ib._cachedH || 28) : 0;
-                    layer.style.height = (ibH + slotRenderedH[slot]) + 'px';
-                    // Video positioned below the bar strip; bar follows via CSS (bottom:100%)
-                    if (videoWrapper) videoWrapper.style.top = ibH + 'px';
+                    const ibH = slotIbH[slot] || 0;
+                    const scaledH = Math.round(slotRenderedH[slot] * fillScale);
+                    const scaledW = Math.round((slotRenderedH[slot] > 0 ? scaledH / slotRenderedH[slot] : 1) * parseFloat(videoWrapper?.style.width || 0));
+                    layer.style.height = (ibH + scaledH) + 'px';
+                    if (videoWrapper) {
+                        videoWrapper.style.top = ibH + 'px';
+                        videoWrapper.style.height = scaledH + 'px';
+                        videoWrapper.style.width = scaledW + 'px';
+                        // Re-center horizontally after width change
+                        const containerW = mediaContainer.offsetWidth;
+                        videoWrapper.style.left = Math.round((containerW - scaledW) / 2) + 'px';
+                    }
                 });
 
-                // Shift the first layer down (or up, if negative) to center the group
+                // Vertically center the group in the viewport
+                const scaledTotalH = totalIbH + Math.round(totalVideoH * fillScale);
+                const topPad = Math.max(0, Math.round((availH - scaledTotalH) / 2));
                 const firstSlot = loadedSlots[0];
                 const firstLayer = getLayer(firstSlot);
                 if (firstLayer) firstLayer.style.marginTop = topPad + 'px';
+
+                // Position video controls below the video group
+                const controls = document.querySelector('.video-controls');
+                if (controls) {
+                    const groupBottom = topPad + scaledTotalH + headerH;
+                    const bottomGap = window.innerHeight - groupBottom;
+                    controls.style.bottom = Math.max(8, Math.round(bottomGap / 2)) + 'px';
+                }
             }
 
             // If any loaded slot had a zero-dimension container (layout not yet committed),
@@ -3135,6 +3216,8 @@
 
                     // Clear inline styles set by positionLabelsToMedia() so CSS takes over in overlay mode
                     document.querySelectorAll('.video-wrapper').forEach(clearVideoWrapperStyles);
+                    const controls = document.querySelector('.video-controls');
+                    if (controls) controls.style.bottom = '';
                     // Reset audio mute states and button icons when leaving split view
                     assetOrder.forEach(slot => {
                         audioMuteStates[slot] = false;
@@ -3162,8 +3245,13 @@
                 const targetMode = mode;
                 const loadedSlotCount = getLoadedSlotCount();
 
-                splitZoomLevel = null;
-                splitStepZoom = 1.0;
+                // Preserve zoom when toggling between tripartite sub-layouts (L-shaped <-> equal)
+                const wasTripartite = isTripartiteMode();
+                const isTripartiteSwitch = wasTripartite && targetMode === 'tripartite';
+                if (!isTripartiteSwitch) {
+                    splitZoomLevel = null;
+                    splitStepZoom = 1.0;
+                }
                 if (!isSplitMode) {
                     isSplitMode = true;
                     selectAudioSource(currentAudioSource);
