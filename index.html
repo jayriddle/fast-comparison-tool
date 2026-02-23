@@ -905,14 +905,14 @@
         }
 
         .video-controls {
-            position: absolute;
+            position: fixed;
             bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.9);
             padding: 8px 16px;
             border-radius: 6px;
-            z-index: 10;
+            z-index: 100;
             display: none;
             min-width: 600px;
             max-width: 90vw;
@@ -928,12 +928,7 @@
         body.tripartite .video-controls,
         body.tripartite-columns .video-controls,
         body.tripartite-rows .video-controls {
-            position: fixed;
             bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: 90vw;
-            z-index: 100;
         }
 
         .video-controls-row {
@@ -2418,6 +2413,8 @@
         function resetFitZoom() {
             if (isSplitMode) {
                 splitStepZoom = 1.0;
+                splitZoomLevel = null;
+                document.body.classList.remove('zoom-100');
                 positionLabelsToMedia();
                 return;
             }
@@ -3877,6 +3874,8 @@
             get isSplitMode() { return isSplitMode; },
             get panOffsetX() { return panOffsetX; },
             get panOffsetY() { return panOffsetY; },
+            get splitZoomLevel() { return splitZoomLevel; },
+            get splitStepZoom() { return splitStepZoom; },
         };
 
     </script>
