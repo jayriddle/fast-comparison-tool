@@ -293,10 +293,9 @@
         }
 
         .quick-start-popup {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            margin-top: 6px;
+            position: fixed;
+            top: 45px;
+            left: 20px;
             background: #242424;
             border: 1px solid #3a3a3a;
             border-radius: 6px;
@@ -1153,7 +1152,7 @@
     <div class="container">
         <div class="header">
             <div style="position: relative; display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 16px; font-weight: 600;"><i>Warp</i>Diff</span><span id="appVersion" style="font-size: 11px; color: #666; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
+                <span style="font-size: 16px; font-weight: 600;"><i>Warp</i>Diff</span><span id="appVersion" style="font-size: 11px; color: #888; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
                 <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 2–3 files to compare (or press L)" style="margin-left: 16px;">
                     Load
                     <div class="help-tooltip">Select 2–3 files to compare (auto-sorts by save time). Shortcut: L</div>
@@ -3937,6 +3936,7 @@
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
         <div class="shortcuts-list">
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Toggle overlay mode</span></div>
@@ -3952,7 +3952,6 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
             <hr class="shortcut-divider">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
         </div>
     </div>
