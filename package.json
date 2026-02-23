@@ -1,0 +1,25 @@
+{
+  "name": "warpdiff",
+  "version": "1.0.0",
+  "description": "A browser-based visual comparison tool for reviewing 2–3 versions of images or videos side-by-side, stacked, or in overlay mode.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jayriddle/warpdiff.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jayriddle/warpdiff/issues"
+  },
+  "homepage": "https://github.com/jayriddle/warpdiff#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "serve": "^14.2.5"
+  }
+}

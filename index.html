@@ -311,6 +311,16 @@
             display: block;
         }
 
+        .feedback-link {
+            font-size: 11px;
+            color: #888;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+        }
+        .feedback-link:hover { color: #ccc; }
+
         .quick-start-overlay {
             display: none;
         }
@@ -393,9 +403,12 @@
             object-fit: contain;
         }
 
-        /* Info bar: JS positions it per mode (above video in overlay/horizontal, left in vertical) */
-        .media-container > .asset-info-bar {
+        /* Info bar: CSS child of video-wrapper, always flush above it via bottom:100% */
+        .video-wrapper > .asset-info-bar {
             position: absolute;
+            bottom: 100%;
+            left: 0;
+            width: 100%;
         }
 
         /* In overlay mode, only show info bar and zoom for the active layer */
@@ -703,8 +716,9 @@
             height: auto;
         }
 
-        /* Keyboard shortcuts slide-in panel */
-        .shortcuts-backdrop {
+        /* Keyboard shortcuts and manual panels */
+        .shortcuts-backdrop,
+        .manual-backdrop {
             position: fixed;
             inset: 0;
             background: rgba(0, 0, 0, 0.3);
@@ -714,12 +728,14 @@
             transition: opacity 0.15s ease;
         }
 
-        .shortcuts-backdrop.open {
+        .shortcuts-backdrop.open,
+        .manual-backdrop.open {
             opacity: 1;
             pointer-events: auto;
         }
 
-        .shortcuts-panel {
+        .shortcuts-panel,
+        .manual-panel {
             position: fixed;
             top: 50%;
             left: 50%;
@@ -739,11 +755,72 @@
             transition: opacity 0.15s ease, transform 0.15s ease;
         }
 
-        .shortcuts-panel.open {
+        .shortcuts-panel.open,
+        .manual-panel.open {
             opacity: 1;
             pointer-events: auto;
             transform: translate(-50%, -50%) scale(1);
         }
+
+        .manual-panel { width: 520px; }
+
+        .manual-content {
+            padding: 14px 18px;
+            overflow-y: auto;
+            flex: 1;
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.6;
+        }
+        .manual-content h2 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            margin: 16px 0 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .manual-content h2:first-child { margin-top: 4px; }
+        .manual-content p { margin: 0 0 8px; color: #aaa; }
+        .manual-content ul, .manual-content ol {
+            margin: 0 0 8px;
+            padding-left: 18px;
+            color: #aaa;
+        }
+        .manual-content li { margin-bottom: 3px; }
+        .manual-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 6px 0 10px;
+            font-size: 12px;
+            table-layout: fixed;
+        }
+        .manual-content th {
+            text-align: left;
+            padding: 4px 8px;
+            color: #888;
+            border-bottom: 1px solid #2a2a2a;
+            font-weight: 600;
+        }
+        .manual-content td {
+            padding: 4px 8px;
+            color: #aaa;
+            border-bottom: 1px solid #222;
+        }
+        .manual-content th:first-child,
+        .manual-content td:first-child {
+            width: 150px;
+        }
+        .manual-content kbd {
+            background: #333;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #bbb;
+            border: 1px solid #444;
+        }
+        .manual-content strong { color: #ddd; }
 
         .shortcuts-panel-header {
             display: flex;
@@ -864,6 +941,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 12px;
             font-weight: 600;
+            font-variant-numeric: tabular-nums;
             color: rgb(160, 160, 160);
             cursor: pointer;
             user-select: none;
@@ -1149,7 +1227,7 @@
                 <!-- Help Popup -->
                 <div class="quick-start-popup" id="quickStartPopup">
                     <button class="quick-start-close" onclick="toggleQuickStart()">✕</button>
-                    <p style="margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #aaa; text-transform: uppercase;">Help</p>
+                    <p style="margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #aaa; text-transform: uppercase;">Quick Start</p>
                     <ol style="margin: 0; padding-left: 18px; font-size: 13px; color: #ccc; line-height: 1.7;">
                         <li>Export your files in order: Original, A, B</li>
                         <li>Select 2–3 files and drop onto this window, or press <kbd>L</kbd>
@@ -1164,6 +1242,11 @@
                         <li>Press <kbd>Space</kbd> to play/pause videos</li>
                         <li>Press <kbd>K</kbd> for all hotkeys</li>
                     </ol>
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 6px;">
+                        <a class="feedback-link" onclick="toggleQuickStart(); toggleManualPanel();" style="cursor: pointer;">Manual</a>
+                        <a href="https://forms.gle/oob2qL4feRGcBFfZ9"
+                           target="_blank" class="feedback-link">Submit bugs and feedback</a>
+                    </div>
                 </div>
             </div>
             <!-- Mode strip: OVERLAY / 3-UP / COMPARE — tappable, active one highlighted -->
@@ -1187,6 +1270,7 @@
                         <span class="asset-name">ORIGINAL</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1196,6 +1280,7 @@
                         <span class="asset-name">EDIT A</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1205,6 +1290,7 @@
                         <span class="asset-name">EDIT B</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     </div>
                 </div>
@@ -1349,9 +1435,8 @@
 
         // Cached pan targets: set in handlePanStart, reused every mousemove in
         // handlePanMove and clampPanOffsets without re-querying the DOM.
-        let _panVw        = null; // active .video-wrapper during pan
-        let _panInfoBar   = null; // active .asset-info-bar during pan
-        let _panLayer     = null; // active .overlay-layer during pan
+        let _panVw    = null; // active .video-wrapper during pan
+        let _panLayer = null; // active .overlay-layer during pan
 
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
@@ -1540,6 +1625,7 @@
                         <span class="asset-name">${slotLabel}</span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
                         <span class="asset-duration">-</span>
                     `;
                 }
@@ -1553,10 +1639,10 @@
 
                 // Build the asset structure:
                 //   media-container (position:relative, fills layer)
-                //     ├── asset-info-bar  ← JS-positioned per mode
                 //     └── video-wrapper   ← JS-sized to exact rendered video bounds
                 //           ├── video/img
-                //           └── split-zoom-indicator  ← always bottom-right of wrapper
+                //           ├── split-zoom-indicator  ← always bottom-right of wrapper
+                //           └── asset-info-bar        ← CSS-positioned flush above (bottom:100%)
 
                 const videoWrapper = document.createElement('div');
                 videoWrapper.className = 'video-wrapper';
@@ -1568,8 +1654,8 @@
                 // Zoom indicator lives inside the wrapper — always at bottom-right of video bounds
                 videoWrapper.appendChild(zoomIndicator);
 
-                // Info bar is a sibling of video-wrapper — JS positions it per mode
-                mediaContainer.appendChild(infoBar);
+                // Info bar lives inside video-wrapper — CSS positions it flush above via bottom:100%
+                videoWrapper.appendChild(infoBar);
                 mediaContainer.appendChild(videoWrapper);
 
                 layer.appendChild(mediaContainer);
@@ -1588,35 +1674,43 @@
             const resolution = `${width}×${height}`;
             const ratio = width / height;
             const standardRatios = [
-                { value: 16/9, label: '16:9' },
-                { value: 9/16, label: '9:16' },
-                { value: 4/3, label: '4:3' },
-                { value: 3/4, label: '3:4' },
-                { value: 3/2, label: '3:2' },
-                { value: 2/3, label: '2:3' },
-                { value: 1.85, label: '1.85:1' },
-                { value: 2.39, label: '2.39:1' },
-                { value: 21/9, label: '21:9' },
-                { value: 1, label: '1:1' }
+                { value: 16/9,  label: '16:9' },
+                { value: 9/16,  label: '9:16' },
+                { value: 4/3,   label: '4:3' },
+                { value: 3/4,   label: '3:4' },
+                { value: 3/2,   label: '3:2' },
+                { value: 2/3,   label: '2:3' },
+                { value: 4/5,   label: '4:5' },
+                { value: 5/4,   label: '5:4' },
+                { value: 2/1,   label: '2:1' },
+                { value: 1/2,   label: '1:2' },
+                { value: 1.85,  label: '1.85:1' },
+                { value: 2.39,  label: '2.39:1' },
+                { value: 21/9,  label: '21:9' },
+                { value: 1,     label: '1:1' }
             ];
 
             // Find closest standard ratio (within 1% tolerance)
             let aspectRatio = `${ratio.toFixed(2)}:1`;
+            let nonStandardAspect = true;
             for (const std of standardRatios) {
                 if (Math.abs(ratio - std.value) / std.value < 0.01) {
                     aspectRatio = std.label;
+                    nonStandardAspect = false;
                     break;
                 }
             }
 
-            updateAssetInfoBar(slot, { resolution, aspectRatio });
+            updateAssetInfoBar(slot, { resolution, aspectRatio, nonStandardAspect });
         }
 
-        function updateDurationDisplay(slot, duration) {
+        function updateDurationDisplay(slot, duration, fps) {
             if (!duration) return;
             const minutes = Math.floor(duration / 60);
             const seconds = Math.floor(duration % 60);
-            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            const useFps = fps || 30;
+            const frames = Math.floor((duration % 1) * useFps);
+            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
@@ -1636,7 +1730,16 @@
             // Update aspect ratio
             if (data.aspectRatio) {
                 const aspectElement = infoBar.querySelector('.asset-aspect');
-                if (aspectElement) aspectElement.textContent = data.aspectRatio;
+                if (aspectElement) {
+                    aspectElement.textContent = data.aspectRatio;
+                    aspectElement.style.color = data.nonStandardAspect ? '#c8932a' : '';
+                }
+            }
+
+            // Update fps
+            if (data.fps !== undefined) {
+                const fpsElement = infoBar.querySelector('.asset-fps');
+                if (fpsElement) fpsElement.textContent = data.fps;
             }
 
             // Update duration
@@ -1690,16 +1793,82 @@
             }
         }
 
+        // Serial fps detection queue — samples one video at a time to prevent
+        // play/pause sync from triggering on other videos during sampling.
+        const fpsDetectionQueue = [];
+
+        function drainFpsQueue() {
+            if (fpsDetectionQueue.length === 0) return;
+            const { video, slot } = fpsDetectionQueue[0];
+
+            const SAMPLE_COUNT = 10;
+            const standardRates = [23.976, 24, 25, 29.97, 30, 48, 59.94, 60];
+
+            function finalize(snapped) {
+                videoFrameRates[video.src] = snapped;
+                updateAssetInfoBar(slot, { fps: `${snapped} fps` });
+                updateDurationDisplay(slot, video.duration, snapped);
+                fpsDetectionQueue.shift();
+                drainFpsQueue(); // process next in queue
+                // If view activation was deferred waiting for fps, trigger it now
+                if (fpsDetectionQueue.length === 0 && pendingViewActivation) {
+                    pendingViewActivation = false;
+                    checkAllLoaded();
+                }
+            }
+
+            if (typeof video.requestVideoFrameCallback !== 'function') {
+                finalize(30);
+                return;
+            }
+
+            const timestamps = [];
+            // Suppress sync handlers during sampling playback
+            video._samplingFps = true;
+            const prevMuted = video.muted;
+            video.muted = true;
+
+            function onFrame(now, metadata) {
+                timestamps.push(metadata.mediaTime);
+                if (timestamps.length <= SAMPLE_COUNT) {
+                    video.requestVideoFrameCallback(onFrame);
+                } else {
+                    // Done sampling — compute fps
+                    let total = 0;
+                    for (let i = 1; i < timestamps.length; i++) total += timestamps[i] - timestamps[i - 1];
+                    const rawFps = 1 / (total / SAMPLE_COUNT);
+                    const snapped = standardRates.reduce((a, b) =>
+                        Math.abs(b - rawFps) < Math.abs(a - rawFps) ? b : a);
+
+                    video._samplingFps = false;
+                    video.pause();
+                    video.currentTime = 0;
+                    video.muted = prevMuted;
+                    finalize(snapped);
+                }
+            }
+
+            video.play().then(() => {
+                video.requestVideoFrameCallback(onFrame);
+            }).catch(() => {
+                video._samplingFps = false;
+                video.muted = prevMuted;
+                finalize(30);
+            });
+        }
+
         function setupVideoHandlers(video, slot) {
             // Enable native looping
             video.loop = true;
-            
-            // Detect framerate from video metadata
-            video.addEventListener('loadedmetadata', function() {
-                videoFrameRates[video.src] = 30;
-            });
+
+            // Queue fps sampling so only one video samples at a time,
+            // preventing play/pause sync from interfering across videos.
+            fpsDetectionQueue.push({ video, slot });
+            if (fpsDetectionQueue.length === 1) drainFpsQueue();
             
             video.addEventListener('play', function() {
+                // Suppress sync while any video is being sampled for fps
+                if (fpsDetectionQueue.length > 0) return;
                 // Sync all videos when any video plays
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video) {
@@ -1715,6 +1884,8 @@
             });
 
             video.addEventListener('pause', function() {
+                // Suppress sync while any video is being sampled for fps
+                if (fpsDetectionQueue.length > 0) return;
                 // Sync pause to all other videos
                 document.querySelectorAll('video').forEach(v => {
                     if (v !== video && !v.paused) {
@@ -1999,163 +2170,80 @@
             const progressContainer = document.getElementById('videoProgressContainer');
             let isDragging = false;
             let wasPlaying = false;
-            let pendingScrubPct = null; // latest scrub position waiting for next rAF
-            let scrubRafId = null;      // rAF handle for pending seek
 
             // Cached scrub targets — populated at mousedown, zero DOM queries during drag
-            let _scrubVideo = null;       // primary (active) video element
-            let _scrubAllVideos = null;   // all video elements (for sync)
-            let _scrubContainerRect = null; // progress bar bounding rect (stable during drag)
-            let _seekInFlight = false;    // true while the decoder is processing a seek
+            let _scrubVideo = null;
+            let _scrubAllVideos = null;
+            let _scrubContainerRect = null;
 
-            // Seek a single video, preferring fastSeek() for keyframe-level speed.
-            function seekVideo(v, time) {
-                if (v.fastSeek) {
-                    v.fastSeek(time);
-                } else {
-                    v.currentTime = time;
-                }
-            }
+            // Seek all videos to the position under the cursor and update the UI.
+            // Direct synchronous currentTime assignment — no rAF needed; browsers
+            // coalesce rapid seeks internally, and this eliminates races with the
+            // startProgressUpdateLoop rAF which would otherwise override the bar.
+            function scrubToPosition(e) {
+                const rect = _scrubContainerRect;
+                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
 
-            // Flush the pending scrub: seek video(s) and update the UI.
-            // Only fires when the decoder is idle (_seekInFlight === false) so seeks
-            // never queue up inside the browser's media pipeline.
-            // In overlay mode only the active (visible) video is seeked during drag;
-            // hidden videos are synced on mouseup so they don't compete for the decoder.
-            function flushScrub() {
-                scrubRafId = null;
-                if (pendingScrubPct === null) return;
-                if (_seekInFlight) return; // decoder busy — drop stale position, next seeked event will retry
-                const pct = pendingScrubPct;
-                pendingScrubPct = null;
+                // Update bar immediately so it tracks the cursor
+                getProgressEls();
+                if (_elProgressBar) _elProgressBar.style.width = (pct * 100) + '%';
 
                 const video = _scrubVideo;
                 if (!video || isNaN(video.duration)) return;
 
-                // Update the progress bar immediately from mouse position (no seek lag)
-                getProgressEls();
-                if (_elProgressBar) _elProgressBar.style.width = (pct * 100) + '%';
-
-                // Mark seek in-flight; cleared by the 'seeked' event on the primary video
-                _seekInFlight = true;
-
-                // Overlay mode: only seek the visible video during drag — hidden videos
-                // would compete for the decoder and slow down the one you're watching.
-                // Compare/split modes: seek all videos in real time for sync preview.
-                seekVideo(video, pct * video.duration);
-                if (isSplitMode) {
-                    const all = _scrubAllVideos;
-                    if (all) {
-                        for (let i = 0; i < all.length; i++) {
-                            const v = all[i];
-                            if (v !== video) seekVideo(v, pct * v.duration);
-                        }
+                const t = pct * video.duration;
+                video.currentTime = t;
+                if (_scrubAllVideos) {
+                    for (let i = 0; i < _scrubAllVideos.length; i++) {
+                        const v = _scrubAllVideos[i];
+                        if (v !== video && !isNaN(v.duration)) v.currentTime = pct * v.duration;
                     }
                 }
 
-                // Update timecode display from the seek target, not video.currentTime
-                // (currentTime lags until the seek completes)
-                updateVideoProgressFromTime(video, pct * video.duration);
-            }
-
-            function scrubToPosition(e) {
-                const rect = _scrubContainerRect;
-                const clickX = e.clientX - rect.left;
-                pendingScrubPct = Math.max(0, Math.min(1, clickX / rect.width));
-
-                // Immediately update progress bar so it tracks the cursor without waiting
-                getProgressEls();
-                if (_elProgressBar) _elProgressBar.style.width = (pendingScrubPct * 100) + '%';
-
-                // Schedule one flush per animation frame — rapid mousemoves collapse into one seek.
-                // If a seek is already in-flight the rAF will find _seekInFlight=true and drop it;
-                // the 'seeked' handler will schedule a fresh rAF to pick up whatever is pending.
-                if (scrubRafId === null) {
-                    scrubRafId = requestAnimationFrame(flushScrub);
-                }
-            }
-
-            // Called when the primary video finishes a seek — clears the in-flight flag
-            // and immediately schedules another flush if the user moved the scrubber
-            // while the decoder was busy (pendingScrubPct will be non-null in that case).
-            function onScrubSeeked() {
-                _seekInFlight = false;
-                if (isDragging && pendingScrubPct !== null) {
-                    if (scrubRafId === null) {
-                        scrubRafId = requestAnimationFrame(flushScrub);
-                    }
-                }
+                // Update timecode from seek target (currentTime lags until decode completes)
+                updateVideoProgressFromTime(video, t);
             }
 
             progressContainer.addEventListener('mousedown', function(e) {
                 isDragging = true;
-                _seekInFlight = false;
 
-                // Cache all scrub targets once at drag-start — zero DOM queries during drag
+                // Cancel any pending progress-loop frame so it can't override the bar during drag
+                if (globalAnimationId !== null) {
+                    cancelAnimationFrame(globalAnimationId);
+                    globalAnimationId = null;
+                }
+
                 const activeLayer = document.querySelector('.overlay-layer.active');
                 _scrubVideo = activeLayer ? activeLayer.querySelector('video') : null;
+                if (!_scrubVideo) {
+                    const vids = getAllVideos();
+                    if (vids.length > 0) _scrubVideo = vids[0];
+                }
                 _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer video'));
                 _scrubContainerRect = progressContainer.getBoundingClientRect();
 
-                // Listen for seek completion on the primary video to pace the next seek
-                if (_scrubVideo) {
-                    _scrubVideo.addEventListener('seeked', onScrubSeeked);
-                }
-
-                // Pause video during scrubbing for smooth experience
                 if (_scrubVideo) {
                     wasPlaying = !_scrubVideo.paused;
-                    if (wasPlaying) {
-                        pauseAllVideos();
-                    }
+                    if (wasPlaying) pauseAllVideos();
                 }
 
                 scrubToPosition(e);
             });
 
             document.addEventListener('mousemove', function(e) {
-                if (isDragging) {
-                    scrubToPosition(e);
-                }
+                if (isDragging) scrubToPosition(e);
             });
 
             document.addEventListener('mouseup', function(e) {
                 if (isDragging) {
                     isDragging = false;
-                    // Flush any pending scrub so the final position is applied
-                    if (scrubRafId !== null) {
-                        cancelAnimationFrame(scrubRafId);
-                        scrubRafId = null;
-                        flushScrub();
-                    }
+                    if (_scrubContainerRect) scrubToPosition(e); // apply final cursor position
 
-                    // Remove the seeked listener and clear in-flight flag
-                    if (_scrubVideo) {
-                        _scrubVideo.removeEventListener('seeked', onScrubSeeked);
-                    }
-                    _seekInFlight = false;
-
-                    // In overlay mode, hidden videos weren't seeked during drag —
-                    // sync them now to the final position before resuming playback.
-                    if (!isSplitMode && _scrubVideo && _scrubAllVideos) {
-                        const finalPct = _scrubVideo.duration
-                            ? _scrubVideo.currentTime / _scrubVideo.duration
-                            : 0;
-                        for (let i = 0; i < _scrubAllVideos.length; i++) {
-                            const v = _scrubAllVideos[i];
-                            if (v !== _scrubVideo) seekVideo(v, finalPct * v.duration);
-                        }
-                    }
-
-                    // Clear cached scrub targets
                     _scrubVideo = null;
                     _scrubAllVideos = null;
                     _scrubContainerRect = null;
 
-                    // Resume playback if it was playing before
-                    if (wasPlaying) {
-                        playAllVideos();
-                    }
+                    if (wasPlaying) playAllVideos();
                 }
             });
         });
@@ -2273,28 +2361,6 @@
                 const badge = vw.querySelector('.split-zoom-indicator');
                 if (badge) badge.textContent = perAssetScale.toFixed(2) + '×';
 
-                // Position info bar flush above the wrapper.
-                // Store base (un-panned) coords so handlePanMove() can update cheaply.
-                const infoBar = layer.querySelector('.asset-info-bar');
-                if (infoBar) {
-                    // Always read live offsetHeight here (not cached) — the bar height can
-                    // change on first render (font load, initial layout) and a stale cache
-                    // causes the bar to separate from the video's top edge.
-                    const ibH = infoBar.offsetHeight || 28;
-                    infoBar._cachedH = ibH; // update cache for handlePanMove hot path
-                    infoBar.dataset.centerTop = centerTop;
-                    infoBar.dataset.centerLeft = centerLeft;
-                    infoBar.dataset.scaledW = scaledW;
-                    infoBar.dataset.headerH = headerH;
-                    const clampedLeft = Math.max(0, pannedLeft);
-                    infoBar.style.position = 'fixed';
-                    infoBar.style.left = clampedLeft + 'px';
-                    infoBar.style.top = Math.max(headerH, pannedTop - ibH) + 'px';
-                    infoBar.style.width = Math.min(scaledW, window.innerWidth - clampedLeft) + 'px';
-                    infoBar.style.right = '';
-                    infoBar.style.bottom = '';
-                    infoBar.style.height = '';
-                }
             });
         }
 
@@ -2398,11 +2464,10 @@
             panStartX = e.clientX - panOffsetX;
             panStartY = e.clientY - panOffsetY;
             document.getElementById('overlayContainer').classList.add('panning');
-            // Cache the active layer's vw and infoBar so handlePanMove/clampPanOffsets
+            // Cache the active layer's vw so handlePanMove/clampPanOffsets
             // never query the DOM during the hot mousemove path.
-            _panLayer   = document.querySelector('.overlay-layer.active');
-            _panVw      = _panLayer ? _panLayer.querySelector('.video-wrapper') : null;
-            _panInfoBar = _panLayer ? _panLayer.querySelector('.asset-info-bar') : null;
+            _panLayer = document.querySelector('.overlay-layer.active');
+            _panVw    = _panLayer ? _panLayer.querySelector('.video-wrapper') : null;
         }
 
         function handlePanMove(e) {
@@ -2413,7 +2478,8 @@
             panOffsetY = e.clientY - panStartY;
             clampPanOffsets();
 
-            // Move the wrapper using cached refs set in handlePanStart — no DOM queries
+            // Move the wrapper using cached refs set in handlePanStart — no DOM queries.
+            // The info bar is a CSS child (bottom:100%) so it moves with the wrapper for free.
             const vw = _panVw;
             if (vw) {
                 const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
@@ -2421,28 +2487,13 @@
                 vw.style.top  = (centerTop  + panOffsetY) + 'px';
                 vw.style.left = (centerLeft + panOffsetX) + 'px';
             }
-            // Move info bar in lockstep
-            const infoBar = _panInfoBar;
-            if (infoBar) {
-                const ibH = infoBar._cachedH || (infoBar._cachedH = infoBar.offsetHeight || 28);
-                const barCenterTop  = parseFloat(infoBar.dataset.centerTop  || 50);
-                const barCenterLeft = parseFloat(infoBar.dataset.centerLeft || 0);
-                const barW          = parseFloat(infoBar.dataset.scaledW    || infoBar.offsetWidth);
-                const barHeaderH    = parseFloat(infoBar.dataset.headerH    || 50);
-                const pannedTop  = barCenterTop  + panOffsetY;
-                const pannedLeft = barCenterLeft + panOffsetX;
-                const clampedLeft = Math.max(0, pannedLeft);
-                infoBar.style.top   = Math.max(barHeaderH, pannedTop - ibH) + 'px';
-                infoBar.style.left  = clampedLeft + 'px';
-                infoBar.style.width = Math.min(barW, window.innerWidth - clampedLeft) + 'px';
-            }
         }
 
         function handlePanEnd(e) {
             isPanning = false;
-            _panVw = null; _panInfoBar = null; _panLayer = null; // release cached refs
+            _panVw = null; _panLayer = null; // release cached refs
             document.getElementById('overlayContainer').classList.remove('panning');
-            applyZoom(); // re-anchor info bars to the settled pan position
+            applyZoom(); // re-anchor wrapper to the settled pan position
         }
 
         // Clear all loaded media and reset state — called both by resetAll() and at the
@@ -2483,9 +2534,10 @@
             const muteBtn = document.getElementById('muteBtn');
             if (muteBtn) muteBtn.textContent = '🔊';
 
-            // Reset timecode display mode and stale fps cache
+            // Reset timecode display mode, stale fps cache, and sampling queue
             timecodeMode = 'time';
             videoFrameRates = {};
+            fpsDetectionQueue.length = 0;
 
             document.body.classList.remove('fullscreen');
             document.body.classList.remove('side-by-side');
@@ -2496,6 +2548,7 @@
             document.body.classList.remove('two-asset');
             isSplitMode = false;
             viewActivating = false;
+            pendingViewActivation = false;
             layoutMode = 'horizontal';
 
             // Restore all layers to visible for next load
@@ -2592,6 +2645,7 @@
 
         let isSplitMode = false;
         let viewActivating = false;    // true while checkAllLoaded() activation is in progress for current load batch
+        let pendingViewActivation = false; // true when fps queue is still draining at the time checkAllLoaded() first completes
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
         
         function updateSplitViewZoomIndicators() {
@@ -3049,17 +3103,6 @@
                         zoomIndicator.textContent = td.sharedZoom.toFixed(2) + '×';
                     }
 
-                    if (infoBar) {
-                        infoBar.style.position = ''; // clear fixed positioning from overlay mode
-                        const ibH = infoBar.offsetHeight || 28;
-                        infoBar.style.left = tx + 'px';
-                        infoBar.style.width = tw + 'px';
-                        infoBar.style.height = '';
-                        infoBar.style.right = '';
-                        infoBar.style.bottom = '';
-                        // Bar sits flush above the video in all tripartite layouts.
-                        infoBar.style.top = Math.round(Math.max(0, ty - ibH)) + 'px';
-                    }
                     return; // skip the standard positioning below
                 }
 
@@ -3090,19 +3133,6 @@
                     zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
                 }
 
-                // Position the info bar flush above the video, matching its width and x-position.
-                // Clamp top to 0 so the bar never slides up into the header when the video is
-                // centered in a tall cell and offsetY < ibH.
-                if (infoBar) {
-                    infoBar.style.position = ''; // clear fixed positioning from overlay mode
-                    infoBar.style.bottom = '';
-                    infoBar.style.height = '';
-                    infoBar.style.right  = '';
-                    const ibH = infoBar._cachedH = infoBar.offsetHeight || 28;
-                    infoBar.style.left  = Math.round(offsetX) + 'px';
-                    infoBar.style.top   = Math.round(Math.max(0, offsetY - ibH)) + 'px';
-                    infoBar.style.width = Math.round(renderedW) + 'px';
-                }
             });
 
             // Group-centering pass for vertical-stack: shrink each layer to its content height
@@ -3135,10 +3165,8 @@
                     const ib = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
                     const ibH = ib ? (ib._cachedH || 28) : 0;
                     layer.style.height = (ibH + slotRenderedH[slot]) + 'px';
-                    // Video positioned below the bar strip
+                    // Video positioned below the bar strip; bar follows via CSS (bottom:100%)
                     if (videoWrapper) videoWrapper.style.top = ibH + 'px';
-                    // Bar top: main loop already set correct left/width; just pin top to 0
-                    if (ib) ib.style.top = '0px';
                 });
 
                 // Shift the first layer down (or up, if negative) to center the group
@@ -3214,16 +3242,6 @@
                         vw.style.top = '';
                         vw.style.left = '';
                     });
-                    document.querySelectorAll('.asset-info-bar').forEach(bar => {
-                        bar.style.position = '';
-                        bar.style.top = '';
-                        bar.style.left = '';
-                        bar.style.width = '';
-                        bar.style.right = '';
-                        bar.style.bottom = '';
-                        bar.style.height = '';
-                    });
-
                     // Reset audio mute states and button icons when leaving split view
                     ['original', 'editA', 'editB'].forEach(slot => {
                         audioMuteStates[slot] = false;
@@ -3322,16 +3340,6 @@
                         });
                     }
                     document.body.classList.toggle('two-asset', loadedSlotCount === 2);
-
-                    document.querySelectorAll('.asset-info-bar').forEach(bar => {
-                        bar.style.position = '';
-                        bar.style.top = '';
-                        bar.style.left = '';
-                        bar.style.width = '';
-                        bar.style.right = '';
-                        bar.style.bottom = '';
-                        bar.style.height = '';
-                    });
 
                     // zoom-indicator bottom/right offsets left by positionLabelsToMedia
                     document.querySelectorAll('.video-wrapper .split-zoom-indicator').forEach(zi => {
@@ -3548,6 +3556,27 @@
             // setViewMode('horizontal') to hide the not-yet-loaded third layer,
             // resulting in a black screen when tripartite mode is set moments later.
             if (loadedCount < expectedFileCount) {
+                return;
+            }
+
+            // Wait until all loaded video slots have non-zero videoWidth — the browser
+            // may not have painted dimensions yet even though loadedmetadata has fired.
+            // Defer with rAF until ready rather than laying out against zero dimensions.
+            const allDimensionsReady = ['original', 'editA', 'editB'].every(s => {
+                if (!mediaData[s] || mediaData[s].type !== 'video') return true;
+                const layer = getLayer(s);
+                const v = layer ? layer.querySelector('video') : null;
+                return v && v.videoWidth > 0;
+            });
+            if (!allDimensionsReady) {
+                requestAnimationFrame(checkAllLoaded);
+                return;
+            }
+
+            // If fps detection is still running, defer view activation until the
+            // queue drains. finalize() will call checkAllLoaded() when it's done.
+            if (fpsDetectionQueue.length > 0) {
+                pendingViewActivation = true;
                 return;
             }
 
@@ -3806,6 +3835,11 @@
             document.getElementById('shortcutsBackdrop').classList.toggle('open');
         }
 
+        function toggleManualPanel() {
+            document.getElementById('manualPanel').classList.toggle('open');
+            document.getElementById('manualBackdrop').classList.toggle('open');
+        }
+
         function toggleInstructions() {
             const content = document.getElementById('instructionsContent');
             const icon = document.getElementById('toggleIcon');
@@ -3820,6 +3854,111 @@
         }
 
     </script>
+
+    <div class="manual-backdrop" id="manualBackdrop" onclick="toggleManualPanel()"></div>
+    <div class="manual-panel" id="manualPanel">
+        <div class="shortcuts-panel-header">
+            <span>Manual</span>
+            <button onclick="toggleManualPanel()">✕</button>
+        </div>
+        <div class="manual-content">
+            <h2>Loading Files</h2>
+            <p>WarpDiff is a browser-based visual comparison tool for reviewing 2–3 versions of images or videos side-by-side or stacked.</p>
+            <p><strong>Three ways to load files:</strong></p>
+            <ul>
+                <li>Press <kbd>L</kbd></li>
+                <li>Click the <strong>Load</strong> button in the header</li>
+                <li>Drag and drop files onto the window</li>
+            </ul>
+            <p><strong>File requirements:</strong></p>
+            <ul>
+                <li>2 or 3 files (images or videos)</li>
+                <li>2 files → assigned to <strong>Edit A</strong> and <strong>Edit B</strong></li>
+                <li>3 files → assigned to <strong>Original</strong>, <strong>Edit A</strong>, and <strong>Edit B</strong></li>
+                <li>Files are automatically sorted oldest → newest by last-modified timestamp</li>
+            </ul>
+            <p><strong>Timestamp warning:</strong> If two or more files have timestamps within 2 seconds of each other, a toast warns that the sort order may be unreliable.</p>
+            <p><strong>Duplicate detection:</strong> If two slots contain the same file (matched by name, size, and timestamp), a warning banner appears.</p>
+            <p><strong>Reset:</strong> Click the <strong>Reset</strong> button (visible after loading) to clear all files and start over.</p>
+
+            <h2>View Modes</h2>
+            <p><strong>Overlay</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
+            <p><strong>Compare (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
+            <p><strong>3-UP (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between L-shaped (Original large left, A/B stacked right) and equal-size layouts (side-by-side columns or stacked rows).</p>
+
+            <h2>Switching Modes</h2>
+            <table>
+                <tr><th>Action</th><th>Result</th></tr>
+                <tr><td>Click <strong>OVERLAY / COMPARE / 3-UP</strong> in header</td><td>Switch to that mode</td></tr>
+                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Compare/3-UP</td></tr>
+                <tr><td>Press <kbd>C</kbd></td><td>Toggle Compare/3-UP ↔ Overlay</td></tr>
+            </table>
+
+            <h2>Zoom &amp; Pan</h2>
+            <p>Zoom and pan are available in <strong>Overlay mode only</strong>.</p>
+            <table>
+                <tr><th>Shortcut</th><th>Action</th></tr>
+                <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
+                <tr><td><kbd>−</kbd></td><td>Zoom out</td></tr>
+                <tr><td><kbd>0</kbd></td><td>Zoom to fit</td></tr>
+                <tr><td><kbd>1</kbd></td><td>Zoom to 100% (actual pixels)</td></tr>
+                <tr><td>Click and drag</td><td>Pan (when zoomed in)</td></tr>
+            </table>
+            <p>Zoom range: 5%–3200%. Each step multiplies/divides by √2 (~1.41×). In split modes, pressing <kbd>1</kbd> toggles between fit-to-panel and 100% cap.</p>
+
+            <h2>Video Playback</h2>
+            <p>Video controls appear at the bottom when videos are loaded. All videos play, pause, and seek in sync.</p>
+            <table>
+                <tr><th>Control</th><th>Description</th></tr>
+                <tr><td>Progress bar</td><td>Click to seek; drag to scrub</td></tr>
+                <tr><td>Timecode (left)</td><td>Current position — click to toggle between time and frame count</td></tr>
+                <tr><td>Speaker icon</td><td>Mute/unmute the active audio source</td></tr>
+                <tr><td>Volume slider</td><td>Adjust volume</td></tr>
+                <tr><td><kbd>O</kbd> <kbd>A</kbd> <kbd>B</kbd> buttons</td><td>Select which asset's audio to hear</td></tr>
+            </table>
+            <p><strong>Keyboard shortcuts:</strong></p>
+            <table>
+                <tr><th>Shortcut</th><th>Action</th></tr>
+                <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
+                <tr><td><kbd>R</kbd></td><td>Restart from beginning</td></tr>
+                <tr><td><kbd>M</kbd></td><td>Mute / Unmute</td></tr>
+            </table>
+            <p>Only one audio track plays at a time. If the active source is muted, audio automatically switches to the next unmuted source.</p>
+
+            <h2>Keyboard Shortcuts Reference</h2>
+            <table>
+                <tr><th>Key</th><th>Action</th></tr>
+                <tr><td><kbd>L</kbd></td><td>Load files</td></tr>
+                <tr><td><kbd>← →</kbd></td><td>Switch asset (Overlay mode)</td></tr>
+                <tr><td><kbd>O</kbd></td><td>Toggle Overlay mode</td></tr>
+                <tr><td><kbd>C</kbd></td><td>Toggle Compare / 3-UP mode</td></tr>
+                <tr><td><kbd>3</kbd></td><td>Toggle 3-UP layout (L-shaped ↔ equal)</td></tr>
+                <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
+                <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
+                <tr><td><kbd>−</kbd></td><td>Zoom out</td></tr>
+                <tr><td><kbd>0</kbd></td><td>Zoom to fit</td></tr>
+                <tr><td><kbd>1</kbd></td><td>Zoom to 100% / toggle 100% cap</td></tr>
+                <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
+                <tr><td><kbd>R</kbd></td><td>Restart</td></tr>
+                <tr><td><kbd>M</kbd></td><td>Mute</td></tr>
+                <tr><td><kbd>K</kbd></td><td>Toggle shortcuts panel</td></tr>
+            </table>
+
+            <h2>Info Bar</h2>
+            <p>Each asset displays an info bar showing: slot name, resolution (e.g. <code>1920×1080</code>), aspect ratio (e.g. <code>16:9</code>), and duration for videos or <code>—</code> for images.</p>
+            <p>Aspect ratios that don't match a known standard are shown in amber as a heads-up to check your export settings.</p>
+            <p>The frame counter detects frame rate automatically and snaps to the nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60).</p>
+            <p>In split modes, the info bar of the asset whose audio is currently playing is highlighted.</p>
+
+            <h2>Limitations</h2>
+            <ul>
+                <li><strong>2 or 3 files only</strong> — loading 1 or 4+ files is not supported</li>
+                <li><strong>Images and videos only</strong> — other file types are ignored</li>
+                <li><strong>Pan available in Overlay mode only</strong></li>
+                <li><strong>Audio:</strong> one track at a time; others are automatically muted</li>
+            </ul>
+        </div>
+    </div>
 
     <div class="shortcuts-backdrop" id="shortcutsBackdrop"></div>
     <div class="shortcuts-panel" id="shortcutsPanel">

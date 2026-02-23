@@ -120,8 +120,10 @@ Video controls appear at the bottom of the screen when videos are loaded. All vi
 Each asset displays an info bar showing:
 - Slot name (ORIGINAL, IMAGE A / EDIT A, IMAGE B / EDIT B)
 - Resolution (e.g. `1920×1080`)
-- Aspect ratio (e.g. `16:9`)
+- Aspect ratio (e.g. `16:9`) — shown in amber if it doesn't match a known standard, as a heads-up to check export settings
 - Duration for videos (e.g. `0:02:34`), or `—` for images
+
+The frame counter detects frame rate automatically and snaps to the nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60).
 
 In split modes, the info bar of the asset whose audio is currently playing is highlighted.
 
@@ -133,4 +135,3 @@ In split modes, the info bar of the asset whose audio is currently playing is hi
 - **Images and videos only** — other file types are ignored
 - **Pan available in Overlay mode only**
 - **Audio:** one track at a time; others are automatically muted
-- **Frame counter** assumes 30 fps
