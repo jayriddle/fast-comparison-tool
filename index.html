@@ -148,6 +148,11 @@
             overflow: hidden;
             user-select: none;
             position: relative;
+            transition: height 0.2s ease;
+        }
+
+        .audio-viz-active .video-progress-container {
+            height: 28px;
         }
 
         .waveform-canvas {
@@ -942,6 +947,24 @@
             z-index: 2;
         }
 
+        .spectrogram-scale-toggle {
+            display: flex;
+            align-items: center;
+            padding: 2px 5px;
+            font-size: 9px;
+            font-family: monospace;
+            color: #888;
+            cursor: pointer;
+            user-select: none;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            letter-spacing: 1px;
+        }
+
+        .spectrogram-scale-toggle:hover {
+            color: #ccc;
+        }
+
         .video-controls-row {
             display: flex;
             align-items: center;
@@ -1349,7 +1372,7 @@
                     </div>
                 </div>
                 <div class="spectrogram-panel" id="spectrogramPanel">
-                    <div class="spectrogram-freq-labels">
+                    <div class="spectrogram-freq-labels" id="spectrogramLabels">
                         <span>20k</span>
                         <span>10k</span>
                         <span>5k</span>
@@ -1360,6 +1383,7 @@
                         <canvas id="spectrogramCanvas"></canvas>
                         <div class="spectrogram-cursor" id="spectrogramCursor"></div>
                     </div>
+                    <div class="spectrogram-scale-toggle" id="spectrogramScaleToggle" onclick="toggleSpectrogramScale()" title="Toggle linear/log frequency scale (Shift+W)">LIN</div>
                 </div>
             </div>
         </div>
@@ -1499,6 +1523,7 @@
         let waveformData = {};         // { slot: Float32Array } — downsampled amplitude
         let spectrogramData = {};      // { slot: { data: Uint8Array[], sampleRate, duration } }
         let audioVizVisible = false;   // W key toggle
+        let spectrogramLogScale = false; // linear vs log frequency axis
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
         // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
@@ -1678,17 +1703,16 @@
             return p;
         })();
 
-        function computeWaveformData(audioBuffer, numBuckets) {
-            const raw = audioBuffer.getChannelData(0); // mono or left channel
-            const samplesPerBucket = Math.floor(raw.length / numBuckets);
+        function computeWaveformChannel(channelData, numBuckets) {
+            const samplesPerBucket = Math.floor(channelData.length / numBuckets);
             const result = new Float32Array(numBuckets * 2); // [min, max] pairs
             for (let i = 0; i < numBuckets; i++) {
                 let min = 1, max = -1;
                 const start = i * samplesPerBucket;
-                const end = Math.min(start + samplesPerBucket, raw.length);
+                const end = Math.min(start + samplesPerBucket, channelData.length);
                 for (let j = start; j < end; j++) {
-                    if (raw[j] < min) min = raw[j];
-                    if (raw[j] > max) max = raw[j];
+                    if (channelData[j] < min) min = channelData[j];
+                    if (channelData[j] > max) max = channelData[j];
                 }
                 result[i * 2] = min;
                 result[i * 2 + 1] = max;
@@ -1696,15 +1720,20 @@
             return result;
         }
 
-        function computeSpectrogramData(audioBuffer) {
-            const raw = audioBuffer.getChannelData(0);
-            const sr = audioBuffer.sampleRate;
+        function computeWaveformData(audioBuffer, numBuckets) {
+            const L = computeWaveformChannel(audioBuffer.getChannelData(0), numBuckets);
+            const R = audioBuffer.numberOfChannels > 1
+                ? computeWaveformChannel(audioBuffer.getChannelData(1), numBuckets)
+                : null;
+            return { L, R };
+        }
+
+        function computeSpectrogramChannel(channelData, sampleRate) {
             const fftSize = 2048;
             const hop = 512;
-            const numFrames = Math.floor((raw.length - fftSize) / hop) + 1;
+            const numFrames = Math.floor((channelData.length - fftSize) / hop) + 1;
             if (numFrames <= 0) return null;
 
-            // Precompute Hann window
             const win = new Float32Array(fftSize);
             for (let i = 0; i < fftSize; i++) win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (fftSize - 1)));
 
@@ -1716,21 +1745,44 @@
             for (let f = 0; f < numFrames; f++) {
                 const offset = f * hop;
                 for (let i = 0; i < fftSize; i++) {
-                    re[i] = (offset + i < raw.length ? raw[offset + i] : 0) * win[i];
+                    re[i] = (offset + i < channelData.length ? channelData[offset + i] : 0) * win[i];
                     im[i] = 0;
                 }
                 fft(re, im);
                 const magnitudes = new Uint8Array(halfBins);
                 for (let i = 0; i < halfBins; i++) {
                     const mag = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
-                    // Convert to dB, clamp to [-90, 0] range, map to 0-255
                     const db = 20 * Math.log10(Math.max(mag, 1e-10));
                     magnitudes[i] = Math.round(Math.max(0, Math.min(255, ((db + 90) / 90) * 255)));
                 }
                 frames[f] = magnitudes;
             }
 
-            return { frames, sampleRate: sr, duration: audioBuffer.duration, fftSize };
+            return { frames, fftSize };
+        }
+
+        function computeSpectrogramData(audioBuffer) {
+            const sr = audioBuffer.sampleRate;
+            const L = computeSpectrogramChannel(audioBuffer.getChannelData(0), sr);
+            const R = audioBuffer.numberOfChannels > 1
+                ? computeSpectrogramChannel(audioBuffer.getChannelData(1), sr)
+                : null;
+            return { L, R, sampleRate: sr, duration: audioBuffer.duration };
+        }
+
+        function drawWaveformChannel(ctx, data, w, topY, halfH, color, clipColor) {
+            const numBuckets = data.length / 2;
+            const bucketW = w / numBuckets;
+            const midY = topY + halfH;
+            for (let i = 0; i < numBuckets; i++) {
+                const min = data[i * 2];
+                const max = data[i * 2 + 1];
+                const isClipping = max >= 0.99 || min <= -0.99;
+                ctx.fillStyle = isClipping ? clipColor : color;
+                const top = midY - max * halfH;
+                const bottom = midY - min * halfH;
+                ctx.fillRect(i * bucketW, top, Math.max(bucketW, 1), bottom - top);
+            }
         }
 
         function drawWaveform(slot) {
@@ -1748,20 +1800,56 @@
             ctx.clearRect(0, 0, w, h);
 
             const data = waveformData[slot];
-            if (!data || data.length === 0) return;
+            if (!data || !data.L || data.L.length === 0) return;
 
-            const numBuckets = data.length / 2;
-            const bucketW = w / numBuckets;
-            const midY = h / 2;
+            if (data.R) {
+                // Stereo: L in top half, R in bottom half
+                const halfH = h / 2;
+                drawWaveformChannel(ctx, data.L, w, 0, halfH, 'rgba(100, 180, 255, 0.5)', 'rgba(255, 80, 80, 0.7)');
+                drawWaveformChannel(ctx, data.R, w, halfH, halfH, 'rgba(255, 160, 80, 0.5)', 'rgba(255, 80, 80, 0.7)');
+                // Center divider
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.beginPath();
+                ctx.moveTo(0, halfH);
+                ctx.lineTo(w, halfH);
+                ctx.stroke();
+            } else {
+                // Mono: full height
+                drawWaveformChannel(ctx, data.L, w, 0, h / 2, 'rgba(160, 160, 160, 0.4)', 'rgba(255, 80, 80, 0.7)');
+            }
+        }
 
-            for (let i = 0; i < numBuckets; i++) {
-                const min = data[i * 2];
-                const max = data[i * 2 + 1];
-                const isClipping = max >= 0.99 || min <= -0.99;
-                ctx.fillStyle = isClipping ? 'rgba(255, 80, 80, 0.7)' : 'rgba(160, 160, 160, 0.4)';
-                const top = midY - max * midY;
-                const bottom = midY - min * midY;
-                ctx.fillRect(i * bucketW, top, Math.max(bucketW, 1), bottom - top);
+        function drawSpectrogramRegion(pixels, canvasW, frames, numBins, startY, regionH, sampleRate) {
+            const numFrames = frames.length;
+            const nyquist = sampleRate / 2;
+            const fMin = 20; // 20 Hz floor for log scale
+            const logMin = Math.log(fMin);
+            const logMax = Math.log(nyquist);
+            const logRange = logMax - logMin;
+
+            for (let x = 0; x < canvasW; x++) {
+                const frameIdx = Math.min(numFrames - 1, Math.floor((x / canvasW) * numFrames));
+                const frame = frames[frameIdx];
+                for (let dy = 0; dy < regionH; dy++) {
+                    const y = startY + dy;
+                    const t = (regionH - 1 - dy) / regionH; // 0 at bottom, 1 at top
+                    let binIdx;
+                    if (spectrogramLogScale) {
+                        // Log: map pixel to frequency logarithmically
+                        const freq = Math.exp(logMin + t * logRange);
+                        binIdx = Math.min(numBins - 1, Math.max(0, Math.round(freq / nyquist * numBins)));
+                    } else {
+                        // Linear
+                        binIdx = Math.min(numBins - 1, Math.floor(t * numBins));
+                    }
+                    const val = frame[binIdx];
+                    const [r, g, b] = spectrogramPalette[val];
+                    const idx = (y * canvasW + x) * 4;
+                    pixels[idx] = r;
+                    pixels[idx + 1] = g;
+                    pixels[idx + 2] = b;
+                    pixels[idx + 3] = 255;
+                }
             }
         }
 
@@ -1777,30 +1865,50 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const spec = spectrogramData[slot];
-            if (!spec || !spec.frames.length) return;
+            if (!spec || !spec.L || !spec.L.frames.length) return;
 
-            const numFrames = spec.frames.length;
-            const numBins = spec.frames[0].length;
-            const dpr = window.devicePixelRatio || 1;
+            // Update freq labels for mono/stereo and lin/log
+            const labels = document.getElementById('spectrogramLabels');
+            if (labels) {
+                const isStereo = spec.R && spec.R.frames.length;
+                const scaleLabel = spectrogramLogScale ? 'LOG' : 'LIN';
+                if (isStereo) {
+                    if (spectrogramLogScale) {
+                        labels.innerHTML = '<span style="color:#6ab4ff">L</span><span>10k</span><span>100</span><span>20</span><span style="color:#ffa050">R</span><span>10k</span><span>100</span><span>20</span>';
+                    } else {
+                        labels.innerHTML = '<span style="color:#6ab4ff">L</span><span>20k</span><span>1k</span><span style="color:#ffa050">R</span><span>20k</span><span>1k</span>';
+                    }
+                } else {
+                    if (spectrogramLogScale) {
+                        labels.innerHTML = '<span>20k</span><span>10k</span><span>1k</span><span>100</span><span>20</span>';
+                    } else {
+                        labels.innerHTML = '<span>20k</span><span>10k</span><span>5k</span><span>1k</span><span>100</span>';
+                    }
+                }
+            }
+
+            const sr = spec.sampleRate;
+            const numBins = spec.L.frames[0].length;
             const imgData = ctx.createImageData(canvas.width, canvas.height);
             const pixels = imgData.data;
 
-            for (let x = 0; x < canvas.width; x++) {
-                const frameIdx = Math.min(numFrames - 1, Math.floor((x / canvas.width) * numFrames));
-                const frame = spec.frames[frameIdx];
-                for (let y = 0; y < canvas.height; y++) {
-                    // Y=0 is top of canvas = highest frequency
-                    const binIdx = Math.min(numBins - 1, Math.floor(((canvas.height - 1 - y) / canvas.height) * numBins));
-                    const val = frame[binIdx];
-                    const [r, g, b] = spectrogramPalette[val];
-                    const idx = (y * canvas.width + x) * 4;
-                    pixels[idx] = r;
-                    pixels[idx + 1] = g;
-                    pixels[idx + 2] = b;
-                    pixels[idx + 3] = 255;
-                }
+            if (spec.R && spec.R.frames.length) {
+                // Stereo: L top half, R bottom half
+                const halfH = Math.floor(canvas.height / 2);
+                drawSpectrogramRegion(pixels, canvas.width, spec.L.frames, numBins, 0, halfH, sr);
+                drawSpectrogramRegion(pixels, canvas.width, spec.R.frames, numBins, halfH, canvas.height - halfH, sr);
+                // Draw divider line
+                ctx.putImageData(imgData, 0, 0);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.beginPath();
+                ctx.moveTo(0, halfH);
+                ctx.lineTo(canvas.width, halfH);
+                ctx.stroke();
+            } else {
+                // Mono: full height
+                drawSpectrogramRegion(pixels, canvas.width, spec.L.frames, numBins, 0, canvas.height, sr);
+                ctx.putImageData(imgData, 0, 0);
             }
-            ctx.putImageData(imgData, 0, 0);
         }
 
         function updateSpectrogramCursor(video) {
@@ -1838,23 +1946,128 @@
             audioVizVisible = !audioVizVisible;
             const panel = document.getElementById('spectrogramPanel');
             if (panel) panel.classList.toggle('active', audioVizVisible);
+            const controls = document.getElementById('videoControls');
+            if (controls) controls.classList.toggle('audio-viz-active', audioVizVisible);
             if (audioVizVisible) {
+                // Lazy-decode: on first W press, decode any pending audio buffers
+                for (const slot of Object.keys(audioFileBuffers)) {
+                    if (!waveformData[slot] && audioFileBuffers[slot]) {
+                        decodeAndComputeAudioViz(slot, audioFileBuffers[slot]);
+                    }
+                }
                 const slot = currentAudioSource || assetOrder[currentAssetIndex];
                 updateAudioVisForSlot(slot);
+                // Redraw waveform after progress bar height transition completes
+                setTimeout(() => drawWaveform(slot), 250);
+            }
+        }
+
+        function toggleSpectrogramScale() {
+            spectrogramLogScale = !spectrogramLogScale;
+            const btn = document.getElementById('spectrogramScaleToggle');
+            if (btn) btn.textContent = spectrogramLogScale ? 'LOG' : 'LIN';
+            if (audioVizVisible) {
+                const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                drawSpectrogram(slot);
             }
         }
 
         // ── End Audio Visualization ─────────────────────────────────────
 
         function loadFile(slot, file) {
+            const isVideo = file.type.startsWith('video/');
+
+            // Videos: read as ArrayBuffer once, create blob URL for playback,
+            // reuse the same buffer for audio visualization.
+            // Images: read as data URL (unchanged).
+            if (isVideo) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    const blob = new Blob([arrayBuffer], { type: file.type });
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    mediaData[slot] = {
+                        type: 'video',
+                        src: blobUrl,
+                        name: file.name,
+                        size: file.size,
+                        lastModified: file.lastModified
+                    };
+
+                    const layer = getLayer(slot);
+                    const oldContainer = layer.querySelector('.media-container');
+                    if (oldContainer) oldContainer.remove();
+
+                    const mediaContainer = document.createElement('div');
+                    mediaContainer.className = 'media-container';
+
+                    const video = document.createElement('video');
+                    video.src = blobUrl;
+                    video.controls = false;
+                    video.volume = 1.0;
+
+                    video.addEventListener('loadedmetadata', function() {
+                        if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
+                        updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
+                        updateDurationDisplay(slot, video.duration);
+                        setupVideoHandlers(video, slot);
+                        checkAllLoaded();
+                        positionLabelsToMediaDebounced();
+                    });
+
+                    mediaContainer.appendChild(video);
+                    hasVideos = true;
+
+                    // Find or create info bar and zoom indicator
+                    let infoBar = layer.querySelector('.asset-info-bar');
+                    let zoomIndicator = layer.querySelector('.split-zoom-indicator');
+
+                    if (!infoBar) {
+                        infoBar = document.createElement('div');
+                        infoBar.className = 'asset-info-bar';
+                        const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
+                        infoBar.innerHTML = `
+                            <span class="asset-name">${slotLabel}</span>
+                            <span class="asset-resolution">-</span>
+                            <span class="asset-aspect">-</span>
+                            <span class="asset-fps"></span>
+                            <span class="asset-duration">-</span>
+                        `;
+                    }
+
+                    if (!zoomIndicator) {
+                        zoomIndicator = document.createElement('div');
+                        zoomIndicator.className = 'split-zoom-indicator';
+                        zoomIndicator.id = `zoom${capitalize(slot)}`;
+                        zoomIndicator.textContent = '1.0×';
+                    }
+
+                    const videoWrapper = document.createElement('div');
+                    videoWrapper.className = 'video-wrapper';
+                    const mediaEl = mediaContainer.querySelector('video');
+                    if (mediaEl) videoWrapper.appendChild(mediaEl);
+                    videoWrapper.appendChild(zoomIndicator);
+                    videoWrapper.appendChild(infoBar);
+                    mediaContainer.appendChild(videoWrapper);
+
+                    layer.appendChild(mediaContainer);
+                    layer.style.opacity = '0';
+
+                    // Store ArrayBuffer for lazy audio decode (triggered on first W press)
+                    audioFileBuffers[slot] = arrayBuffer;
+                };
+                reader.readAsArrayBuffer(file);
+                return;
+            }
+
             const reader = new FileReader();
-            
+
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
-                const isVideo = file.type.startsWith('video/');
-                
+
                 mediaData[slot] = {
-                    type: isVideo ? 'video' : 'image',
+                    type: 'image',
                     src: dataUrl,
                     name: file.name,
                     size: file.size,
@@ -1870,62 +2083,33 @@
                     oldContainer.remove();
                 }
 
-                // Create media container to hold the actual image/video
+                // Create media container to hold the image
                 const mediaContainer = document.createElement('div');
                 mediaContainer.className = 'media-container';
 
-                if (isVideo) {
-                    const video = document.createElement('video');
-                    video.src = dataUrl;
-                    video.controls = false;
-                    video.volume = 1.0;
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.addEventListener('load', async function() {
+                    // Wait for image to be fully decoded before getting dimensions
+                    try {
+                        await img.decode();
+                    } catch (e) {
+                        console.warn('Image decode error:', e);
+                    }
 
-                    video.addEventListener('loadedmetadata', function() {
-                        if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
-                        updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
-                        updateDurationDisplay(slot, video.duration);
+                    if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
+                    updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
+                    updateSplitViewZoomIndicators();
 
-                        // Setup video handlers
-                        setupVideoHandlers(video, slot);
+                    // Dimensions are now available — safe to activate the view.
+                    // checkAllLoaded() is called here (not in reader.onload) so that
+                    // positionLabelsToMedia() always has valid naturalWidth/naturalHeight.
+                    checkAllLoaded();
 
-                        // Dimensions are now available — safe to activate the view.
-                        // checkAllLoaded() is called here (not in reader.onload) so that
-                        // positionLabelsToMedia() always has valid videoWidth/videoHeight.
-                        checkAllLoaded();
-
-                        // Position labels after video loads — debounced so all slots
-                        // are measured together once rapid successive loads settle.
-                        positionLabelsToMediaDebounced();
-
-                    });
-
-                    mediaContainer.appendChild(video);
-                    hasVideos = true;
-                } else {
-                    const img = document.createElement('img');
-                    img.src = dataUrl;
-                    img.addEventListener('load', async function() {
-                        // Wait for image to be fully decoded before getting dimensions
-                        try {
-                            await img.decode();
-                        } catch (e) {
-                            console.warn('Image decode error:', e);
-                        }
-
-                        if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
-                        updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
-                        updateSplitViewZoomIndicators();
-
-                        // Dimensions are now available — safe to activate the view.
-                        // checkAllLoaded() is called here (not in reader.onload) so that
-                        // positionLabelsToMedia() always has valid naturalWidth/naturalHeight.
-                        checkAllLoaded();
-
-                        // Debounced so all slots are measured together once rapid successive loads settle.
-                        positionLabelsToMediaDebounced();
-                    });
-                    mediaContainer.appendChild(img);
-                }
+                    // Debounced so all slots are measured together once rapid successive loads settle.
+                    positionLabelsToMediaDebounced();
+                });
+                mediaContainer.appendChild(img);
 
                 // Find or create info bar and zoom indicator, then add to media container
                 let infoBar = layer.querySelector('.asset-info-bar');
@@ -1988,15 +2172,6 @@
 
             reader.readAsDataURL(file);
 
-            // Also read file as ArrayBuffer for audio visualization (videos only)
-            if (file.type.startsWith('video/')) {
-                const audioReader = new FileReader();
-                audioReader.onload = function(ev) {
-                    audioFileBuffers[slot] = ev.target.result;
-                    decodeAndComputeAudioViz(slot, ev.target.result);
-                };
-                audioReader.readAsArrayBuffer(file);
-            }
         }
 
         function updateResolutionDisplay(slot, width, height) {
@@ -2849,8 +3024,13 @@
             spectrogramData = {};
             audioFileBuffers = {};
             audioVizVisible = false;
+            spectrogramLogScale = false;
             const specPanel = document.getElementById('spectrogramPanel');
             if (specPanel) specPanel.classList.remove('active');
+            const scaleBtn = document.getElementById('spectrogramScaleToggle');
+            if (scaleBtn) scaleBtn.textContent = 'LIN';
+            const vizControls = document.getElementById('videoControls');
+            if (vizControls) vizControls.classList.remove('audio-viz-active');
             const wfCanvas = document.getElementById('waveformCanvas');
             if (wfCanvas) { const c = wfCanvas.getContext('2d'); c.clearRect(0, 0, wfCanvas.width, wfCanvas.height); }
 
@@ -4179,7 +4359,11 @@
                 // R key restarts from beginning
                 e.preventDefault();
                 restartAllVideos();
-            } else if (e.key === 'w' || e.key === 'W') {
+            } else if (e.key === 'W' && e.shiftKey) {
+                // Shift+W toggles log/linear frequency scale
+                e.preventDefault();
+                if (hasVideos && audioVizVisible) toggleSpectrogramScale();
+            } else if (e.key === 'w') {
                 // W key toggles audio visualization (spectrogram)
                 e.preventDefault();
                 if (hasVideos) toggleAudioViz();
@@ -4345,6 +4529,7 @@
                 <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
                 <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
                 <tr><td><kbd>W</kbd></td><td>Toggle waveform / spectrogram</td></tr>
+                <tr><td><kbd>Shift+W</kbd></td><td>Toggle linear / log frequency scale</td></tr>
             </table>
             <p>Only one audio track plays at a time. If the active source is muted, audio automatically switches to the next unmuted source.</p>
 
@@ -4367,6 +4552,7 @@
                 <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
                 <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
                 <tr><td><kbd>W</kbd></td><td>Toggle waveform / spectrogram</td></tr>
+                <tr><td><kbd>Shift+W</kbd></td><td>Toggle linear / log frequency scale</td></tr>
                 <tr><td><kbd>K</kbd></td><td>Toggle shortcuts panel</td></tr>
             </table>
 
@@ -4408,6 +4594,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>,</kbd> <kbd>.</kbd></span><span class="shortcut-desc">Frame back / forward</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>W</kbd></span><span class="shortcut-desc">Audio waveform / spectrogram</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>⇧W</kbd></span><span class="shortcut-desc">Linear / log frequency</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
             <hr class="shortcut-divider">
