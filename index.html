@@ -4293,7 +4293,7 @@
             // Split mode first, OVERLAY last: 3-UP / OVERLAY or COMPARE / OVERLAY
             const modes = loadedCount === 3
                 ? [['tripartite', '3-UP'], ['overlay', 'OVERLAY']]
-                : [['compare', 'COMPARE'], ['overlay', 'OVERLAY']];
+                : [['compare', 'GRID'], ['overlay', 'OVERLAY']];
 
             // Wrap mode buttons in a flex group so they slide together
             const modeCore = document.createElement('div');
@@ -4755,7 +4755,7 @@
                 e.preventDefault();
                 stepFrame(1);
             } else if (e.key === 'c' || e.key === 'C') {
-                // C key toggles compare mode depending on asset count.
+                // C key toggles grid mode depending on asset count.
                 e.preventDefault();
                 const allThreeLoaded = getLoadedSlotCount() === 3;
                 if (allThreeLoaded) {
@@ -4853,15 +4853,15 @@
 
             <h2>View Modes</h2>
             <p><strong>Overlay</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
-            <p><strong>Compare (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
+            <p><strong>Grid (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
             <p><strong>3-UP (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between Grid (columns or rows, auto-picked by aspect ratio) and 1+2 (Original alone, A/B paired).</p>
 
             <h2>Switching Modes</h2>
             <table>
                 <tr><th>Action</th><th>Result</th></tr>
-                <tr><td>Click <strong>OVERLAY / COMPARE / 3-UP</strong> in header</td><td>Switch to that mode</td></tr>
-                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Compare/3-UP</td></tr>
-                <tr><td>Press <kbd>C</kbd></td><td>Toggle Compare/3-UP ↔ Overlay</td></tr>
+                <tr><td>Click <strong>OVERLAY / GRID / 3-UP</strong> in header</td><td>Switch to that mode</td></tr>
+                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Grid/3-UP</td></tr>
+                <tr><td>Press <kbd>C</kbd></td><td>Toggle Grid/3-UP ↔ Overlay</td></tr>
             </table>
 
             <h2>Zoom &amp; Pan</h2>
@@ -4908,7 +4908,7 @@
                 <tr><td><kbd>[ ]</kbd></td><td>Resize zoom loupe</td></tr>
                 <tr><td><kbd>← →</kbd></td><td>Switch asset (Overlay mode)</td></tr>
                 <tr><td><kbd>O</kbd></td><td>Toggle Overlay mode</td></tr>
-                <tr><td><kbd>C</kbd></td><td>Toggle Compare / 3-UP mode</td></tr>
+                <tr><td><kbd>C</kbd></td><td>Toggle Grid / 3-UP mode</td></tr>
                 <tr><td><kbd>3</kbd></td><td>Toggle 3-UP layout (Grid ↔ 1+2)</td></tr>
                 <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
                 <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
@@ -4956,7 +4956,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>←</kbd> <kbd>→</kbd></span><span class="shortcut-desc">Switch asset</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>C</kbd></span><span class="shortcut-desc">Compare mode</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>C</kbd></span><span class="shortcut-desc">Grid mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">3-Up: Grid / 1+2</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
