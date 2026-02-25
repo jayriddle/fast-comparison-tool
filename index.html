@@ -3529,6 +3529,10 @@
             // Update progress display from the first video
             const primary = videos[0];
             if (primary) updateVideoProgressFromTime(primary, primary.currentTime);
+            // Refresh magnifier after seek so loupe shows the new frame
+            if (magnifierEnabled && _lastMouseEvent) {
+                requestAnimationFrame(() => updateMagnifier(_lastMouseEvent));
+            }
         }
 
         let isSplitMode = false;
