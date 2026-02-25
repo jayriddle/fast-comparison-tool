@@ -1748,7 +1748,7 @@
         let spectrogramData = {};      // { slot: { data: Uint8Array[], sampleRate, duration } }
         let audioVizVisible = false;   // W key toggle
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
-        let magnifierLinked = true;     // Shift+Z toggle: linked loupes in split mode
+        let magnifierLinked = false;    // Shift+Z toggle: linked loupes in split mode
         let spectrogramLogScale = false; // linear vs log frequency axis
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
@@ -3396,12 +3396,15 @@
             audioFileBuffers = {};
             audioVizVisible = false;
             magnifierEnabled = false;
-            magnifierLinked = true;
+            magnifierLinked = false;
             magnifierZoom = 4;
             magnifierSize = 200;
             _magnifierEls.forEach(id => {
                 const m = document.getElementById(id);
-                if (m) m.classList.remove('active');
+                if (!m) return;
+                m.classList.remove('active');
+                const c = m.querySelector('canvas');
+                if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
             });
             document.body.classList.remove('magnifier-active');
             spectrogramLogScale = false;
