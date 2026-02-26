@@ -23,6 +23,10 @@ Press `Z` for a circular zoom loupe that follows your cursor, showing magnified 
 
 All videos play in sync with shared transport controls. Scrub, frame-step with `,`/`.`, and restart together. Per-source audio switching lets you listen to any asset's audio track independently.
 
+## Video scopes
+
+Press `V` to toggle RGB histogram, waveform monitor, and vectorscope. Scopes update in real time during playback and on frame step.
+
 ## Audio visualization
 
 Press `W` to toggle waveform and spectrogram views. Waveform uses dB color coding — green for normal levels, yellow for caution (>-6dB), red for hot/clipping (>-1dB). Spectrogram supports linear/log frequency scale (`Shift+W`) and multiple color palettes (`Shift+C`).
