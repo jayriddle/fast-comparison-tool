@@ -134,6 +134,24 @@ Mono tracks display a single waveform with a MONO indicator. Stereo tracks show 
 
 ---
 
+## Video Scopes
+
+Press **V** to toggle the video scopes panel above the video controls. Three scopes are displayed side by side:
+
+- **RGB Histogram** — shows the distribution of red, green, and blue values across the frame as overlapping semi-transparent curves
+- **Waveform Monitor** — plots luma (brightness) for each column of the frame, green phosphor style with 0–100 IRE scale
+- **Vectorscope** — plots color information (Cb vs Cr) on a circular graph with skin tone line and R/Y/G/C/B/M color target markers
+
+Scopes update in real time during playback and on frame step. In overlay mode they show the active asset; in split modes they show the active audio source.
+
+---
+
+## Mixed Orientation Layout
+
+When loading assets with different orientations (e.g. landscape and portrait videos together), the grid layout uses an **equal-area algorithm** so each asset has roughly the same visual weight regardless of aspect ratio. The 3-UP L-shaped layout is not available for mixed orientations — the app uses the equal-area grid instead.
+
+---
+
 ## Keyboard Shortcuts Reference
 
 | Key | Action |
@@ -154,6 +172,7 @@ Mono tracks display a single waveform with a MONO indicator. Stereo tracks show 
 | **,** / **.** | Frame step back / forward |
 | **R** | Restart |
 | **M** | Mute |
+| **V** | Toggle video scopes (histogram, waveform monitor, vectorscope) |
 | **W** | Toggle waveform / spectrogram |
 | **Shift+W** | Toggle linear / log frequency |
 | **Shift+C** | Cycle spectrogram color palette |

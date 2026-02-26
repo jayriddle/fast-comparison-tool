@@ -725,9 +725,21 @@
         }
 
         /* Active audio indicator for split views - shows which audio is playing */
+        body.split-mode .overlay-layer.active-audio .video-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 1px solid rgba(0, 210, 230, 0.7);
+            pointer-events: none;
+            z-index: 5;
+        }
+
         body.split-mode .overlay-layer.active-audio .asset-info-bar {
-            background: rgba(60, 60, 60, 0.95);
-            color: #e0e0e0;
+            background: rgba(0, 160, 175, 0.85);
+            color: #fff;
         }
 
         body.split-mode .overlay-layer.active-audio .asset-info-bar .asset-name {
