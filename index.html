@@ -4384,7 +4384,9 @@
                         }
                     });
                     if (splitZoomLevel === 1 && verticalSharedScale !== null) {
-                        verticalSharedScale = Math.min(verticalSharedScale, 1);
+                        // Zoom to native pixels (1:1) for the reference asset.
+                        // sharedScale=1 makes the reference asset render at native size.
+                        verticalSharedScale = 1;
                     }
                 }
             }
@@ -4408,9 +4410,9 @@
                 const containerH = mediaContainer.offsetHeight;
                 if (containerW === 0 || containerH === 0) { anySkipped = true; return; }
 
-                // In vertical-stack, reserve the top of each cell for the info bar so the
-                // video is always fitted below it — no overlap, no gap between cells.
-                const ibReserve = (isVertical && infoBar)
+                // Reserve the top of each cell for the info bar so the
+                // video is always fitted below it — no overlap with the header.
+                const ibReserve = (isSplitMode && infoBar)
                     ? (infoBar._cachedH = infoBar.offsetHeight || 28)
                     : 0;
                 const fitH = containerH - ibReserve;
@@ -4448,9 +4450,9 @@
                     const baseH = naturalHeight * refScale;
                     // Clamp to fit-to-viewport at base zoom (splitStepZoom=1); splitStepZoom
                     // can then push past the cell boundary (same as overlay zoom going past fit).
-                    // When splitZoomLevel===1, also cap so assets don't exceed native pixel size.
+                    // When splitZoomLevel===1, zoom to native pixel size (1:1).
                     let clampScale = Math.min(containerW / baseW, fitH / baseH);
-                    if (splitZoomLevel === 1) clampScale = Math.min(clampScale, 1 / refScale);
+                    if (splitZoomLevel === 1) clampScale = 1 / refScale;
                     renderedW = Math.round(baseW * clampScale * splitStepZoom);
                     renderedH = Math.round(baseH * clampScale * splitStepZoom);
                     // Keep the whole group centered around the screen midpoint.
@@ -4464,8 +4466,8 @@
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
                     // offsetX is relative to each cell's own origin (cell i starts at i * containerW)
                     offsetX = groupLeft + slotIdx * (renderedW + gap) - slotIdx * containerW;
-                    // Vertically center the image in the available space.
-                    offsetY = Math.round((fitH - renderedH) / 2);
+                    // Vertically center the image below the info bar reserve.
+                    offsetY = ibReserve + Math.round((fitH - renderedH) / 2);
                 } else {
                     // Vertical-stack / tripartite / fallback: contain-fit per cell.
                     if (isVertical && verticalSharedScale !== null && verticalRefLong > 0) {
@@ -4486,8 +4488,8 @@
                         } else {
                             fitScale = containerW / naturalWidth;
                         }
-                        // Cap at 1.0 if 100% mode active (no upscaling past actual pixels)
-                        scale = splitZoomLevel === 1 ? Math.min(fitScale, 1) : fitScale;
+                        // splitZoomLevel===1: zoom to native pixel size (1:1)
+                        scale = splitZoomLevel === 1 ? 1 : fitScale;
                         renderedW = naturalWidth  * scale * splitStepZoom;
                         renderedH = naturalHeight * scale * splitStepZoom;
                     }
@@ -5311,12 +5313,7 @@
                     splitStepZoom = 1.0;
                     document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
                     positionLabelsToMedia();
-                    // If the 100%-anchor size was clamped to fit (assets are already at or
-                    // below native pixels at the fit zoom level), notify the user.
-                    const isAnyTripartiteNow = isTripartiteMode();
-                    if (splitZoomLevel === 1 && isAnyTripartiteNow && _tripartiteZoomWasCapped) {
-                        showToast('Already at fit size');
-                    }
+                    showToast(splitZoomLevel === 1 ? '100% native pixels' : 'Fit to panel');
                 }
             } else if (e.key === '3') {
                 // Toggle between L-shaped and equal-layout 3-UP
