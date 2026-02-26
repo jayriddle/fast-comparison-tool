@@ -374,13 +374,28 @@
             color: #ddd;
         }
 
-        .quick-start-body .whats-new {
-            border-top: 1px solid #333;
-            padding-top: 12px;
-            margin-top: 16px;
+        .changelog-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            z-index: 2000;
+            width: 420px;
+            max-height: 80vh;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
         }
 
-        .quick-start-body .whats-new h3 {
+        .changelog-popup.show {
+            display: flex;
+        }
+
+        .changelog-popup .quick-start-body h3 {
             color: #6c9;
         }
 
@@ -3298,7 +3313,13 @@
             }
         }
 
-        // Dismiss Help popup when clicking backdrop
+        function dismissChangelog() {
+            document.getElementById('changelogPopup').classList.remove('show');
+            document.getElementById('changelogBackdrop').classList.remove('show');
+            localStorage.setItem('lastSeenVersion', APP_VERSION);
+        }
+
+        // Dismiss Help/Changelog popup when clicking backdrop
         document.addEventListener('mousedown', function(e) {
             const popup = document.getElementById('quickStartPopup');
             const backdrop = document.getElementById('quickStartBackdrop');
@@ -3306,6 +3327,10 @@
                 popup.classList.remove('show');
                 backdrop.classList.remove('show');
                 localStorage.setItem('lastSeenVersion', APP_VERSION);
+            }
+            const changelogBackdrop = document.getElementById('changelogBackdrop');
+            if (changelogBackdrop && e.target === changelogBackdrop) {
+                dismissChangelog();
             }
         });
 
@@ -5061,9 +5086,11 @@
             if (loadedCount >= 2) {
                 viewActivating = true; // prevent re-entry from subsequent img.load events
                 
-                // Hide quick start popup if showing
+                // Hide quick start or changelog popup if showing
                 document.getElementById('quickStartPopup').classList.remove('show');
                 document.getElementById('quickStartBackdrop').classList.remove('show');
+                document.getElementById('changelogPopup').classList.remove('show');
+                document.getElementById('changelogBackdrop').classList.remove('show');
                 localStorage.setItem('lastSeenVersion', APP_VERSION);
 
                 document.getElementById('comparisonView').classList.add('active');
@@ -5213,6 +5240,8 @@
             if (e.key === 'Escape') {
                 if (magnifierEnabled) {
                     toggleMagnifier();
+                } else if (document.getElementById('changelogPopup').classList.contains('show')) {
+                    dismissChangelog();
                 } else if (document.getElementById('quickStartPopup').classList.contains('show')) {
                     toggleQuickStart();
                 } else if (document.getElementById('shortcutsPanel').classList.contains('open')) {
@@ -5438,18 +5467,20 @@
                 if (c) { c.width = magnifierSize; c.height = magnifierSize; }
             });
 
-            // Show welcome popup on first visit or version update
+            // Show welcome popup on first visit, or changelog on version update
             const lastSeen = localStorage.getItem('lastSeenVersion');
-            if (!lastSeen || lastSeen !== APP_VERSION) {
+            if (!lastSeen) {
                 document.getElementById('quickStartPopup').classList.add('show');
                 document.getElementById('quickStartBackdrop').classList.add('show');
-                // Show "What's New" only for returning users (lastSeen exists but outdated)
-                const whatsNew = document.getElementById('whatsNewSection');
-                if (whatsNew) whatsNew.style.display = lastSeen ? 'block' : 'none';
+            } else if (lastSeen !== APP_VERSION) {
+                document.getElementById('changelogPopup').classList.add('show');
+                document.getElementById('changelogBackdrop').classList.add('show');
             }
-            // Set version badge in popup
+            // Set version badges in popups
             const popupVer = document.getElementById('popupVersion');
             if (popupVer) popupVer.textContent = 'v' + APP_VERSION;
+            const changelogVer = document.getElementById('changelogVersion');
+            if (changelogVer) changelogVer.textContent = 'v' + APP_VERSION;
         });
 
         function toggleShortcutsPanel() {
@@ -5644,9 +5675,8 @@
 
             <h3>View Modes</h3>
             <ul>
-                <li><strong>Overlay</strong> (<kbd>O</kbd>) — flip between assets with <kbd>←</kbd> <kbd>→</kbd></li>
-                <li><strong>Grid</strong> (<kbd>G</kbd>) — side-by-side or stacked, auto-picks layout</li>
-                <li><strong>Grid</strong> (<kbd>3</kbd>) — inline (equal columns/rows) or offset (original left, edits stacked right)</li>
+                <li><strong>Overlay</strong> <kbd>O</kbd> — flip between assets with <kbd>←</kbd> <kbd>→</kbd></li>
+                <li><strong>Grid</strong> <kbd>G</kbd> — side-by-side or stacked; <kbd>3</kbd> toggles inline / offset layout</li>
             </ul>
 
             <h3>Zoom Loupe</h3>
@@ -5661,7 +5691,12 @@
                 <li><kbd>Space</kbd> play/pause, <kbd>,</kbd> <kbd>.</kbd> frame step</li>
                 <li>Synced playback across all assets</li>
                 <li>Per-source audio switching (O/A/B) with individual mute</li>
-                <li><kbd>W</kbd> waveform with dB color coding + spectrogram</li>
+            </ul>
+
+            <h3>Analysis</h3>
+            <ul>
+                <li><kbd>V</kbd> video scopes — histogram, parade, vectorscope</li>
+                <li><kbd>W</kbd> audio waveform with dB color coding + spectrogram</li>
             </ul>
 
             <h3>Keyboard-First</h3>
@@ -5671,21 +5706,31 @@
                 <li>Your preferences persist across sessions</li>
             </ul>
 
-            <div class="whats-new" id="whatsNewSection" style="display: none;">
-                <h3>What's New in v2</h3>
-                <ul>
-                    <li>View modes: Grid (<kbd>G</kbd>) with inline and offset (<kbd>3</kbd>) layouts</li>
-                    <li>Zoom loupe (<kbd>Z</kbd>) with adjustable magnification, resize, linked mode</li>
-                    <li>Video: frame stepping, synced playback, per-source audio switching</li>
-                    <li>Audio visualization: waveform with dB color coding, spectrogram with palette/scale options</li>
-                    <li>Preferences persist across sessions</li>
-                    <li>Keyboard-driven workflow — press <kbd>K</kbd> for all hotkeys</li>
-                </ul>
-            </div>
         </div>
         <div class="quick-start-footer">
             <a class="feedback-link" onclick="toggleQuickStart(); toggleManualPanel();">Manual</a>
             <a href="https://forms.gle/oob2qL4feRGcBFfZ9" target="_blank" class="feedback-link">Bugs &amp; Feedback</a>
+        </div>
+    </div>
+
+    <div class="quick-start-backdrop" id="changelogBackdrop"></div>
+    <div class="changelog-popup" id="changelogPopup">
+        <div class="quick-start-header">
+            <h2>What's New <span class="version-badge" id="changelogVersion"></span></h2>
+            <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
+        </div>
+        <div class="quick-start-body">
+            <h3>v2</h3>
+            <ul>
+                <li>View modes: Grid <kbd>G</kbd> with inline and offset <kbd>3</kbd> layouts</li>
+                <li>Zoom loupe <kbd>Z</kbd> with adjustable magnification, resize, linked mode</li>
+                <li>Video: frame stepping, synced playback, per-source audio switching</li>
+                <li>Audio waveform with dB color coding, spectrogram with palette/scale options</li>
+                <li>Visual scopes: histogram, parade, vectorscope <kbd>V</kbd> with multiple display modes</li>
+                <li>Fullscreen mode <kbd>F</kbd></li>
+                <li>Preferences persist across sessions</li>
+                <li>Keyboard-driven workflow — press <kbd>K</kbd> for all hotkeys</li>
+            </ul>
         </div>
     </div>
 
