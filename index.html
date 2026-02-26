@@ -3237,15 +3237,15 @@
             getProgressEls();
             const fps = videoFrameRates[video.src] || 30;
             if (timecodeMode === 'frames') {
-                const currentFrame = Math.floor(currentTime * fps);
-                const totalFrames = Math.floor(duration * fps);
+                const currentFrame = Math.floor(currentTime * fps + 0.01);
+                const totalFrames = Math.floor(duration * fps + 0.01);
                 _elTimecode.textContent = `Frame ${currentFrame}`;
                 _elDuration.textContent = `${totalFrames}`;
             } else {
                 // Time mode: "0:15:22" and "2:35:18" (min:sec:frame)
                 const currentMinutes = Math.floor(currentTime / 60);
                 const currentSeconds = Math.floor(currentTime % 60);
-                const currentFrames = Math.floor((currentTime % 1) * fps);
+                const currentFrames = Math.floor((currentTime % 1) * fps + 0.01) % Math.floor(fps + 0.01);
                 const totalMinutes = Math.floor(duration / 60);
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFramesD = Math.floor((duration % 1) * fps);
@@ -3925,8 +3925,15 @@
             videos.forEach(v => { if (!v.paused) v.pause(); });
             videos.forEach(v => {
                 const fps = videoFrameRates[v.src] || 30;
-                const frameDuration = 1 / fps;
-                v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + direction * frameDuration));
+                // Small epsilon (0.01 frames) handles IEEE 754 rounding at
+                // frame boundaries without overshooting from frame midpoints.
+                const currentFrame = Math.floor(v.currentTime * fps + 0.01);
+                const targetFrame = currentFrame + direction;
+                // Seek to the midpoint of the target frame to avoid landing on
+                // a frame boundary where IEEE 754 rounding leaves us in the
+                // wrong frame (e.g. 1/24 = 0.04166...64, just short of frame 1).
+                const target = Math.max(0, Math.min(v.duration, (targetFrame + 0.5) / fps));
+                v.currentTime = target;
             });
             // Update progress display after seek completes (seeked event handles
             // the visual update). Also update optimistically for responsive feel.
