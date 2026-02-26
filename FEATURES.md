@@ -9,8 +9,7 @@ Load 2–3 images or videos by dragging and dropping, pressing `L`, or clicking 
 ## View modes
 
 - **Overlay** (`O`) — flip between assets with arrow keys, same position and zoom
-- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks the best layout
-- **Grid** (`3`) — inline (equal columns/rows) or offset (original left, edits stacked right)
+- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks the best layout; `3` toggles inline / offset
 
 ## Zoom loupe
 
