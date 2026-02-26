@@ -1414,7 +1414,7 @@
                 <button class="quick-start-btn" onclick="toggleQuickStart()">Help</button>
 
             </div>
-            <!-- Mode strip: OVERLAY / 3-UP / COMPARE — tappable, active one highlighted -->
+            <!-- Mode strip: OVERLAY / GRID / COMPARE — tappable, active one highlighted -->
             <div id="modeStrip" style="display:none;"></div>
             <!-- Asset strip: overlay mode only — shows asset names, active one highlighted -->
             <div id="assetStrip" style="display:none;"></div>
@@ -4872,7 +4872,7 @@
 
             // Split mode first, OVERLAY last: 3-UP / OVERLAY or COMPARE / OVERLAY
             const modes = loadedCount === 3
-                ? [['tripartite', '3-UP'], ['overlay', 'OVERLAY']]
+                ? [['tripartite', 'GRID'], ['overlay', 'OVERLAY']]
                 : [['compare', 'GRID'], ['overlay', 'OVERLAY']];
 
             // Wrap mode buttons in a flex group so they slide together
@@ -5324,7 +5324,7 @@
                     const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
                     const land3 = dims3.filter(m => m.w >= m.h).length;
                     if (land3 > 0 && land3 < dims3.length) {
-                        showToast('1+2 layout unavailable for mixed orientations');
+                        showToast('Offset layout unavailable for mixed orientations');
                         return;
                     }
                     tripartiteLayout3Col = !tripartiteLayout3Col;
@@ -5518,14 +5518,14 @@
             <h2>View Modes</h2>
             <p><strong>Overlay</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
             <p><strong>Grid (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
-            <p><strong>3-UP (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between Grid (columns or rows, auto-picked by aspect ratio) and 1+2 (Original alone, A/B paired).</p>
+            <p><strong>Grid (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between Inline (columns or rows, auto-picked by aspect ratio) and Offset (Original alone, A/B paired).</p>
 
             <h2>Switching Modes</h2>
             <table>
                 <tr><th>Action</th><th>Result</th></tr>
-                <tr><td>Click <strong>OVERLAY / GRID / 3-UP</strong> in header</td><td>Switch to that mode</td></tr>
-                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Grid/3-UP</td></tr>
-                <tr><td>Press <kbd>G</kbd></td><td>Toggle Grid/3-UP ↔ Overlay</td></tr>
+                <tr><td>Click <strong>OVERLAY / GRID</strong> in header</td><td>Switch to that mode</td></tr>
+                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Grid</td></tr>
+                <tr><td>Press <kbd>G</kbd></td><td>Toggle Grid ↔ Overlay</td></tr>
             </table>
 
             <h2>Zoom &amp; Pan</h2>
@@ -5549,7 +5549,7 @@
                 <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Resize loupe (100–400px)</td></tr>
                 <tr><td><kbd>Shift+Z</kbd></td><td>Toggle linked zoom</td></tr>
             </table>
-            <p><strong>Linked zoom:</strong> In Grid and 3-Up modes, enabling linked zoom (<kbd>Shift+Z</kbd>) shows corresponding loupes on all other visible assets at the same relative position — hover over one asset to compare the exact same spot across all versions.</p>
+            <p><strong>Linked zoom:</strong> In Grid modes, enabling linked zoom (<kbd>Shift+Z</kbd>) shows corresponding loupes on all other visible assets at the same relative position — hover over one asset to compare the exact same spot across all versions.</p>
             <p>The loupe hides during panning and updates live during video playback and frame stepping. Loupe size and magnification level persist across sessions.</p>
 
             <h2>Video Playback</h2>
@@ -5585,8 +5585,8 @@
                 <tr><td><kbd>[ ]</kbd></td><td>Resize zoom loupe</td></tr>
                 <tr><td><kbd>← →</kbd></td><td>Switch asset (Overlay mode)</td></tr>
                 <tr><td><kbd>O</kbd></td><td>Toggle Overlay mode</td></tr>
-                <tr><td><kbd>G</kbd></td><td>Toggle Grid / 3-UP mode</td></tr>
-                <tr><td><kbd>3</kbd></td><td>Toggle 3-UP layout (Grid ↔ 1+2)</td></tr>
+                <tr><td><kbd>G</kbd></td><td>Toggle Grid mode</td></tr>
+                <tr><td><kbd>3</kbd></td><td>Toggle Grid layout (Inline ↔ Offset)</td></tr>
                 <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
                 <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
                 <tr><td><kbd>−</kbd></td><td>Zoom out</td></tr>
@@ -5646,7 +5646,7 @@
             <ul>
                 <li><strong>Overlay</strong> (<kbd>O</kbd>) — flip between assets with <kbd>←</kbd> <kbd>→</kbd></li>
                 <li><strong>Grid</strong> (<kbd>G</kbd>) — side-by-side or stacked, auto-picks layout</li>
-                <li><strong>3-Up</strong> (<kbd>3</kbd>) — original left, edits stacked right — larger in the same viewport</li>
+                <li><strong>Grid</strong> (<kbd>3</kbd>) — inline (equal columns/rows) or offset (original left, edits stacked right)</li>
             </ul>
 
             <h3>Zoom Loupe</h3>
@@ -5674,7 +5674,7 @@
             <div class="whats-new" id="whatsNewSection" style="display: none;">
                 <h3>What's New in v2</h3>
                 <ul>
-                    <li>View modes: Grid (<kbd>G</kbd>) and 3-Up (<kbd>3</kbd>) layouts</li>
+                    <li>View modes: Grid (<kbd>G</kbd>) with inline and offset (<kbd>3</kbd>) layouts</li>
                     <li>Zoom loupe (<kbd>Z</kbd>) with adjustable magnification, resize, linked mode</li>
                     <li>Video: frame stepping, synced playback, per-source audio switching</li>
                     <li>Audio visualization: waveform with dB color coding, spectrogram with palette/scale options</li>
@@ -5705,7 +5705,7 @@
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>G</kbd></span><span class="shortcut-desc">Grid mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">3-Up: Grid / 1+2</span></div>
+            <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">Grid: Inline / Offset</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out</span></div>

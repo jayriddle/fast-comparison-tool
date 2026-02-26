@@ -11,7 +11,7 @@ A browser-based visual comparison tool for reviewing 2–3 versions of images or
 **View modes**
 - **Overlay** (`O`) — flip between assets with arrow keys, same position/zoom
 - **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout
-- **3-Up** (`3`) — original on the left, two edits stacked on the right — more space-efficient for larger previews
+- **Grid** (`3`) — inline (equal columns/rows) or offset (original left, edits stacked right)
 
 **Zoom loupe** (`Z`)
 - Pixel-level inspection without changing your view
@@ -33,7 +33,7 @@ A browser-based visual comparison tool for reviewing 2–3 versions of images or
 
 1. Open the [live app](https://jayriddle.github.io/warpdiff/)
 2. Press **L** (or click **Load**) and select 2–3 image or video files
-3. Use **Overlay / Grid / 3-Up** buttons to switch views
+3. Use **Overlay / Grid** buttons to switch views
 4. Press **K** to see all keyboard shortcuts
 
 Files auto-sort oldest → newest by timestamp. See [MANUAL.md](MANUAL.md) for full documentation.

@@ -36,10 +36,7 @@ Both assets displayed side-by-side with a gap between them. Assets are scaled so
 The layout can be switched between **Horizontal** (left/right) and **Vertical** (top/bottom) using the buttons that appear below the media. The app auto-picks the best layout on first load based on the images' aspect ratios.
 
 ### Grid (3 files)
-All three assets displayed in a row or column, auto-picked by aspect ratio.
-
-### 3-UP (3 files)
-Original on the left, Edit A top-right, Edit B bottom-right. More space-efficient than Grid — assets appear larger in the same viewport. Press **3** to toggle between Grid and 1+2 layouts.
+All three assets displayed in a grid. Press **3** to toggle between Inline (columns or rows, auto-picked by aspect ratio) and Offset (original on the left, edits stacked on the right — more space-efficient so assets appear larger).
 
 ---
 
@@ -47,9 +44,9 @@ Original on the left, Edit A top-right, Edit B bottom-right. More space-efficien
 
 | Action | Result |
 |--------|--------|
-| Click **OVERLAY** / **GRID** / **3-UP** in header | Switch to that mode |
-| Press **O** | Toggle Overlay ↔ Grid/3-UP |
-| Press **G** | Toggle Grid/3-UP ↔ Overlay |
+| Click **OVERLAY** / **GRID** in header | Switch to that mode |
+| Press **O** | Toggle Overlay ↔ Grid |
+| Press **G** | Toggle Grid ↔ Overlay |
 
 ---
 
@@ -67,7 +64,7 @@ Zoom and pan are available in **Overlay mode only**.
 
 Zoom range: 5% – 3200%. Each step multiplies/divides by √2 (~1.41×).
 
-In **split modes** (Grid, 3-UP), pressing **1** toggles between fit-to-panel and 100% native pixels. Assets zoom to their actual pixel size, even if that means overflowing the panel.
+In **split modes** (Grid), pressing **1** toggles between fit-to-panel and 100% native pixels. Assets zoom to their actual pixel size, even if that means overflowing the panel.
 
 A zoom indicator appears at the bottom-right corner of each asset showing the current scale (e.g. `1.5×`).
 
@@ -84,7 +81,7 @@ Press **Z** to toggle a circular zoom loupe that follows your cursor, showing ma
 | **[** / **]** | Resize loupe (100–400px) |
 | **Shift+Z** | Toggle linked zoom |
 
-**Linked zoom:** In Grid and 3-Up modes, enabling linked zoom (**Shift+Z**) shows corresponding loupes on all other visible assets at the same relative position — hover over one asset to compare the exact same spot across all versions.
+**Linked zoom:** In Grid modes, enabling linked zoom (**Shift+Z**) shows corresponding loupes on all other visible assets at the same relative position — hover over one asset to compare the exact same spot across all versions.
 
 The loupe hides during panning and updates live during video playback and frame stepping. Loupe size and magnification level persist across sessions.
 
@@ -148,7 +145,7 @@ Scopes update in real time during playback and on frame step. In overlay mode th
 
 ## Mixed Orientation Layout
 
-When loading assets with different orientations (e.g. landscape and portrait videos together), the grid layout uses an **equal-area algorithm** so each asset has roughly the same visual weight regardless of aspect ratio. The 3-UP L-shaped layout is not available for mixed orientations — the app uses the equal-area grid instead.
+When loading assets with different orientations (e.g. landscape and portrait videos together), the grid layout uses an **equal-area algorithm** so each asset has roughly the same visual weight regardless of aspect ratio. The Offset grid layout is not available for mixed orientations — the app uses the equal-area inline grid instead.
 
 ---
 
@@ -158,12 +155,12 @@ When loading assets with different orientations (e.g. landscape and portrait vid
 |-----|--------|
 | **L** | Load files |
 | **Z** | Toggle zoom loupe |
-| **Shift+Z** | Toggle linked zoom (Grid/3-Up) |
+| **Shift+Z** | Toggle linked zoom (Grid) |
 | **[ ]** | Resize zoom loupe |
 | **← →** | Switch asset (Overlay mode) |
 | **O** | Toggle Overlay mode |
-| **G** | Toggle Grid / 3-UP mode |
-| **3** | Toggle 3-UP layout (Grid ↔ 1+2) |
+| **G** | Toggle Grid mode |
+| **3** | Toggle Grid layout (Inline ↔ Offset) |
 | **F** | Fullscreen |
 | **+** / **−** | Zoom in/out (or loupe magnification when active) |
 | **0** | Zoom to fit |

@@ -10,7 +10,7 @@ Load 2–3 images or videos by dragging and dropping, pressing `L`, or clicking 
 
 - **Overlay** (`O`) — flip between assets with arrow keys, same position and zoom
 - **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks the best layout
-- **3-Up** (`3`) — original on the left, two edits stacked on the right — more space-efficient so you see assets larger in the same viewport
+- **Grid** (`3`) — inline (equal columns/rows) or offset (original left, edits stacked right)
 
 ## Zoom loupe
 
@@ -18,7 +18,7 @@ Press `Z` for a circular zoom loupe that follows your cursor, showing magnified 
 
 - `+`/`-` adjust magnification (2×–32×)
 - `[`/`]` resize the loupe (100–400px)
-- `Shift+Z` enables linked zoom — hover one asset, see the same spot magnified on all others (Grid/3-Up modes)
+- `Shift+Z` enables linked zoom — hover one asset, see the same spot magnified on all others (Grid modes)
 
 ## Synchronized video playback
 
