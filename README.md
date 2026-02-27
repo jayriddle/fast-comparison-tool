@@ -11,6 +11,8 @@ A browser-based comparison tool for reviewing 2–3 versions of images, videos, 
 **View modes**
 - **Overlay** (`O`) — flip between assets with arrow keys, same position/zoom
 - **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout; `3` toggles inline / offset
+- Active asset highlighted with cyan border and info bar
+- Mixed orientations use equal-area layout so each asset has the same visual weight
 
 **Zoom loupe** (`Z`)
 - Pixel-level inspection without changing your view

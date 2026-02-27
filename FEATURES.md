@@ -10,6 +10,7 @@ Load 2–3 images, videos, or audio files by dragging and dropping, pressing `L`
 
 - **Overlay** (`O`) — flip between assets with arrow keys, same position and zoom
 - **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks the best layout; `3` toggles inline / offset
+- Active asset highlighted with cyan border and info bar. Mixed orientations use an equal-area layout so each asset has the same visual weight.
 
 ## Zoom loupe
 
