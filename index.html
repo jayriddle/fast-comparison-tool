@@ -622,6 +622,14 @@
             overflow: visible;
         }
 
+        /* Allow overflow when zoomed to 100% native pixels in grid modes */
+        body.zoom-100 .overlay-container {
+            overflow: visible !important;
+        }
+        body.zoom-100.vertical-stack .overlay-layer {
+            overflow: visible !important;
+        }
+
         body.tripartite .media-container,
         body.tripartite-columns .media-container,
         body.tripartite-rows .media-container {
@@ -4697,11 +4705,11 @@
                     tripartiteEffectiveZoom = tripartiteBaseZoom * splitStepZoom;
                 }
 
-                // Clamp tripartiteEffectiveZoom so no asset overflows its cell.
-                // This prevents the '1' key from blowing assets off-screen when native
-                // pixel dimensions exceed the cell size. Record whether clamping occurred
-                // so the '1' key handler can flash the badges to signal the limit.
-                {
+                // Clamp tripartiteEffectiveZoom so no asset overflows its cell
+                // (only when NOT at 100% native — the 1 key should allow overflow).
+                // When splitZoomLevel===1, skip clamping so assets render at true 1:1 pixels
+                // even if they exceed the cell bounds (CSS overflow handles the visual).
+                if (splitZoomLevel !== 1) {
                     let maxAllowed = Infinity;
                     const isRows = document.body.classList.contains('tripartite-rows');
                     if (isRows && widthConstrained) {
@@ -4746,6 +4754,8 @@
                     } else {
                         _tripartiteZoomWasCapped = false;
                     }
+                } else {
+                    _tripartiteZoomWasCapped = false;
                 }
 
                 // Apply shared dimension: same width (portrait) or same height (landscape).
@@ -4838,13 +4848,13 @@
                             // Area multiplier = linearZoom²
                             let targetArea = fitArea * linearZoom * linearZoom;
 
-                            // Clamp so nothing overflows viewport
+                            // Clamp so nothing overflows viewport (skip when at 100% native — allow overflow)
                             const projW = loadedSlots.reduce((sum, s) => sum + Math.sqrt(targetArea * ratios[s]), 0);
                             const projMaxH = Math.max(...loadedSlots.map(s => Math.sqrt(targetArea / ratios[s])));
                             const clamped = projW > availW || projMaxH > availH;
-                            if (clamped) targetArea = fitArea;
+                            if (clamped && splitZoomLevel !== 1) targetArea = fitArea;
 
-                            _tripartiteZoomWasCapped = clamped && (splitZoomLevel === 1 || splitStepZoom > 1);
+                            _tripartiteZoomWasCapped = clamped && splitZoomLevel !== 1 && splitStepZoom > 1;
 
                             loadedSlots.forEach(s => {
                                 const d = tripartiteLayout[s];
@@ -5941,7 +5951,10 @@
                     applyZoom();
                 } else {
                     // Split modes: toggle between fit-to-panel and 100%-anchor (smallest asset at native pixels).
-                    splitZoomLevel = splitZoomLevel === 1 ? null : 1;
+                    // Only toggle back to fit if already at true 100% (no step zoom applied).
+                    // If the user zoomed away from 100% with +/-, pressing 1 should re-snap to 100%.
+                    const atTrue100 = splitZoomLevel === 1 && splitStepZoom === 1.0;
+                    splitZoomLevel = atTrue100 ? null : 1;
                     // Reset step zoom so the baseline is clean.
                     splitStepZoom = 1.0;
                     document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
@@ -6368,6 +6381,7 @@
                 <li>Active asset indicator with cyan border and highlighted info bar</li>
                 <li>Equal-area layout for mixed orientations in Grid mode</li>
                 <li>Spectrogram scale and palette controls work in audio-only mode</li>
+                <li>Faster audio loading with optimized canvas rendering</li>
             </ul>
             <h3>v2</h3>
             <ul>
