@@ -1466,6 +1466,27 @@
             flex: 1;
             min-height: 0;
         }
+
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #111;
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .loading-overlay.active { display: flex; }
+        #loadingStatus {
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            color: #888;
+            margin-top: 24px;
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body>
@@ -2033,6 +2054,19 @@
             _positionDebounceTimer = setTimeout(positionLabelsToMedia, 150);
         }
 
+        // --- Loading overlay ---
+        function showLoading(msg) {
+            const el = document.getElementById('loadingOverlay');
+            el.classList.add('active');
+            document.getElementById('loadingStatus').textContent = msg || 'Loading…';
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+        function updateLoadingStatus(msg) {
+            document.getElementById('loadingStatus').textContent = msg;
+        }
+
         // Setup drag and drop — listen on the whole page
         function setupDragAndDrop() {
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -2079,6 +2113,7 @@
             // (e.g., a mediaData.original left over from a prior 3-file session) never
             // bleeds into the new load. This mirrors resetAll() but without the dialog.
             clearAllMedia();
+            showLoading('Reading files…');
 
             // Tell checkAllLoaded() how many files to wait for before activating the view.
             // Without this, it fires at loadedCount=2 during a 3-file load and calls
@@ -2974,6 +3009,7 @@
         function decodeAndComputeAudioSlotViz(slot, arrayBuffer) {
             const ctx = getAudioContext();
             ctx.decodeAudioData(arrayBuffer.slice(0)).then(audioBuffer => {
+                updateLoadingStatus('Computing waveforms…');
                 const numBuckets = 4000;
                 const waveform = computeWaveformData(audioBuffer, numBuckets);
                 const spectrogram = computeSpectrogramData(audioBuffer);
@@ -3324,6 +3360,7 @@
 
                     // Decode audio and compute viz data
                     audioFileBuffers[slot] = arrayBuffer;
+                    updateLoadingStatus('Decoding audio…');
                     decodeAndComputeAudioSlotViz(slot, arrayBuffer);
                 };
                 reader.readAsArrayBuffer(file);
@@ -5809,6 +5846,7 @@
                     .filter(Boolean);
 
                 function startFadeIn() {
+                    hideLoading();
                     // Double-rAF ensures opacity:0 is painted before adding the transition.
                     requestAnimationFrame(() => requestAnimationFrame(() => {
                         loadedLayers.forEach(layer => {
@@ -6353,6 +6391,11 @@
                 <li><strong>Audio:</strong> one track at a time; others are automatically muted</li>
             </ul>
         </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <img src="loading.gif" alt="" style="max-width: 200px;">
+        <span id="loadingStatus">Initializing…</span>
     </div>
 
     <div class="quick-start-backdrop" id="quickStartBackdrop"></div>
