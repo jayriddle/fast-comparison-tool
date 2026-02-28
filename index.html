@@ -1604,11 +1604,11 @@
                 </div>
             </div>
             <div class="video-controls-row">
-                <span class="video-timecode" id="videoTimecode" onclick="toggleTimecodeMode()" title="Click to toggle time/frame display">0:00:00</span>
+                <span class="video-timecode" id="videoTimecode" onclick="toggleTimecodeMode()" title="Click to toggle time/frame display">0:00</span>
                 <div class="video-progress-container" id="videoProgressContainer">
                     <div class="video-progress-bar" id="videoProgressBar"></div>
                 </div>
-                <span class="video-duration" id="videoDuration">0:00:00</span>
+                <span class="video-duration" id="videoDuration">0:00</span>
                 <div class="volume-control">
                     <span class="volume-icon" onclick="toggleMute()" id="muteBtn" title="Click to mute/unmute">🔊</span>
                     <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" oninput="setVolume(this.value)">
@@ -2880,12 +2880,15 @@
             const currentTime = media.currentTime;
             if (_elProgressBar) _elProgressBar.style.width = ((currentTime / duration) * 100) + '%';
 
-            // Time-only timecode (no frames for audio)
+            // Time-only timecode (no frames for audio); omit minutes when duration < 60s
+            const showMin = duration >= 60;
             const fmtTime = (t) => {
                 const m = Math.floor(t / 60);
                 const s = Math.floor(t % 60);
                 const ms = Math.floor((t % 1) * 100);
-                return `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+                return showMin
+                    ? `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+                    : `${s}.${ms.toString().padStart(2, '0')}`;
             };
             if (_elTimecode) _elTimecode.textContent = fmtTime(currentTime);
             if (_elDuration) _elDuration.textContent = fmtTime(duration);
@@ -3282,11 +3285,11 @@
                     }
                     infoBar.innerHTML = `
                         <span class="asset-name">${slotLabel}</span>
-                        <span class="asset-sample-rate"></span>
                         <span class="asset-channels"></span>
+                        <span class="asset-sample-rate"></span>
                         <span class="asset-bit-depth"></span>
-                        <span class="asset-file-size"></span>
                         <span class="asset-duration">-</span>
+                        <span class="asset-file-size"></span>
                     `;
 
                     if (!zoomIndicator) {
@@ -3564,7 +3567,9 @@
             const seconds = Math.floor(duration % 60);
             const useFps = fps || 30;
             const frames = Math.floor((duration % 1) * useFps);
-            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+            const durationStr = minutes > 0
+                ? `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`
+                : `${seconds}:${frames.toString().padStart(2, '0')}`;
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
@@ -3840,17 +3845,24 @@
                 _elTimecode.textContent = `Frame ${currentFrame}`;
                 _elDuration.textContent = `${totalFrames}`;
             } else {
-                // Time mode: "0:15:22" and "2:35:18" (min:sec:frame)
+                // Time mode: adaptive "15:22" or "2:35:18" (show minutes only when duration >= 60s)
                 const currentMinutes = Math.floor(currentTime / 60);
                 const currentSeconds = Math.floor(currentTime % 60);
                 const currentFrames = Math.floor((currentTime % 1) * fps + 0.01) % Math.floor(fps + 0.01);
                 const totalMinutes = Math.floor(duration / 60);
                 const totalSeconds = Math.floor(duration % 60);
                 const totalFramesD = Math.floor((duration % 1) * fps);
-                _elTimecode.textContent =
-                    `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
-                _elDuration.textContent =
-                    `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFramesD.toString().padStart(2, '0')}`;
+                if (totalMinutes > 0) {
+                    _elTimecode.textContent =
+                        `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')}:${currentFrames.toString().padStart(2, '0')}`;
+                    _elDuration.textContent =
+                        `${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}:${totalFramesD.toString().padStart(2, '0')}`;
+                } else {
+                    _elTimecode.textContent =
+                        `${currentSeconds}:${currentFrames.toString().padStart(2, '0')}`;
+                    _elDuration.textContent =
+                        `${totalSeconds}:${totalFramesD.toString().padStart(2, '0')}`;
+                }
             }
         }
 
@@ -3861,8 +3873,8 @@
             // Guard against NaN when video metadata isn't ready yet
             if (isNaN(duration) || duration === 0) {
                 _elProgressBar.style.width = '0%';
-                _elTimecode.textContent = '0:00:00';
-                _elDuration.textContent = '0:00:00';
+                _elTimecode.textContent = '0:00';
+                _elDuration.textContent = '0:00';
                 return;
             }
 
