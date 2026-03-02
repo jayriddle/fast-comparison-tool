@@ -1665,6 +1665,11 @@
     <script>
         const APP_VERSION = '3.1';
         document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
+        document.getElementById('appVersion').style.cursor = 'pointer';
+        document.getElementById('appVersion').addEventListener('click', () => {
+            document.getElementById('changelogPopup').classList.add('show');
+            document.getElementById('changelogBackdrop').classList.add('show');
+        });
 
         // true = equal-layout 3-UP (3 columns or 3 rows); false = L-shaped (default)
         let tripartiteLayout3Col = localStorage.getItem('tripartiteLayout3Col') === 'true';
