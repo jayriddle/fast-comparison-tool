@@ -2931,15 +2931,15 @@
             const currentTime = media.currentTime;
             if (_elProgressBar) _elProgressBar.style.width = ((currentTime / duration) * 100) + '%';
 
-            // Time-only timecode (no frames for audio); omit minutes when duration < 60s
+            // Audio timecode: M:SS.cc or S.cc (decimal centiseconds, no fake frames)
             const showMin = duration >= 60;
             const fmtTime = (t) => {
                 const m = Math.floor(t / 60);
                 const s = Math.floor(t % 60);
-                const ms = Math.floor((t % 1) * 100);
+                const cs = Math.floor((t % 1) * 100);
                 return showMin
-                    ? `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
-                    : `${s}.${ms.toString().padStart(2, '0')}`;
+                    ? `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
+                    : `${s}.${cs.toString().padStart(2, '0')}`;
             };
             if (_elTimecode) _elTimecode.textContent = fmtTime(currentTime);
             if (_elDuration) _elDuration.textContent = fmtTime(duration);
@@ -3620,11 +3620,20 @@
             if (!duration) return;
             const minutes = Math.floor(duration / 60);
             const seconds = Math.floor(duration % 60);
-            const useFps = fps || 30;
-            const frames = Math.floor((duration % 1) * useFps);
-            const durationStr = minutes > 0
-                ? `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`
-                : `${seconds}:${frames.toString().padStart(2, '0')}`;
+            let durationStr;
+            if (fps) {
+                // Video: SS:FF or M:SS:FF
+                const frames = Math.floor((duration % 1) * fps);
+                durationStr = minutes > 0
+                    ? `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`
+                    : `${seconds}:${frames.toString().padStart(2, '0')}`;
+            } else {
+                // Audio: S.cc or M:SS.cc (decimal centiseconds)
+                const cs = Math.floor((duration % 1) * 100);
+                durationStr = minutes > 0
+                    ? `${minutes}:${seconds.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
+                    : `${seconds}.${cs.toString().padStart(2, '0')}`;
+            }
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
