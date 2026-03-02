@@ -2931,15 +2931,12 @@
             const currentTime = media.currentTime;
             if (_elProgressBar) _elProgressBar.style.width = ((currentTime / duration) * 100) + '%';
 
-            // Audio timecode: M:SS.cc or S.cc (decimal centiseconds, no fake frames)
-            const showMin = duration >= 60;
+            // Audio timecode: M:SS.cc (always show minutes for clarity)
             const fmtTime = (t) => {
                 const m = Math.floor(t / 60);
                 const s = Math.floor(t % 60);
                 const cs = Math.floor((t % 1) * 100);
-                return showMin
-                    ? `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
-                    : `${s}.${cs.toString().padStart(2, '0')}`;
+                return `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
             };
             if (_elTimecode) _elTimecode.textContent = fmtTime(currentTime);
             if (_elDuration) _elDuration.textContent = fmtTime(duration);
@@ -3026,7 +3023,7 @@
             const ctx = getAudioContext();
             ctx.decodeAudioData(arrayBuffer.slice(0)).then(audioBuffer => {
                 updateLoadingStatus('Computing waveforms…');
-                const numBuckets = 4000;
+                const numBuckets = Math.ceil(audioBuffer.duration * 1000);
                 const waveform = computeWaveformData(audioBuffer, numBuckets);
                 const spectrogram = computeSpectrogramData(audioBuffer);
                 _audioSlotVizData[slot] = { waveform, spectrogram, audioBuffer };
