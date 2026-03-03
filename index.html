@@ -18,7 +18,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: rgb(32, 32, 32);
+            background: rgb(16, 16, 16);
             color: #e0e0e0;
             overflow: hidden;
         }
@@ -4473,6 +4473,12 @@
             playbackRateIndex = 2;
             const muteBtn = document.getElementById('muteBtn');
             if (muteBtn) muteBtn.textContent = '🔊';
+
+            // Reset progress bar and timecode display
+            getProgressEls();
+            if (_elProgressBar) _elProgressBar.style.width = '0%';
+            if (_elTimecode) _elTimecode.textContent = '0:00';
+            if (_elDuration) _elDuration.textContent = '0:00';
 
             // Reset timecode display mode, stale fps cache, and sampling queue
             timecodeMode = 'time';
