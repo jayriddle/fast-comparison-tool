@@ -2929,7 +2929,8 @@
             if (isNaN(duration) || duration === 0) return;
             getProgressEls();
             const currentTime = media.currentTime;
-            if (_elProgressBar) _elProgressBar.style.width = ((currentTime / duration) * 100) + '%';
+            const maxDur = _audioMaxDuration || duration;
+            if (_elProgressBar) _elProgressBar.style.width = ((currentTime / maxDur) * 100) + '%';
 
             // Audio timecode: M:SS.cc (always show minutes for clarity)
             const fmtTime = (t) => {
@@ -2939,7 +2940,7 @@
                 return `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
             };
             if (_elTimecode) _elTimecode.textContent = fmtTime(currentTime);
-            if (_elDuration) _elDuration.textContent = fmtTime(duration);
+            if (_elDuration) _elDuration.textContent = fmtTime(maxDur);
             updateAllAudioSlotCursors(media);
         }
 
@@ -4109,12 +4110,13 @@
                 const video = _scrubVideo;
                 if (!video || isNaN(video.duration)) return;
 
-                const t = pct * video.duration;
+                const seekDur = hasAudios ? (_audioMaxDuration || video.duration) : video.duration;
+                const t = Math.min(pct * seekDur, video.duration);
                 video.currentTime = t;
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
-                        if (v !== video && !isNaN(v.duration)) v.currentTime = pct * v.duration;
+                        if (v !== video && !isNaN(v.duration)) v.currentTime = Math.min(pct * seekDur, v.duration);
                     }
                 }
 
