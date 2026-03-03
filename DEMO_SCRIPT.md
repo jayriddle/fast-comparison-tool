@@ -1,4 +1,4 @@
-# WarpDiff v3.1 — Demo Script
+# WarpDiff v3 — Demo Script
 
 **Format:** Screen recording with voiceover
 **Duration:** ~5 minutes
