@@ -1435,8 +1435,8 @@
             pointer-events: none;
             z-index: 5;
         }
-        /* Audio mode: fill each grid cell completely */
-        body.audio-mode .video-wrapper.audio-slot-group {
+        /* Audio mode (split): fill each grid cell completely */
+        body.audio-mode.split-mode .video-wrapper.audio-slot-group {
             top: 0 !important;
             left: 0 !important;
             width: 100% !important;
@@ -1451,12 +1451,15 @@
             flex-direction: column;
         }
         .audio-slot-group > .asset-info-bar {
-            position: relative !important;
-            bottom: auto !important;
             background: #333;
             color: #ccc;
             border-radius: 4px 4px 0 0;
             flex-shrink: 0;
+        }
+        /* Split mode: info bar flows inside the flex column */
+        body.split-mode .audio-slot-group > .asset-info-bar {
+            position: relative !important;
+            bottom: auto !important;
         }
         body.split-mode .overlay-layer.active-audio .audio-slot-group > .asset-info-bar {
             background: rgba(0, 140, 190, 0.85);
@@ -2279,9 +2282,7 @@
             return { L, R };
         }
 
-        function computeSpectrogramChannel(channelData, sampleRate) {
-            const fftSize = 2048;
-            const hop = 512;
+        function runSTFT(channelData, fftSize, hop) {
             const numFrames = Math.floor((channelData.length - fftSize) / hop) + 1;
             if (numFrames <= 0) return null;
 
@@ -2302,14 +2303,67 @@
                 fft(re, im);
                 const magnitudes = new Uint8Array(halfBins);
                 for (let i = 0; i < halfBins; i++) {
-                    const mag = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+                    const mag = Math.sqrt(re[i] * re[i] + im[i] * im[i]) / halfBins;
                     const db = 20 * Math.log10(Math.max(mag, 1e-10));
-                    magnitudes[i] = Math.round(Math.max(0, Math.min(255, ((db + 90) / 90) * 255)));
+                    magnitudes[i] = Math.round(Math.max(0, Math.min(255, ((db + 100) / 100) * 255)));
                 }
                 frames[f] = magnitudes;
             }
 
-            return { frames, fftSize };
+            return { frames, halfBins };
+        }
+
+        function computeSpectrogramChannel(channelData, sampleRate) {
+            const hop = 128;
+            const loFFT = 8192;  // fine frequency resolution for lows
+            const hiFFT = 2048;  // sharp time resolution for highs
+            const crossoverLoHz = 500;   // blend zone starts (pure lo below)
+            const crossoverHiHz = 2000;  // blend zone ends (pure hi above)
+
+            const lo = runSTFT(channelData, loFFT, hop);
+            const hi = runSTFT(channelData, hiFFT, hop);
+            if (!lo || !hi) return lo ? { frames: lo.frames, fftSize: loFFT } : null;
+
+            const outBins = loFFT / 2; // 4096 bins in output
+            const binResLo = sampleRate / loFFT; // Hz per bin (low pass)
+            const binResHi = sampleRate / hiFFT; // Hz per bin (high pass)
+            const blendLoBin = Math.round(crossoverLoHz / binResLo);
+            const blendHiBin = Math.round(crossoverHiHz / binResLo);
+            const blendRange = blendHiBin - blendLoBin;
+
+            const loFrames = lo.frames;
+            const hiFrames = hi.frames;
+            const numFrames = loFrames.length; // lo has fewer frames (larger window); use as base
+
+            const frames = new Array(numFrames);
+            for (let f = 0; f < numFrames; f++) {
+                const merged = new Uint8Array(outBins);
+                const loFrame = loFrames[f];
+                // Map lo-pass frame index to hi-pass frame index (hi has more frames)
+                const hiIdx = Math.min(hiFrames.length - 1, Math.round(f * (hiFrames.length - 1) / (numFrames - 1 || 1)));
+                const hiFrame = hiFrames[hiIdx];
+
+                // Below blend zone: pure lo-FFT
+                for (let b = 0; b < blendLoBin && b < outBins; b++) {
+                    merged[b] = loFrame[b];
+                }
+                // Blend zone: crossfade between lo-FFT and hi-FFT
+                for (let b = blendLoBin; b < blendHiBin && b < outBins; b++) {
+                    const t = (b - blendLoBin) / blendRange; // 0→1 across blend zone
+                    const freq = b * binResLo;
+                    const hiBin = Math.min(hi.halfBins - 1, Math.round(freq / binResHi));
+                    merged[b] = Math.round(loFrame[b] * (1 - t) + hiFrame[hiBin] * t);
+                }
+                // Above blend zone: pure hi-FFT
+                for (let b = blendHiBin; b < outBins; b++) {
+                    const freq = b * binResLo;
+                    const hiBin = Math.min(hi.halfBins - 1, Math.round(freq / binResHi));
+                    merged[b] = hiFrame[hiBin];
+                }
+                frames[f] = merged;
+            }
+
+            return { frames, fftSize: loFFT };
         }
 
         function computeSpectrogramData(audioBuffer) {
@@ -2466,16 +2520,18 @@
                 for (let dy = 0; dy < regionH; dy++) {
                     const y = startY + dy;
                     const t = (regionH - 1 - dy) / regionH; // 0 at bottom, 1 at top
-                    let binIdx;
+                    let binF;
                     if (spectrogramLogScale) {
-                        // Log: map pixel to frequency logarithmically
                         const freq = Math.exp(logMin + t * logRange);
-                        binIdx = Math.min(numBins - 1, Math.max(0, Math.round(freq / nyquist * numBins)));
+                        binF = freq / nyquist * numBins;
                     } else {
-                        // Linear
-                        binIdx = Math.min(numBins - 1, Math.floor(t * numBins));
+                        binF = t * numBins;
                     }
-                    const val = frame[binIdx];
+                    // Lerp between adjacent bins for smooth rendering
+                    const b0 = Math.max(0, Math.min(numBins - 1, Math.floor(binF)));
+                    const b1 = Math.min(numBins - 1, b0 + 1);
+                    const frac = binF - b0;
+                    const val = Math.round(frame[b0] * (1 - frac) + frame[b1] * frac);
                     const [r, g, b] = spectrogramPalette[val];
                     const idx = (y * canvasW + x) * 4;
                     pixels[idx] = r;
