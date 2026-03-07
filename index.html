@@ -2729,6 +2729,8 @@
                 }
                 frames[f] = merged;
             }
+            lo.frames = null;
+            hi.frames = null;
 
             return { frames, fftSize: loFFT };
         }
@@ -2752,9 +2754,9 @@
 
         // dB zone boundaries sorted from highest to lowest amplitude
         const WAVEFORM_ZONES = [
-            { threshold: WAVEFORM_DB_CLIP, color: 'rgba(255, 50, 50, 0.9)' },   // clipping
-            { threshold: WAVEFORM_DB_1,    color: 'rgba(255, 80, 60, 0.85)' },   // > -1dB
-            { threshold: WAVEFORM_DB_6,    color: 'rgba(255, 200, 60, 0.8)' },   // -6 to -1dB
+            { threshold: WAVEFORM_DB_CLIP, color: 'rgba(255, 50, 50, 1)' },     // clipping
+            { threshold: WAVEFORM_DB_1,    color: 'rgba(255, 80, 60, 1)' },      // > -1dB
+            { threshold: WAVEFORM_DB_6,    color: 'rgba(255, 200, 60, 1)' },     // -6 to -1dB
             { threshold: 0,               color: null },                          // below -6dB: use default
         ];
 
@@ -2766,22 +2768,28 @@
             const bucketW = drawW / numBuckets;
 
             // Build closed Path2D: max peaks left→right, min peaks right→left
+            const minSpread = 1 / halfH;
             const path = new Path2D();
-            path.moveTo(0, midY - data[1] * halfH); // first max
+            let mn = data[0], mx = data[1];
+            if (mx - mn < minSpread) { mx += minSpread / 2; mn -= minSpread / 2; }
+            path.moveTo(0, midY - mx * halfH);
             for (let i = 1; i < numBuckets; i++) {
-                path.lineTo(i * bucketW, midY - data[i * 2 + 1] * halfH);
+                mn = data[i * 2]; mx = data[i * 2 + 1];
+                if (mx - mn < minSpread) { mx += minSpread / 2; mn -= minSpread / 2; }
+                path.lineTo(i * bucketW, midY - mx * halfH);
             }
-            // Trace min peaks right→left
             for (let i = numBuckets - 1; i >= 0; i--) {
-                path.lineTo(i * bucketW, midY - data[i * 2] * halfH);
+                mn = data[i * 2]; mx = data[i * 2 + 1];
+                if (mx - mn < minSpread) { mn -= minSpread / 2; }
+                path.lineTo(i * bucketW, midY - mn * halfH);
             }
             path.closePath();
 
             // Fill with vertical gradient
             const grad = ctx.createLinearGradient(0, topY, 0, topY + fullH);
-            grad.addColorStop(0.0, 'rgba(30, 130, 30, 0.7)');
-            grad.addColorStop(0.5, 'rgba(100, 230, 100, 0.9)');
-            grad.addColorStop(1.0, 'rgba(30, 130, 30, 0.7)');
+            grad.addColorStop(0.0, 'rgba(30, 130, 30, 1)');
+            grad.addColorStop(0.5, 'rgba(100, 230, 100, 1)');
+            grad.addColorStop(1.0, 'rgba(30, 130, 30, 1)');
             ctx.fillStyle = grad;
             ctx.fill(path);
 
@@ -2795,19 +2803,15 @@
             for (let z = WAVEFORM_ZONES.length - 2; z >= 0; z--) {
                 const zone = WAVEFORM_ZONES[z];
                 const t = zone.threshold;
-                // Positive side: band from threshold to top
-                const bandTopPos = midY - halfH;       // top of channel
-                const bandBotPos = midY - t * halfH;   // threshold line
-                // Negative side: band from threshold to bottom
+                const bandTopPos = midY - halfH;
+                const bandBotPos = midY - t * halfH;
                 const bandTopNeg = midY + t * halfH;
                 const bandBotNeg = midY + halfH;
 
                 ctx.save();
                 ctx.clip(path);
                 ctx.fillStyle = zone.color;
-                // Positive zone band
                 ctx.fillRect(0, bandTopPos, drawW, bandBotPos - bandTopPos);
-                // Negative zone band
                 ctx.fillRect(0, bandTopNeg, drawW, bandBotNeg - bandTopNeg);
                 ctx.restore();
             }
@@ -3029,6 +3033,7 @@
                 const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
                 waveformData[slot] = computeWaveformData(audioBuffer, 600);
                 spectrogramData[slot] = computeSpectrogramData(audioBuffer);
+                delete audioFileBuffers[slot];
                 // Draw if this is the currently active/visible slot
                 const activeSlot = assetOrder[currentAssetIndex];
                 if (slot === activeSlot || slot === currentAudioSource) {
@@ -3504,10 +3509,13 @@
             const ctx = getAudioContext();
             ctx.decodeAudioData(arrayBuffer.slice(0)).then(audioBuffer => {
                 updateLoadingStatus('Computing waveforms…');
-                const numBuckets = Math.ceil(audioBuffer.duration * 1000);
+                const dpr = window.devicePixelRatio || 1;
+                const maxPx = Math.round(window.innerWidth * dpr);
+                const numBuckets = Math.min(Math.ceil(audioBuffer.duration * 1000), maxPx);
                 const waveform = computeWaveformData(audioBuffer, numBuckets);
                 const spectrogram = computeSpectrogramData(audioBuffer);
                 _audioSlotVizData[slot] = { waveform, spectrogram, audioBuffer };
+                delete audioFileBuffers[slot];
 
                 // Update info bar with audio metadata
                 updateAudioInfoBar(slot, audioBuffer, arrayBuffer);
@@ -5290,6 +5298,36 @@
         let viewActivating = false;    // true while checkAllLoaded() activation is in progress for current load batch
         let pendingViewActivation = false; // true when fps queue is still draining at the time checkAllLoaded() first completes
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
+
+        // Pick horizontal vs vertical layout based on which gives larger rendered images
+        // for the current viewport dimensions and asset aspect ratios.
+        // n = number of assets (2 or 3). Returns 'horizontal' or 'vertical'.
+        function pickBestGridLayout(n) {
+            const container = document.querySelector('.overlay-container');
+            const W = container ? container.offsetWidth : window.innerWidth;
+            const H = container ? container.offsetHeight : window.innerHeight;
+            if (!W || !H) return 'horizontal';
+
+            const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
+            if (dims.length === 0) return 'horizontal';
+
+            // Sum rendered area across all assets for each layout option.
+            // Horizontal = n columns; Vertical = n rows.
+            let horizArea = 0, vertArea = 0;
+            for (const d of dims) {
+                const r = d.w / d.h; // asset aspect ratio
+                // Horizontal: each slot is (W/n) × H
+                const hSlotW = W / n, hSlotH = H;
+                const hScale = Math.min(hSlotW / d.w, hSlotH / d.h);
+                horizArea += d.w * hScale * d.h * hScale;
+                // Vertical: each slot is W × (H/n)
+                const vSlotW = W, vSlotH = H / n;
+                const vScale = Math.min(vSlotW / d.w, vSlotH / d.h);
+                vertArea += d.w * vScale * d.h * vScale;
+            }
+
+            return vertArea > horizArea ? 'vertical' : 'horizontal';
+        }
         
         function updateSplitViewZoomIndicators() {
             // Only update in split view modes
@@ -6021,9 +6059,28 @@
 
         // Call positioning on resize
         let _audioResizeRaf = null;
+        let _layoutResizeRaf = null;
         window.addEventListener('resize', () => {
             if (isSplitMode) {
                 positionLabelsToMediaRaf();
+                // Reconsider horizontal vs vertical layout on viewport resize
+                if (!hasAudios && !_layoutResizeRaf) {
+                    _layoutResizeRaf = requestAnimationFrame(() => {
+                        _layoutResizeRaf = null;
+                        const loadedCount = getLoadedSlotCount();
+                        const isTripartite = isTripartiteMode();
+                        if (isTripartite && tripartiteLayout3Col) {
+                            const best = pickBestGridLayout(3);
+                            const isRows = document.body.classList.contains('tripartite-rows');
+                            const want = best === 'vertical' ? 'tripartite-rows' : 'tripartite-columns';
+                            const have = isRows ? 'tripartite-rows' : 'tripartite-columns';
+                            if (want !== have) setViewMode('tripartite');
+                        } else if (!isTripartite && loadedCount === 2) {
+                            const best = pickBestGridLayout(2);
+                            if (best !== layoutMode) setViewMode(best);
+                        }
+                    });
+                }
             } else {
                 applyZoomRaf();
             }
@@ -6127,11 +6184,9 @@
                         const mixedOr = landscapes > 0 && landscapes < dims.length;
 
                         if (mixedOr || tripartiteLayout3Col) {
-                            // Mixed orientations always use grid (equal-area handles it);
-                            // uniform orientations respect the user's grid preference.
-                            const allSame = !mixedOr;
-                            const isLandscape = allSame && landscapes === dims.length;
-                            document.body.classList.add(isLandscape ? 'tripartite-rows' : 'tripartite-columns');
+                            // Pick rows vs columns based on which gives larger images
+                            const best = pickBestGridLayout(3);
+                            document.body.classList.add(best === 'vertical' ? 'tripartite-rows' : 'tripartite-columns');
                         } else {
                             document.body.classList.add('tripartite');
                         }
@@ -6455,14 +6510,6 @@
                     switchToAsset(2); // Start with Edit B
                 }
 
-                // Auto-pick layout based on aspect ratio of loaded assets.
-                // If orientations are mixed, prefer horizontal (side-by-side) so each
-                // asset gets its own column and scales independently.
-                const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
-                const landscapes = dims.filter(m => m.w >= m.h).length;
-                const allSame = landscapes === 0 || landscapes === dims.length;
-                const isLandscape = allSame && landscapes === dims.length;
-
                 // Prepare layers for staggered fade-in.
                 // Set opacity:0 before setViewMode so layers are invisible from the start.
                 const loadedLayers = assetOrder
@@ -6496,8 +6543,8 @@
                     document.querySelector('#layerEditA .asset-name').textContent = mediaType + ' A';
                     document.querySelector('#layerEditB .asset-name').textContent = mediaType + ' B';
 
-                    // Landscape → vertical stack, portrait → side-by-side
-                    setViewMode(isLandscape ? 'vertical' : 'horizontal');
+                    // Pick layout that gives largest images for the current viewport
+                    setViewMode(pickBestGridLayout(2));
                 } else if (loadedCount === 3) {
                     // Respect the user's stored equal-vs-L-shaped preference (written by '3' key).
                     // If no preference has ever been stored, default to equal layout.
@@ -7185,7 +7232,7 @@
         <div class="quick-start-body">
             <h3>v3.3</h3>
             <ul>
-                <li>Loop markers — set in/out points to loop a section <kbd>I</kbd> <kbd>P</kbd></li>
+                <li>Loop markers — <kbd>I</kbd> sets in point, <kbd>P</kbd> sets out point, or <kbd>Shift</kbd>+drag on the timeline</li>
                 <li>Click anywhere on an audio waveform to scrub to that position</li>
                 <li>Smoother waveform rendering with anti-aliased edges and gradient shading</li>
                 <li>Regions outside the loop range are dimmed on the analysis waveform</li>
