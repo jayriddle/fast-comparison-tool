@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WarpDiff</title>
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         * {
             margin: 0;
@@ -6964,6 +6967,11 @@
             if (popupVer) popupVer.textContent = 'v' + APP_VERSION;
             const changelogVer = document.getElementById('changelogVersion');
             if (changelogVer) changelogVer.textContent = 'v' + APP_VERSION;
+
+            // Register service worker for PWA / offline caching
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js');
+            }
         });
 
         function toggleShortcutsPanel() {
