@@ -1022,6 +1022,9 @@
             font-size: 14px;
         }
 
+        .shortcut-row.disabled { opacity: 0.35; }
+        .shortcut-row.disabled .shortcut-note { font-style: italic; }
+
         .shortcuts-list kbd {
             background: #333;
             padding: 2px 7px;
@@ -6977,6 +6980,12 @@
         function toggleShortcutsPanel() {
             document.getElementById('shortcutsPanel').classList.toggle('open');
             document.getElementById('shortcutsBackdrop').classList.toggle('open');
+            // Disable fullscreen shortcut in standalone PWA mode
+            const fsRow = document.getElementById('shortcutFullscreen');
+            if (fsRow && window.matchMedia('(display-mode: standalone)').matches) {
+                fsRow.classList.add('disabled');
+                fsRow.querySelector('.shortcut-desc').innerHTML = 'Browser fullscreen <span class="shortcut-note">(N/A in app mode)</span>';
+            }
         }
 
         function toggleManualPanel() {
@@ -7304,7 +7313,7 @@
             <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>G</kbd></span><span class="shortcut-desc">Grid mode</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">Grid: Inline / Offset</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
+            <div class="shortcut-row" id="shortcutFullscreen"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
             <hr class="shortcut-divider">
             <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out · Speed up / down</span></div>
             <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Zoom to fit</span></div>
