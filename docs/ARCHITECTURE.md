@@ -13,6 +13,106 @@ Both roles favor the single-file, zero-build design: easy to deploy, easy to sha
 
 ---
 
+## Current Workflow and Integration Gap
+
+### How Users Get Media into WarpDiff Today
+
+WarpDiff has no connection to the server-based review tool. Users follow a manual process:
+
+1. Open the review tool in one browser tab, WarpDiff in another
+2. Download the original asset from the review tool
+3. Download edit A
+4. Download edit B
+5. Drag all three files onto WarpDiff (or press L and multi-select)
+
+WarpDiff sorts dropped files by `lastModified` timestamp and assigns them to slots in order: original, edit A, edit B. This means the download order matters — if the user downloads in the right sequence, the timestamps create the correct slot assignment automatically.
+
+### Where This Breaks
+
+- **Browser download queuing** — if two downloads finish out of order (network jitter, different file sizes), timestamps are wrong and slots are swapped. The user may not notice until deep into a review.
+- **Filename ambiguity** — downloaded files often have server-generated names (`asset_382a.mp4`, `render_v2_final.mp4`) with no inherent ordering. Users must remember which is which.
+- **No metadata survives the download** — the review tool knows the asset's role (original vs. revision), the generation prompt, the reference images, who uploaded it, and the review context. None of this reaches WarpDiff. The user carries it in their head.
+- **Reference images aren't transferred at all** — if the review involves 7 reference images that informed the generation, the user would need to download all 7 separately and there's no way to load them into WarpDiff alongside the outputs.
+- **Round-trip friction** — every time the user switches to a different review item in the server tool, they repeat the entire download-and-drop process. There's no deep linking or session continuity.
+
+### Why This Matters
+
+The comparison capabilities in WarpDiff (overlay, split, magnifier, scopes, frame-accurate sync) are significantly more powerful than what the server-based review tool offers. But the manual transfer process means users only reach for WarpDiff when the comparison is important enough to justify the friction. Lightweight comparisons stay in the server tool's weaker viewer, and reference images are never seen alongside outputs during comparison.
+
+### Integration Paths
+
+There are three progressively deeper integration options, each building on the previous:
+
+#### Path A: Deep Link with URL Parameters (Lowest Effort)
+
+The review tool generates a URL that opens WarpDiff with assets pre-specified:
+
+```
+warpdiff.html?original=https://server/api/asset/382a&editA=https://server/api/asset/493b&editB=https://server/api/asset/501c
+```
+
+WarpDiff reads the URL parameters on load, fetches the assets, and assigns them to the correct slots by parameter name — no timestamp guessing. This requires:
+- WarpDiff: ~50 lines to parse URL params and fetch assets
+- Server: a "Compare in WarpDiff" button that constructs the URL
+- CORS headers on the asset API endpoints
+
+Eliminates the download-order problem and filename ambiguity entirely.
+
+#### Path B: JSON Manifest (Medium Effort, Enables References + Prompts)
+
+The review tool generates a manifest that includes outputs, references, prompt text, and metadata:
+
+```json
+{
+  "outputs": [
+    { "url": "https://server/api/asset/382a", "label": "Original", "uploadedBy": "artist1" },
+    { "url": "https://server/api/asset/493b", "label": "Revision 2", "uploadedBy": "artist2" }
+  ],
+  "references": [
+    { "url": "https://server/api/asset/ref1", "label": "Style reference" },
+    { "url": "https://server/api/asset/ref2", "label": "Pose reference" },
+    { "url": "https://server/api/asset/ref3", "label": "Lighting reference" }
+  ],
+  "prompt": "A cinematic wide shot of a forest clearing at golden hour, matching the style of ref1 with the composition of ref2",
+  "reviewContext": {
+    "projectName": "Forest Scene",
+    "reviewRound": 3,
+    "serverUrl": "https://server/reviews/847"
+  }
+}
+```
+
+Loaded via `?manifest=URL` or posted via `window.postMessage` from an iframe. This is the natural integration point for the reference strip and prompt panel (Improvement Plan items 2 and 3).
+
+#### Path C: Embedded iframe with Bidirectional Communication (Deepest)
+
+The server tool embeds WarpDiff in an iframe and communicates via `postMessage`:
+
+```js
+// Server tool sends assets to WarpDiff
+warpFrame.contentWindow.postMessage({
+  type: 'loadManifest',
+  manifest: { outputs: [...], references: [...], prompt: '...' }
+}, '*');
+
+// WarpDiff sends review actions back
+window.parent.postMessage({
+  type: 'reviewAction',
+  action: 'approve',
+  notes: '...'
+}, '*');
+```
+
+This enables the tightest integration: navigate between review items in the server tool and WarpDiff updates in place. Review decisions made in WarpDiff flow back to the server. But it requires the most work on both sides and introduces iframe security and sizing constraints.
+
+### Recommended Sequence
+
+Start with **Path A** (URL parameters) — it solves the most painful problem (slot misassignment) with minimal code on both sides. Then add **Path B** (manifest) when the reference strip and prompt panel are ready. **Path C** (iframe embedding) only if the server tool's architecture supports it and users need seamless navigation between review items.
+
+All three paths coexist with drag-and-drop. Standalone use is never broken.
+
+---
+
 ## State Model
 
 ### Core Media State
@@ -211,21 +311,18 @@ Ordered by priority. Improvements 1–4 can be done within the single file. The 
 
 **Why not N-panel grid:** Showing 10 panels equally makes each one too small for meaningful comparison. The hub-and-spoke model (primary outputs under scrutiny, references on demand) matches actual review workflows.
 
-### 3. Manifest Loading
+### 3. Manifest Loading and URL Parameters
 
-**What:** Accept a JSON manifest via URL parameter (`?manifest=demo1.json`) or embedded data that pre-populates outputs, references, and prompt text.
+**What:** Accept assets via URL parameters (Path A) and JSON manifests (Path B) as described in the Integration Paths section above.
 
-```json
-{
-  "outputs": ["output_v1.mp4", "output_v2.mp4"],
-  "references": ["style_ref.jpg", "pose_ref.png", "scene_ref.jpg"],
-  "prompt": "A cinematic wide shot of..."
-}
-```
+**Why:** Eliminates the fragile download-and-timestamp workflow that currently causes slot misassignment. Also the prerequisite for loading reference images and prompt text from the server tool.
 
-**Why:** Enables reproducible demos and is the natural interface for server integration. The server-based review tool can generate manifests and launch WarpDiff with pre-loaded assets.
+**Implementation sequence:**
+1. URL parameter parsing (`?original=URL&editA=URL&editB=URL`) — solves slot assignment immediately
+2. Manifest loading (`?manifest=URL`) — adds references, prompt text, and metadata
+3. `postMessage` API — enables iframe embedding if needed later
 
-**Coexists with drag-and-drop:** File loading still works for standalone use. Manifest loading adds a second entry point.
+**Coexists with drag-and-drop:** File loading still works for standalone use. URL/manifest loading adds parallel entry points. If both are present, URL parameters take precedence over drag-and-drop but the user can still drop files to replace assets.
 
 ### 4. Sync Coordinator
 
