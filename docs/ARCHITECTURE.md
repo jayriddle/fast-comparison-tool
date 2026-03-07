@@ -37,11 +37,23 @@ WarpDiff sorts dropped files by `lastModified` timestamp and assigns them to slo
 
 ### Cost
 
-For three video or audio files, the download-and-import process burns ~15+ seconds per review task. Over a session of 20–30 reviews, that's 5–8 minutes of mechanical overhead — enough to discourage use for anything but the most critical comparisons.
+For three video or audio files, the manual download-and-import process burns ~15+ seconds per review task. Over a session of 20–30 reviews, that's 5–8 minutes of mechanical overhead — enough to discourage use for anything but the most critical comparisons.
+
+### Current Mitigation: Chrome Extension
+
+A Chrome extension bridges the gap today. It watches the in-house review tool's page, detects when media is loaded, grabs the assets, and loads them directly into WarpDiff with correct slot assignment — no manual download step. This saves 10+ seconds per task, reducing the transfer overhead from ~15s to ~5s.
+
+The extension works well as a stopgap but has limitations:
+- Requires installation and maintenance as the review tool's DOM changes
+- Only available in Chrome (not Firefox, Safari, or other browsers)
+- Cannot transfer reference images or prompt text (same metadata gap as manual workflow)
+- Tightly coupled to the current review tool's page structure — brittle if the tool is redesigned
+
+The integration paths below (URL params, manifest, postMessage) would replace the extension with a server-side solution that works in any browser, carries metadata, and doesn't break when either tool's UI changes.
 
 ### Why This Matters
 
-The comparison capabilities in WarpDiff (overlay, split, magnifier, scopes, frame-accurate sync) are significantly more powerful than what the server-based review tool offers. But the ~15-second transfer tax per task means users only reach for WarpDiff when the comparison is important enough to justify the friction. Lightweight comparisons stay in the server tool's weaker viewer, and reference images are never seen alongside outputs during comparison.
+The comparison capabilities in WarpDiff (overlay, split, magnifier, scopes, frame-accurate sync) are significantly more powerful than what the server-based review tool offers. Even with the Chrome extension cutting transfer time to ~5 seconds, the workflow still lacks metadata, reference images, and prompt context. Lightweight comparisons stay in the server tool's weaker viewer, and reference images are never seen alongside outputs during comparison.
 
 ### Integration Paths
 
