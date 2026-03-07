@@ -35,9 +35,13 @@ WarpDiff sorts dropped files by `lastModified` timestamp and assigns them to slo
 - **Reference images aren't transferred at all** — if the review involves 7 reference images that informed the generation, the user would need to download all 7 separately and there's no way to load them into WarpDiff alongside the outputs.
 - **Round-trip friction** — every time the user switches to a different review item in the server tool, they repeat the entire download-and-drop process. There's no deep linking or session continuity.
 
+### Cost
+
+For three video or audio files, the download-and-import process burns ~15+ seconds per review task. Over a session of 20–30 reviews, that's 5–8 minutes of mechanical overhead — enough to discourage use for anything but the most critical comparisons.
+
 ### Why This Matters
 
-The comparison capabilities in WarpDiff (overlay, split, magnifier, scopes, frame-accurate sync) are significantly more powerful than what the server-based review tool offers. But the manual transfer process means users only reach for WarpDiff when the comparison is important enough to justify the friction. Lightweight comparisons stay in the server tool's weaker viewer, and reference images are never seen alongside outputs during comparison.
+The comparison capabilities in WarpDiff (overlay, split, magnifier, scopes, frame-accurate sync) are significantly more powerful than what the server-based review tool offers. But the ~15-second transfer tax per task means users only reach for WarpDiff when the comparison is important enough to justify the friction. Lightweight comparisons stay in the server tool's weaker viewer, and reference images are never seen alongside outputs during comparison.
 
 ### Integration Paths
 
