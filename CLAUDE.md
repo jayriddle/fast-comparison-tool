@@ -33,3 +33,32 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 - Use `_prefixed` names for module-level private state (e.g., `_frameStepping`, `_audioSlotVizData`)
 - Debounced layout functions use the pattern `functionNameDebounced` wrapping `functionName`
 - `APP_VERSION` in `index.html` and `CACHE_NAME` in `sw.js` must be kept in sync on version bumps
+
+## Testing
+
+- Framework: Playwright (Chromium only)
+- Run: `npx playwright test`
+- Config: `playwright.config.ts` — serves app on port 3948 via `npx serve`
+- Tests use `window.__testAPI` to read internal state (exposed in `index.html`)
+- Fixtures are generated PNGs created at test time in `tests/fixtures/`
+
+## Architecture Document
+
+Read `docs/ARCHITECTURE.md` for the full picture — it covers:
+- State model and all subsystems
+- Current workflow pain points (manual download → slot misassignment)
+- Chrome extension that bridges the review tool today (saves ~10s/task but Chrome-only, no metadata)
+- Three integration paths (URL params → JSON manifest → iframe postMessage)
+- Prioritized improvement plan (6 items, none started yet)
+- Known structural limitations and what to preserve
+
+## Current Status
+
+The improvement plan in `docs/ARCHITECTURE.md` has **no items started**. The codebase is at feature-complete v3 for standalone use. Next steps are about integration with the server-based review tool:
+
+1. **Dynamic slot model** — replace fixed `{ original, editA, editB }` with an array (prerequisite for everything else)
+2. **Reference strip + prompt panel** — two-zone layout for showing references alongside outputs
+3. **Manifest loading + URL params** — eliminate the download-and-drop workflow
+4. **Sync coordinator** — formalize the ad-hoc sync lock pattern
+5. **Reactive state store** — only if complexity warrants it
+6. **Lazy reference loading** — only when reference strip exists
