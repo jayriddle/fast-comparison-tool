@@ -1107,7 +1107,7 @@
 
         .shortcut-key {
             flex-shrink: 0;
-            min-width: 70px;
+            width: 70px;
             color: #ccc;
             font-size: 14px;
             white-space: nowrap;
@@ -1125,7 +1125,7 @@
             background: #333;
             padding: 2px 7px;
             border-radius: 3px;
-            font-family: monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 13px;
             color: #bbb;
             margin: 0 1px;
@@ -1788,7 +1788,7 @@
                 </div>
                 <button class="landing-load-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();">Load Files</button>
                 <div class="landing-hints">
-                    <kbd>L</kbd> load files · <kbd>K</kbd> hotkeys · <kbd>?</kbd> help
+                    <kbd>L</kbd> load files · <kbd>H</kbd> hotkeys · <kbd>?</kbd> help
                 </div>
             </div>
         </div>
@@ -2439,6 +2439,12 @@
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
         let videoScopesVisible = false; // V key toggle
         let _scopeOffscreen = null;     // offscreen canvas for frame sampling
+        let _waveformMode = 'luma';     // 'luma' | 'parade' | 'overlay'
+        const _waveformModes = ['luma', 'parade', 'overlay'];
+        const _waveformModeLabels = { luma: 'Luma', parade: 'RGB Parade', overlay: 'RGB Overlay' };
+        let _histogramMode = 'rgb';     // 'rgb' | 'rgb+luma' | 'cdf'
+        const _histogramModes = ['rgb', 'rgb+luma', 'cdf'];
+        const _histogramModeLabels = { rgb: 'RGB', 'rgb+luma': 'RGB + Luma', cdf: 'CDF' };
         let magnifierLinked = _prefs.load('magnifierLinked', false); // Shift+Z toggle
         let spectrogramLogScale = _prefs.load('spectrogramLogScale', false);
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
@@ -3326,30 +3332,93 @@
                 bBins[pixels[i + 2]]++;
             }
 
-            // Fixed normalization: scale relative to total pixel count so the
-            // Y-axis stays consistent across frames (no auto-ranging)
             const totalPixels = pixels.length / 4;
-            const maxVal = totalPixels / 32;
+            const mode = _histogramMode;
 
-            const drawChannel = (bins, color) => {
+            if (mode === 'cdf') {
+                // Cumulative distribution — running sum normalized to 1.0
+                const rCdf = new Float32Array(256);
+                const gCdf = new Float32Array(256);
+                const bCdf = new Float32Array(256);
+                rCdf[0] = rBins[0]; gCdf[0] = gBins[0]; bCdf[0] = bBins[0];
+                for (let i = 1; i < 256; i++) {
+                    rCdf[i] = rCdf[i - 1] + rBins[i];
+                    gCdf[i] = gCdf[i - 1] + gBins[i];
+                    bCdf[i] = bCdf[i - 1] + bBins[i];
+                }
+                for (let i = 0; i < 256; i++) {
+                    rCdf[i] /= totalPixels;
+                    gCdf[i] /= totalPixels;
+                    bCdf[i] /= totalPixels;
+                }
+
+                const drawCdf = (cdf, color) => {
+                    ctx.beginPath();
+                    for (let i = 0; i < 256; i++) {
+                        const x = (i / 255) * w;
+                        const y = h - cdf[i] * h;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.5 * devicePixelRatio;
+                    ctx.stroke();
+                };
+
+                drawCdf(rCdf, 'rgba(255, 60, 60, 0.85)');
+                drawCdf(gCdf, 'rgba(60, 255, 60, 0.85)');
+                drawCdf(bCdf, 'rgba(60, 100, 255, 0.85)');
+
+                // Diagonal reference line (perfectly uniform distribution)
                 ctx.beginPath();
                 ctx.moveTo(0, h);
-                for (let i = 0; i < 256; i++) {
-                    const x = (i / 255) * w;
-                    const y = h - (Math.min(bins[i], maxVal) / maxVal) * h;
-                    ctx.lineTo(x, y);
-                }
-                ctx.lineTo(w, h);
-                ctx.closePath();
-                ctx.fillStyle = color;
-                ctx.fill();
-            };
+                ctx.lineTo(w, 0);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            } else {
+                // Histogram: RGB or RGB+Luma
+                const maxVal = totalPixels / 32;
 
-            ctx.globalCompositeOperation = 'lighter';
-            drawChannel(rBins, 'rgba(255, 40, 40, 0.5)');
-            drawChannel(gBins, 'rgba(40, 255, 40, 0.5)');
-            drawChannel(bBins, 'rgba(40, 80, 255, 0.5)');
-            ctx.globalCompositeOperation = 'source-over';
+                const drawChannel = (bins, color) => {
+                    ctx.beginPath();
+                    ctx.moveTo(0, h);
+                    for (let i = 0; i < 256; i++) {
+                        const x = (i / 255) * w;
+                        const y = h - (Math.min(bins[i], maxVal) / maxVal) * h;
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.lineTo(w, h);
+                    ctx.closePath();
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                };
+
+                ctx.globalCompositeOperation = 'lighter';
+                drawChannel(rBins, 'rgba(255, 40, 40, 0.5)');
+                drawChannel(gBins, 'rgba(40, 255, 40, 0.5)');
+                drawChannel(bBins, 'rgba(40, 80, 255, 0.5)');
+                ctx.globalCompositeOperation = 'source-over';
+
+                if (mode === 'rgb+luma') {
+                    // Luma overlay as a white stroke line
+                    const lumaBins = new Uint32Array(256);
+                    for (let i = 0; i < pixels.length; i += 4) {
+                        const luma = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]);
+                        lumaBins[Math.min(255, luma)]++;
+                    }
+                    ctx.beginPath();
+                    for (let i = 0; i < 256; i++) {
+                        const x = (i / 255) * w;
+                        const y = h - (Math.min(lumaBins[i], maxVal) / maxVal) * h;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.lineWidth = 1.5 * devicePixelRatio;
+                    ctx.stroke();
+                }
+            }
         }
 
         function drawWaveformMonitor(imageData, canvas) {
@@ -3360,40 +3429,106 @@
                 canvas.height = h;
             }
             const ctx = canvas.getContext('2d');
-
-            // Build pixel buffer directly — orders of magnitude faster than fillRect calls
-            const buf = ctx.createImageData(w, h);
-            const out = buf.data;
-
-            // Accumulate hit counts per output pixel, then write green intensity
-            const hits = new Uint16Array(w * h);
             const pixels = imageData.data;
             const srcW = imageData.width;
             const srcH = imageData.height;
+            const mode = _waveformMode;
 
-            for (let sx = 0; sx < srcW; sx++) {
-                const ox0 = Math.floor((sx / srcW) * w);
-                const ox1 = Math.floor(((sx + 1) / srcW) * w);
-                for (let sy = 0; sy < srcH; sy++) {
-                    const idx = (sy * srcW + sx) * 4;
-                    const luma = (0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2]) / 255;
-                    const oy = Math.floor((1 - luma) * (h - 1));
-                    for (let ox = ox0; ox < ox1; ox++) {
-                        hits[oy * w + ox]++;
+            const buf = ctx.createImageData(w, h);
+            const out = buf.data;
+
+            if (mode === 'luma') {
+                const hits = new Uint16Array(w * h);
+                for (let sx = 0; sx < srcW; sx++) {
+                    const ox0 = Math.floor((sx / srcW) * w);
+                    const ox1 = Math.floor(((sx + 1) / srcW) * w);
+                    for (let sy = 0; sy < srcH; sy++) {
+                        const idx = (sy * srcW + sx) * 4;
+                        const luma = (0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2]) / 255;
+                        const oy = Math.floor((1 - luma) * (h - 1));
+                        for (let ox = ox0; ox < ox1; ox++) {
+                            hits[oy * w + ox]++;
+                        }
                     }
                 }
-            }
-
-            // Map hit counts to green phosphor intensity
-            const maxHits = Math.max(1, srcH * 0.02);
-            for (let i = 0; i < hits.length; i++) {
-                if (hits[i] > 0) {
-                    const intensity = Math.min(1, hits[i] / maxHits);
-                    const p = i * 4;
-                    out[p]     = Math.round(intensity * 80);
-                    out[p + 1] = Math.round(140 + intensity * 115);
-                    out[p + 2] = Math.round(intensity * 40);
-                    out[p + 3] = 255;
+                const maxHits = Math.max(1, srcH * 0.02);
+                for (let i = 0; i < hits.length; i++) {
+                    if (hits[i] > 0) {
+                        const intensity = Math.min(1, hits[i] / maxHits);
+                        const p = i * 4;
+                        out[p]     = Math.round(intensity * 80);
+                        out[p + 1] = Math.round(140 + intensity * 115);
+                        out[p + 2] = Math.round(intensity * 40);
+                        out[p + 3] = 255;
+                    }
+                }
+            } else if (mode === 'parade') {
+                // RGB Parade — three side-by-side waveforms, one per channel
+                const third = Math.floor(w / 3);
+                const channels = [
+                    { offset: 0, cIdx: 0, color: [255, 60, 60] },
+                    { offset: third, cIdx: 1, color: [60, 255, 60] },
+                    { offset: third * 2, cIdx: 2, color: [60, 100, 255] }
+                ];
+                for (const ch of channels) {
+                    const cw = ch === channels[2] ? w - ch.offset : third;
+                    const hits = new Uint16Array(cw * h);
+                    for (let sx = 0; sx < srcW; sx++) {
+                        const ox0 = Math.floor((sx / srcW) * cw);
+                        const ox1 = Math.floor(((sx + 1) / srcW) * cw);
+                        for (let sy = 0; sy < srcH; sy++) {
+                            const idx = (sy * srcW + sx) * 4;
+                            const val = pixels[idx + ch.cIdx] / 255;
+                            const oy = Math.floor((1 - val) * (h - 1));
+                            for (let ox = ox0; ox < ox1; ox++) {
+                                hits[oy * cw + ox]++;
+                            }
+                        }
+                    }
+                    const maxHits = Math.max(1, srcH * 0.02);
+                    for (let hy = 0; hy < h; hy++) {
+                        for (let hx = 0; hx < cw; hx++) {
+                            const hitVal = hits[hy * cw + hx];
+                            if (hitVal > 0) {
+                                const intensity = Math.min(1, hitVal / maxHits);
+                                const p = (hy * w + ch.offset + hx) * 4;
+                                out[p]     = Math.round(intensity * ch.color[0]);
+                                out[p + 1] = Math.round(intensity * ch.color[1]);
+                                out[p + 2] = Math.round(intensity * ch.color[2]);
+                                out[p + 3] = 255;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // RGB Overlay — all three channels on the same graph in color
+                const hitsR = new Uint16Array(w * h);
+                const hitsG = new Uint16Array(w * h);
+                const hitsB = new Uint16Array(w * h);
+                for (let sx = 0; sx < srcW; sx++) {
+                    const ox0 = Math.floor((sx / srcW) * w);
+                    const ox1 = Math.floor(((sx + 1) / srcW) * w);
+                    for (let sy = 0; sy < srcH; sy++) {
+                        const idx = (sy * srcW + sx) * 4;
+                        const oyR = Math.floor((1 - pixels[idx] / 255) * (h - 1));
+                        const oyG = Math.floor((1 - pixels[idx + 1] / 255) * (h - 1));
+                        const oyB = Math.floor((1 - pixels[idx + 2] / 255) * (h - 1));
+                        for (let ox = ox0; ox < ox1; ox++) {
+                            hitsR[oyR * w + ox]++;
+                            hitsG[oyG * w + ox]++;
+                            hitsB[oyB * w + ox]++;
+                        }
+                    }
+                }
+                const maxHits = Math.max(1, srcH * 0.02);
+                for (let i = 0; i < w * h; i++) {
+                    if (hitsR[i] > 0 || hitsG[i] > 0 || hitsB[i] > 0) {
+                        const p = i * 4;
+                        out[p]     = Math.min(255, Math.round(Math.min(1, hitsR[i] / maxHits) * 255));
+                        out[p + 1] = Math.min(255, Math.round(Math.min(1, hitsG[i] / maxHits) * 255));
+                        out[p + 2] = Math.min(255, Math.round(Math.min(1, hitsB[i] / maxHits) * 255));
+                        out[p + 3] = 255;
+                    }
                 }
             }
 
@@ -3402,12 +3537,31 @@
             // IRE reference lines on top
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.lineWidth = 1;
-            for (const ire of [0, 25, 50, 75, 100]) {
-                const y = Math.round(h - (ire / 100) * h) + 0.5;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y);
-                ctx.stroke();
+            if (mode === 'parade') {
+                // Draw lines across each third + divider lines
+                const third = Math.floor(w / 3);
+                for (const ire of [0, 25, 50, 75, 100]) {
+                    const y = Math.round(h - (ire / 100) * h) + 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(w, y);
+                    ctx.stroke();
+                }
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                for (const x of [third, third * 2]) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 0.5, 0);
+                    ctx.lineTo(x + 0.5, h);
+                    ctx.stroke();
+                }
+            } else {
+                for (const ire of [0, 25, 50, 75, 100]) {
+                    const y = Math.round(h - (ire / 100) * h) + 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(w, y);
+                    ctx.stroke();
+                }
             }
         }
 
@@ -3557,6 +3711,30 @@
             showToast('Video Scopes ' + (videoScopesVisible ? 'ON' : 'OFF'));
             animateRelayout(350);
         }
+
+        // Scope click-to-cycle handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            const wfmCanvas = document.getElementById('waveformMonitorCanvas');
+            if (wfmCanvas) {
+                wfmCanvas.style.cursor = 'pointer';
+                wfmCanvas.addEventListener('click', () => {
+                    const idx = (_waveformModes.indexOf(_waveformMode) + 1) % _waveformModes.length;
+                    _waveformMode = _waveformModes[idx];
+                    showToast('Waveform: ' + _waveformModeLabels[_waveformMode]);
+                    if (videoScopesVisible) requestAnimationFrame(() => updateVideoScopes());
+                });
+            }
+            const histCanvas = document.getElementById('histogramCanvas');
+            if (histCanvas) {
+                histCanvas.style.cursor = 'pointer';
+                histCanvas.addEventListener('click', () => {
+                    const idx = (_histogramModes.indexOf(_histogramMode) + 1) % _histogramModes.length;
+                    _histogramMode = _histogramModes[idx];
+                    showToast('Histogram: ' + _histogramModeLabels[_histogramMode]);
+                    if (videoScopesVisible) requestAnimationFrame(() => updateVideoScopes());
+                });
+            }
+        });
 
         // ── End Audio Visualization ─────────────────────────────────────
 
@@ -4927,17 +5105,17 @@
                 _scrubVideo = getAllPlayableMedia()[0] || null;
                 _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer ' + tag));
 
+                if (_scrubVideo) {
+                    wasPlaying = !_scrubVideo.paused;
+                    if (wasPlaying) pauseAllMedia();
+                }
+
                 if (e.shiftKey) {
-                    // Shift+drag: region selection for loop in/out points
                     _regionSelectStart = canvasXToTime(e, canvas);
                 } else {
                     _regionSelectStart = null;
-                    if (_scrubVideo) {
-                        wasPlaying = !_scrubVideo.paused;
-                        if (wasPlaying) pauseAllMedia();
-                    }
-                    canvasScrubToPosition(e, canvas);
                 }
+                canvasScrubToPosition(e, canvas);
             }, true);
 
             progressContainer.addEventListener('mousedown', function(e) {
@@ -4959,28 +5137,34 @@
                 _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer ' + tag));
                 _scrubContainerRect = progressContainer.getBoundingClientRect();
 
+                if (_scrubVideo) {
+                    wasPlaying = !_scrubVideo.paused;
+                    if (wasPlaying) pauseAllMedia();
+                }
+
                 if (e.shiftKey) {
                     _regionSelectStart = progressBarXToTime(e);
                 } else {
                     _regionSelectStart = null;
-                    if (_scrubVideo) {
-                        wasPlaying = !_scrubVideo.paused;
-                        if (wasPlaying) pauseAllMedia();
-                    }
-                    scrubToPosition(e);
                 }
+                scrubToPosition(e);
             });
 
             document.addEventListener('mousemove', function(e) {
                 if (!isDragging) return;
                 if (_regionSelectStart !== null) {
-                    // Shift+drag: preview the region as loop markers
+                    // Shift+drag: update loop markers + scrub to current position
                     const t = _scrubCanvas ? canvasXToTime(e, _scrubCanvas) : progressBarXToTime(e);
                     if (t !== null) {
                         _loopInPoint = Math.min(_regionSelectStart, t);
                         _loopOutPoint = Math.max(_regionSelectStart, t);
                         updateLoopMarkerUI();
-                        if (_scrubCanvas) redrawAudioSlotCanvases();
+                        if (_scrubCanvas) {
+                            redrawAudioSlotCanvases();
+                            canvasScrubToPosition(e, _scrubCanvas);
+                        } else {
+                            scrubToPosition(e);
+                        }
                     }
                 } else if (_scrubCanvas) {
                     canvasScrubToPosition(e, _scrubCanvas);
@@ -6498,10 +6682,10 @@
             strip.style.display = 'flex';
             strip.innerHTML = '';
 
-            // Split mode first, OVERLAY last: 3-UP / OVERLAY or COMPARE / OVERLAY
+            // Split mode first, STACK last: GRID / STACK
             const modes = loadedCount === 3
-                ? [['tripartite', 'GRID'], ['overlay', 'OVERLAY']]
-                : [['compare', 'GRID'], ['overlay', 'OVERLAY']];
+                ? [['tripartite', 'GRID'], ['overlay', 'STACK']]
+                : [['compare', 'GRID'], ['overlay', 'STACK']];
 
             // Wrap mode buttons in a flex group so they slide together
             const modeCore = document.createElement('div');
@@ -6886,7 +7070,7 @@
               fn: () => { document.getElementById('multiFileInput').click(); } },
 
             // ── View ──
-            { id: 'overlayMode', defaultKey: 'o', label: 'Overlay mode', section: 'view',
+            { id: 'overlayMode', defaultKey: 's', label: 'Stack mode', section: 'view',
               fn: () => {
                   const allThreeLoaded = getLoadedSlotCount() === 3;
                   if (isSplitMode) { setViewMode('overlay'); }
@@ -6943,32 +7127,18 @@
                       showToast(splitZoomLevel === 1 ? '100% native pixels' : 'Fit to panel');
                   }
               } },
-            { id: 'zoomIn', defaultKey: '+', altKey: '=', label: 'Zoom / Speed up', section: 'zoom', paired: 'zoomInOut',
+            { id: 'zoomIn', defaultKey: '+', label: 'Zoom in', section: 'zoom', paired: 'zoomInOut',
               fn: () => {
-                  if (hasAudios) {
-                      if (playbackRateIndex < PLAYBACK_RATES.length - 1) {
-                          playbackRateIndex++;
-                          const rate = PLAYBACK_RATES[playbackRateIndex];
-                          getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
-                          showToast('Speed ' + rate + '×');
-                      }
-                  } else if (magnifierEnabled) {
+                  if (magnifierEnabled) {
                       magnifierZoom = Math.min(magnifierZoom * 2, MAGNIFIER_ZOOM_MAX);
                       _prefs.save('magnifierZoom', magnifierZoom);
                       showToast('Zoom ' + magnifierZoom + '×');
                       if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
                   } else { zoomIn(); }
               } },
-            { id: 'zoomOut', defaultKey: '-', altKey: '_', label: 'Zoom / Speed down', section: 'zoom', paired: 'zoomInOut',
+            { id: 'zoomOut', defaultKey: '-', label: 'Zoom out', section: 'zoom', paired: 'zoomInOut',
               fn: () => {
-                  if (hasAudios) {
-                      if (playbackRateIndex > 0) {
-                          playbackRateIndex--;
-                          const rate = PLAYBACK_RATES[playbackRateIndex];
-                          getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
-                          showToast('Speed ' + rate + '×');
-                      }
-                  } else if (magnifierEnabled) {
+                  if (magnifierEnabled) {
                       magnifierZoom = Math.max(magnifierZoom / 2, MAGNIFIER_ZOOM_MIN);
                       _prefs.save('magnifierZoom', magnifierZoom);
                       showToast('Zoom ' + magnifierZoom + '×');
@@ -6994,14 +7164,14 @@
               fn: () => { if (magnifierEnabled) resizeMagnifier(magnifierSize_STEP); } },
 
             // ── Transport ──
-            { id: 'prevAsset', defaultKey: 'ArrowLeft', altKey: 'ArrowUp', label: 'Previous asset', section: 'transport', paired: 'switchAsset',
+            { id: 'prevAsset', defaultKey: 'ArrowLeft', altKey: 'ArrowUp', label: 'Previous asset', section: 'transport',
               fn: () => {
                   let ni = (currentAssetIndex - 1 + assetOrder.length) % assetOrder.length;
                   let a = 0;
                   while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni - 1 + assetOrder.length) % assetOrder.length; a++; }
                   if (mediaData[assetOrder[ni]]) switchToAsset(ni);
               } },
-            { id: 'nextAsset', defaultKey: 'ArrowRight', altKey: 'ArrowDown', label: 'Next asset', section: 'transport', paired: 'switchAsset',
+            { id: 'nextAsset', defaultKey: 'ArrowRight', altKey: 'ArrowDown', label: 'Next asset', section: 'transport',
               fn: () => {
                   let ni = (currentAssetIndex + 1) % assetOrder.length;
                   let a = 0;
@@ -7028,12 +7198,19 @@
               } },
             { id: 'restart', defaultKey: 'r', label: 'Restart from head', section: 'transport',
               fn: () => restartAllVideos() },
-            { id: 'mute', defaultKey: 'm', label: 'Mute', section: 'transport',
-              fn: () => toggleMute() },
-            { id: 'cycleSpeed', defaultKey: 'j', label: 'Playback speed', section: 'transport',
+            { id: 'speedDown', defaultKey: 'j', label: 'Slower', section: 'transport', paired: 'speed',
               fn: () => {
-                  if (hasVideos || hasAudios) {
-                      playbackRateIndex = (playbackRateIndex + 1) % PLAYBACK_RATES.length;
+                  if ((hasVideos || hasAudios) && playbackRateIndex > 0) {
+                      playbackRateIndex--;
+                      const rate = PLAYBACK_RATES[playbackRateIndex];
+                      getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
+                      showToast('Speed ' + rate + '×');
+                  }
+              } },
+            { id: 'speedUp', defaultKey: 'k', label: 'Faster', section: 'transport', paired: 'speed',
+              fn: () => {
+                  if ((hasVideos || hasAudios) && playbackRateIndex < PLAYBACK_RATES.length - 1) {
+                      playbackRateIndex++;
                       const rate = PLAYBACK_RATES[playbackRateIndex];
                       getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
                       showToast('Speed ' + rate + '×');
@@ -7041,8 +7218,10 @@
               } },
             { id: 'loopIn', defaultKey: 'i', label: 'Loop in point', section: 'transport', paired: 'loopPoints',
               fn: () => { if (hasVideos || hasAudios) setLoopPoint('in'); } },
-            { id: 'loopOut', defaultKey: 'p', label: 'Loop out point', section: 'transport', paired: 'loopPoints',
+            { id: 'loopOut', defaultKey: 'o', label: 'Loop out point', section: 'transport', paired: 'loopPoints',
               fn: () => { if (hasVideos || hasAudios) setLoopPoint('out'); } },
+            { id: 'mute', defaultKey: 'm', label: 'Mute', section: 'transport',
+              fn: () => toggleMute() },
 
             // ── Analysis ──
             { id: 'videoScopes', defaultKey: 'v', label: 'Video scopes', section: 'analysis',
@@ -7061,18 +7240,18 @@
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette(); } },
 
             // ── Panels ──
-            { id: 'help', defaultKey: '?', altKey: '/', label: 'Help', section: 'panels', global: true,
+            { id: 'help', defaultKey: '?', label: 'Help', section: 'panels', global: true,
               fn: () => toggleQuickStart() },
-            { id: 'shortcuts', defaultKey: 'k', label: 'This panel', section: 'panels', global: true,
+            { id: 'shortcuts', defaultKey: 'h', label: 'This panel', section: 'panels', global: true,
               fn: () => toggleShortcutsPanel() },
         ];
 
         // Panel display: which paired groups to show together, with custom combined labels
         const _pairedLabels = {
-            switchAsset:   'Switch asset',
             loupeSize:     'Resize loupe',
             frameStepping: 'Frame back / forward',
-            zoomInOut:     'Zoom / Speed up / down',
+            zoomInOut:     'Zoom in / out',
+            speed:         'Slower / Faster',
             loopPoints:    'Loop in / out point',
         };
 
@@ -7089,6 +7268,9 @@
                     _keymap[prefix + action.altKey] = action.id;
                 }
             }
+            // Hidden aliases: unshifted = and _ map to +/- zoom (same physical keys)
+            if (!_keymap['=']) _keymap['='] = 'zoomIn';
+            if (!_keymap['_']) _keymap['_'] = 'zoomOut';
         }
         _buildKeymap();
 
@@ -7214,7 +7396,7 @@
                     col.appendChild(_buildPairedRow(action));
                     // Append Esc Esc row right after loop points
                     if (action.paired === 'loopPoints') {
-                        col.appendChild(_buildFixedRow('<kbd>Esc</kbd> <kbd>Esc</kbd>', 'Clear loop markers'));
+                        col.appendChild(_buildFixedRow('<kbd>Esc</kbd> <small>2×</small>', 'Clear loop markers'));
                     }
                     continue;
                 }
@@ -7223,7 +7405,7 @@
             }
 
             // "Escape" row in right column (non-reassignable, same section as panels)
-            rightCol.appendChild(_buildFixedRow('<kbd>Esc</kbd>', 'Dismiss any overlay'));
+            rightCol.appendChild(_buildFixedRow('<kbd>Esc</kbd>', 'Dismiss panel'));
 
             list.appendChild(leftCol);
             list.appendChild(rightCol);
@@ -7255,6 +7437,19 @@
                 if (idx > 0) keySpan.appendChild(document.createTextNode(' '));
                 keySpan.appendChild(_buildKbd(p));
                 if (_isCustomised(p.id)) keySpan.appendChild(_buildResetIcon(p));
+                // Show altKey as a secondary kbd if present and not customised
+                if (p.altKey && !_isCustomised(p.id)) {
+                    const altKbd = document.createElement('kbd');
+                    altKbd.textContent = _keyDisplay(p.altKey, p.shift);
+                    altKbd.className = 'shortcut-kbd-clickable';
+                    altKbd.title = 'Alternate key (not reassignable)';
+                    altKbd.addEventListener('click', () => {
+                        altKbd.textContent = 'Not reassignable';
+                        altKbd.classList.add('flash-conflict');
+                        setTimeout(() => { altKbd.textContent = _keyDisplay(p.altKey, p.shift); altKbd.classList.remove('flash-conflict'); }, 1000);
+                    });
+                    keySpan.appendChild(altKbd);
+                }
             });
             row.appendChild(keySpan);
             const descSpan = document.createElement('span');
@@ -7275,6 +7470,18 @@
             keySpan.className = 'shortcut-key';
             keySpan.appendChild(_buildKbd(action));
             if (_isCustomised(action.id)) keySpan.appendChild(_buildResetIcon(action));
+            if (action.altKey && !_isCustomised(action.id)) {
+                const altKbd = document.createElement('kbd');
+                altKbd.textContent = _keyDisplay(action.altKey, action.shift);
+                altKbd.className = 'shortcut-kbd-clickable';
+                altKbd.title = 'Alternate key (not reassignable)';
+                altKbd.addEventListener('click', () => {
+                    altKbd.textContent = 'Not reassignable';
+                    altKbd.classList.add('conflict-flash');
+                    setTimeout(() => { altKbd.textContent = _keyDisplay(action.altKey, action.shift); altKbd.classList.remove('conflict-flash'); }, 1000);
+                });
+                keySpan.appendChild(altKbd);
+            }
             row.appendChild(keySpan);
             const descSpan = document.createElement('span');
             descSpan.className = 'shortcut-desc';
@@ -7320,7 +7527,7 @@
                     kbd.classList.add('conflict-flash');
                     setTimeout(() => {
                         kbd.classList.remove('conflict-flash');
-                        kbd.innerHTML = keyHtml.includes('Esc</kbd> <kbd>') ? 'Esc' : keyHtml.replace(/<\/?kbd>/g, '');
+                        kbd.textContent = 'Esc';
                     }, 1200);
                 });
             });
@@ -7543,20 +7750,20 @@
             <p><strong>Reset:</strong> Click the <strong>Reset</strong> button (visible after loading) to clear all files and start over.</p>
 
             <h2>View Modes</h2>
-            <p><strong>Overlay</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
+            <p><strong>Stack</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
             <p><strong>Grid (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
             <p><strong>Grid (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between Inline (columns or rows, auto-picked by aspect ratio) and Offset (Original alone, A/B paired).</p>
 
             <h2>Switching Modes</h2>
             <table>
                 <tr><th>Action</th><th>Result</th></tr>
-                <tr><td>Click <strong>OVERLAY / GRID</strong> in header</td><td>Switch to that mode</td></tr>
-                <tr><td>Press <kbd>O</kbd></td><td>Toggle Overlay ↔ Grid</td></tr>
-                <tr><td>Press <kbd>G</kbd></td><td>Toggle Grid ↔ Overlay</td></tr>
+                <tr><td>Click <strong>STACK / GRID</strong> in header</td><td>Switch to that mode</td></tr>
+                <tr><td>Press <kbd>S</kbd></td><td>Toggle Stack ↔ Grid</td></tr>
+                <tr><td>Press <kbd>G</kbd></td><td>Toggle Grid ↔ Stack</td></tr>
             </table>
 
             <h2>Zoom &amp; Pan</h2>
-            <p>Zoom and pan are available in <strong>Overlay mode only</strong>.</p>
+            <p>Zoom and pan are available in <strong>Stack mode only</strong>.</p>
             <table>
                 <tr><th>Shortcut</th><th>Action</th></tr>
                 <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
@@ -7617,7 +7824,7 @@
                 <tr><th>Shortcut</th><th>Action</th></tr>
                 <tr><td><kbd>I</kbd></td><td>Set loop in-point at current time</td></tr>
                 <tr><td><kbd>P</kbd></td><td>Set loop out-point at current time</td></tr>
-                <tr><td><kbd>Esc Esc</kbd></td><td>Clear both loop markers (double-tap)</td></tr>
+                <tr><td><kbd>Esc</kbd> <small>2×</small></td><td>Clear both loop markers (double-tap)</td></tr>
                 <tr><td><kbd>R</kbd></td><td>Restart at in-point (or beginning if no markers)</td></tr>
             </table>
 
@@ -7625,31 +7832,31 @@
             <table>
                 <tr><th>Key</th><th>Action</th></tr>
                 <tr><td><kbd>L</kbd></td><td>Load files</td></tr>
+                <tr><td><kbd>J / K</kbd></td><td>Slower / Faster</td></tr>
                 <tr><td><kbd>Z</kbd></td><td>Toggle zoom loupe</td></tr>
                 <tr><td><kbd>Shift+Z</kbd></td><td>Toggle linked zoom in Grid mode</td></tr>
                 <tr><td><kbd>[ ]</kbd></td><td>Resize zoom loupe</td></tr>
-                <tr><td><kbd>← → ↑ ↓</kbd></td><td>Switch asset (Overlay mode)</td></tr>
-                <tr><td><kbd>O</kbd></td><td>Toggle Overlay mode</td></tr>
+                <tr><td><kbd>← → ↑ ↓</kbd></td><td>Switch asset</td></tr>
+                <tr><td><kbd>S</kbd></td><td>Toggle Stack mode</td></tr>
                 <tr><td><kbd>G</kbd></td><td>Toggle Grid mode</td></tr>
                 <tr><td><kbd>3</kbd></td><td>Toggle Grid layout (Inline ↔ Offset)</td></tr>
                 <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
-                <tr><td><kbd>+</kbd></td><td>Zoom in (video) / Speed up (audio)</td></tr>
-                <tr><td><kbd>−</kbd></td><td>Zoom out (video) / Speed down (audio)</td></tr>
+                <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
+                <tr><td><kbd>−</kbd></td><td>Zoom out</td></tr>
                 <tr><td><kbd>0</kbd></td><td>Zoom to fit</td></tr>
                 <tr><td><kbd>1</kbd></td><td>Zoom to 100% / toggle 100% cap</td></tr>
                 <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
                 <tr><td><kbd>R</kbd></td><td>Restart</td></tr>
                 <tr><td><kbd>M</kbd></td><td>Mute</td></tr>
-                <tr><td><kbd>J</kbd></td><td>Cycle playback speed (0.25× – 2×)</td></tr>
                 <tr><td><kbd>I</kbd></td><td>Set loop in-point</td></tr>
-                <tr><td><kbd>P</kbd></td><td>Set loop out-point</td></tr>
-                <tr><td><kbd>Esc Esc</kbd></td><td>Clear loop markers</td></tr>
+                <tr><td><kbd>O</kbd></td><td>Set loop out-point</td></tr>
+                <tr><td><kbd>Esc</kbd> <small>2×</small></td><td>Clear loop markers</td></tr>
                 <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
                 <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
                 <tr><td><kbd>W</kbd></td><td>Toggle waveform / spectrogram</td></tr>
                 <tr><td><kbd>Shift+W</kbd></td><td>Toggle linear / log frequency scale</td></tr>
                 <tr><td><kbd>Shift+C</kbd></td><td>Cycle spectrogram color palette</td></tr>
-                <tr><td><kbd>K</kbd></td><td>Toggle shortcuts panel</td></tr>
+                <tr><td><kbd>H</kbd></td><td>Toggle shortcuts panel</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Dismiss loupe / close panel</td></tr>
             </table>
 
@@ -7672,7 +7879,7 @@
             <ul>
                 <li><strong>2 or 3 files only</strong> — loading 1 or 4+ files is not supported</li>
                 <li><strong>Images, videos, and audio only</strong> — other file types are ignored</li>
-                <li><strong>Pan available in Overlay mode only</strong></li>
+                <li><strong>Pan available in Stack mode only</strong></li>
                 <li><strong>Audio:</strong> one track at a time; others are automatically muted</li>
             </ul>
         </div>
@@ -7698,7 +7905,7 @@
 
             <h3>View Modes</h3>
             <ul>
-                <li><strong>Overlay</strong> <kbd>O</kbd> — flip between assets with <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></li>
+                <li><strong>Stack</strong> <kbd>S</kbd> — flip between assets with <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></li>
                 <li><strong>Grid</strong> <kbd>G</kbd> — side-by-side or stacked; <kbd>3</kbd> toggles inline / offset layout</li>
             </ul>
 
@@ -7724,7 +7931,7 @@
 
             <h3>Keyboard-First</h3>
             <ul>
-                <li><kbd>?</kbd> this help screen, <kbd>K</kbd> all hotkeys</li>
+                <li><kbd>?</kbd> this help screen, <kbd>H</kbd> all hotkeys</li>
                 <li><kbd>+</kbd> <kbd>−</kbd> zoom, <kbd>0</kbd> fit, <kbd>1</kbd> native pixels</li>
                 <li>Your preferences persist across sessions</li>
             </ul>
@@ -7733,6 +7940,7 @@
         <div class="quick-start-footer">
             <a class="feedback-link" onclick="toggleQuickStart(); toggleManualPanel();">Manual</a>
             <a href="https://forms.gle/oob2qL4feRGcBFfZ9" target="_blank" class="feedback-link">Bugs &amp; Feedback</a>
+            <a href="https://github.com/jayriddle/warpdiff" target="_blank" class="feedback-link">GitHub</a>
         </div>
     </div>
 
@@ -7764,8 +7972,8 @@
             </ul>
             <h3>v3.1</h3>
             <ul>
-                <li>Variable playback speed <kbd>J</kbd> — cycle 0.25× / 0.5× / 1× / 2×</li>
-                <li>Up/down arrow keys to switch assets in Overlay mode</li>
+                <li>Variable playback speed <kbd>J</kbd> / <kbd>K</kbd> — 0.25× to 2×</li>
+                <li>Up/down arrow keys to switch assets in Stack mode</li>
                 <li>Audio file loading speed improvement</li>
                 <li>Bug fixes</li>
             </ul>
@@ -7787,7 +7995,7 @@
                 <li>Audio waveform with dB color coding, spectrogram with palette/scale options</li>
                 <li>Fullscreen mode <kbd>F</kbd></li>
                 <li>Preferences persist across sessions</li>
-                <li>Keyboard-driven workflow — press <kbd>K</kbd> for all hotkeys</li>
+                <li>Keyboard-driven workflow — press <kbd>H</kbd> for all hotkeys</li>
             </ul>
         </div>
     </div>

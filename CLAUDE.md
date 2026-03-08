@@ -20,7 +20,7 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 
 ## Naming Conventions
 
-- UI shows two view modes: **Overlay** and **Grid** (never "3-UP")
+- UI shows two view modes: **Stack** and **Grid** (never "Overlay" or "3-UP")
 - Grid sub-layouts (3 files): **Inline** (equal cols/rows) and **Offset** (L-shaped 1+2)
 - Internal code still uses `tripartite`, `tripartiteLayout3Col`, etc. — only user-facing text was renamed
 - Slots are named `original`, `editA`, `editB` internally; UI shows "GT" (Ground Truth), "A", "B"
