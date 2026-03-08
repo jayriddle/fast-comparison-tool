@@ -472,25 +472,35 @@
         .landing-cta {
             flex: 1;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            gap: 16px;
         }
         .landing-cta.hidden { display: none; }
 
         .landing-dropzone {
+            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 12px;
             padding: 48px 64px;
-            border: 2px dashed #333;
+            border: none;
             border-radius: 16px;
+        }
+        .landing-dropzone > svg.dropzone-border {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
             animation: dropzone-pulse 3s ease-in-out infinite;
         }
         .landing-logo { margin-bottom: 8px; }
         @keyframes dropzone-pulse {
-            0%, 100% { border-color: #333; }
-            50% { border-color: #555; }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
         .landing-logo {
             width: 64px;
@@ -1778,6 +1788,7 @@
 
         <div class="landing-cta" id="landingCta">
             <div class="landing-dropzone">
+                <svg class="dropzone-border" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" rx="16" ry="16" width="calc(100% - 2px)" height="calc(100% - 2px)" fill="none" stroke="#444" stroke-width="2" stroke-dasharray="16 12"/></svg>
                 <img src="WarpDiff_Logo_v1.png" alt="" class="landing-logo">
                 <div class="landing-title">Drop 2–3 files to compare</div>
                 <div class="landing-formats">
@@ -1787,9 +1798,9 @@
                     <span class="landing-capsule">Audio</span>
                 </div>
                 <button class="landing-load-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();">Load Files</button>
-                <div class="landing-hints">
-                    <kbd>L</kbd> load files · <kbd>H</kbd> hotkeys · <kbd>?</kbd> help
-                </div>
+            </div>
+            <div class="landing-hints">
+                <kbd>L</kbd> load files · <kbd>H</kbd> hotkeys · <kbd>?</kbd> help
             </div>
         </div>
 
