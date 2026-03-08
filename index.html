@@ -138,7 +138,7 @@
             background: #333;
             padding: 2px 6px;
             border-radius: 3px;
-            font-family: monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             margin: 0 2px;
             font-size: 10px;
         }
@@ -407,7 +407,7 @@
             border-radius: 3px;
             padding: 1px 4px;
             font-size: 11px;
-            font-family: monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             color: #ddd;
         }
 
@@ -562,7 +562,7 @@
             background: #222;
             padding: 1px 5px;
             border-radius: 3px;
-            font-family: monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 11px;
             color: #777;
             border: 1px solid #333;
@@ -647,9 +647,8 @@
             z-index: 11;
         }
 
-        /* In overlay mode, only show info bar and zoom for the active layer */
-        body:not(.split-mode) .overlay-layer:not(.active) .asset-info-bar,
-        body:not(.split-mode) .overlay-layer:not(.active) .split-zoom-indicator {
+        /* In overlay mode, only show info bar for the active layer */
+        body:not(.split-mode) .overlay-layer:not(.active) .asset-info-bar {
             display: none;
         }
 
@@ -722,7 +721,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             grid-template-rows: 1fr;
-            column-gap: 8px;
+            column-gap: 4px;
             height: 100%;
             overflow: hidden;
             align-items: stretch;
@@ -736,7 +735,7 @@
             display: grid;
             grid-template-columns: 1fr;
             grid-template-rows: 1fr 1fr 1fr;
-            row-gap: 8px;
+            row-gap: 4px;
             height: 100%;
             overflow: hidden;
             align-items: stretch;
@@ -758,13 +757,8 @@
             overflow: visible;
         }
 
-        /* Allow overflow when zoomed to 100% native pixels in grid modes */
-        body.zoom-100 .overlay-container {
-            overflow: visible !important;
-        }
-        body.zoom-100.vertical-stack .overlay-layer {
-            overflow: visible !important;
-        }
+        /* zoom-100 class is toggled when user presses 1 (100% native pixels).
+           Assets are capped at viewport fit so no overflow is needed. */
 
         body.tripartite .media-container,
         body.tripartite-columns .media-container,
@@ -811,21 +805,7 @@
         }
 
         /* Zoom level indicator - overlays bottom right corner of media */
-        .split-zoom-indicator {
-            position: absolute;
-            bottom: 5px;
-            right: 5px;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 4px 8px;
-            font-size: 12px;
-            font-weight: bold;
-            border-radius: 3px;
-            pointer-events: none;
-            z-index: 10;
-            color: rgb(160, 160, 160);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: block; /* Always show in all modes */
-        }
+        /* Zoom level shown in info bar via .asset-zoom span */
 
         .toast {
             position: fixed;
@@ -860,7 +840,7 @@
             background: rgba(0, 0, 0, 0.9);
             z-index: 10;
             font-size: 11px;
-            color: #a0a0a0;
+            color: #777;
             border-radius: 3px 3px 0 0;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 1px 0 0 rgba(255, 255, 255, 0.12), inset -1px 0 0 rgba(255, 255, 255, 0.12);
             pointer-events: none;
@@ -873,15 +853,25 @@
             color: #ffffff;
         }
 
+        .asset-info-bar .asset-zoom {
+            background: rgba(255, 255, 255, 0.22);
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .asset-info-bar .asset-zoom:empty { display: none; }
+
         .asset-info-bar .asset-filename {
             margin-left: auto;
-            color: #888;
+            color: #666;
             white-space: nowrap;
         }
 
         body.split-mode .overlay-layer.active-audio .asset-info-bar .asset-filename,
         body:not(.split-mode) .overlay-layer.active .asset-info-bar .asset-filename {
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.5);
         }
 
         /* Prompt bar below header */
@@ -1056,7 +1046,7 @@
             background: #333;
             padding: 1px 6px;
             border-radius: 3px;
-            font-family: monospace;
+            font-family: system-ui, -apple-system, sans-serif;
             font-size: 12px;
             color: #bbb;
             border: 1px solid #444;
@@ -1528,15 +1518,33 @@
             display: flex;
             align-items: center;
             gap: 0;
-            margin-left: -6px; /* underlap OVERLAY pill's 4px border-radius so tint fills flush to its edge */
+            margin-left: -6px; /* underlap active pill's border-radius so tint fills flush */
             opacity: 0;
         }
-        .asset-group.visible {
+        /* Overlay asset group: fade+slide from right */
+        .asset-group[data-group-type="overlay"].visible {
             opacity: 1;
             animation: assetGroupReveal 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
         }
-        .asset-group.hiding {
+        .asset-group[data-group-type="overlay"].hiding {
             animation: assetGroupHide 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        /* Grid sub-options: expand width to push STACK right */
+        .asset-group[data-group-type="grid"] {
+            overflow: hidden;
+            max-width: 0;
+            opacity: 0;
+            transition: max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .asset-group[data-group-type="grid"].visible {
+            opacity: 1;
+        }
+        .asset-group[data-group-type="grid"].hiding {
+            opacity: 0;
+            max-width: 0 !important;
+            transition: max-width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .mode-btn, .asset-btn {
@@ -1814,35 +1822,35 @@
                 </div>
                 
                 <div class="overlay-layer" id="layerOriginal">
-                    <div class="split-zoom-indicator" id="zoomOriginal">1.0×</div>
                     <div class="asset-info-bar">
                         <span class="asset-name">ORIGINAL</span>
+                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-duration">-</span>
+                        <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
                 </div>
                 <div class="overlay-layer" id="layerEditA">
-                    <div class="split-zoom-indicator" id="zoomEditA">1.0×</div>
                     <div class="asset-info-bar">
                         <span class="asset-name">EDIT A</span>
+                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-duration">-</span>
+                        <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
                 </div>
                 <div class="overlay-layer" id="layerEditB">
-                    <div class="split-zoom-indicator" id="zoomEditB">1.0×</div>
                     <div class="asset-info-bar">
                         <span class="asset-name">EDIT B</span>
+                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-duration">-</span>
+                        <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
                 </div>
@@ -1948,7 +1956,7 @@
     </div>
 
     <script>
-        const APP_VERSION = '3.4.1';
+        const APP_VERSION = '3.5';
         document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
         document.getElementById('appVersion').style.cursor = 'pointer';
         document.getElementById('appVersion').addEventListener('click', () => {
@@ -3050,9 +3058,9 @@
             const data = waveformData[slot];
             const isStereo = data && data.R;
             if (isStereo) {
-                labels.innerHTML = '<span style="color:#50c850">L</span><span style="color:#50c850">R</span>';
+                labels.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span style="color:#6ab4ff;font-size:10px;font-weight:600">L</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center"><span style="color:#ffa050;font-size:10px;font-weight:600">R</span></div>';
             } else {
-                labels.innerHTML = '<span>&nbsp;</span><span style="color:#888">MONO</span><span>&nbsp;</span>';
+                labels.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span style="color:#888;font-size:9px">Mono</span></div>';
             }
         }
 
@@ -3161,11 +3169,17 @@
                 const isStereo = spec.R && spec.R.frames.length;
                 const scaleLabel = spectrogramLogScale ? 'LOG' : 'LIN';
                 if (isStereo) {
-                    if (spectrogramLogScale) {
-                        labels.innerHTML = '<span style="color:#6ab4ff">L</span><span>10k</span><span>100</span><span>20</span><span style="color:#ffa050">R</span><span>10k</span><span>100</span><span>20</span>';
-                    } else {
-                        labels.innerHTML = '<span style="color:#6ab4ff">L</span><span>20k</span><span>1k</span><span style="color:#ffa050">R</span><span>20k</span><span>1k</span>';
-                    }
+                    const freqs = spectrogramLogScale
+                        ? ['20k', '10k', '1k', '100', '20'] : ['20k', '10k', '5k', '1k', '100'];
+                    const freqSpans = freqs.map(f => '<span style="font-size:7px;color:#666">' + f + '</span>').join('');
+                    const buildHalf = (ch, color) =>
+                        '<div style="flex:1;display:flex;flex-direction:row;align-items:stretch">' +
+                            '<div style="flex:0 0 14px;display:flex;align-items:center;justify-content:center"><span style="color:' + color + ';font-size:10px;font-weight:600">' + ch + '</span></div>' +
+                            '<div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">' + freqSpans + '</div>' +
+                        '</div>';
+                    labels.innerHTML = buildHalf('L', '#6ab4ff') +
+                        '<div style="flex:0 0 6px"></div>' +
+                        buildHalf('R', '#ffa050');
                 } else {
                     if (spectrogramLogScale) {
                         labels.innerHTML = '<span>20k</span><span>10k</span><span>1k</span><span>100</span><span>20</span>';
@@ -3181,17 +3195,17 @@
             const pixels = imgData.data;
 
             if (spec.R && spec.R.frames.length) {
-                // Stereo: L top half, R bottom half
-                const halfH = Math.floor(canvas.height / 2);
+                // Stereo: L top half, gap, R bottom half
+                const specGap = 6;
+                const halfH = Math.floor((canvas.height - specGap) / 2);
+                const rTop = halfH + specGap;
+                const rHeight = canvas.height - rTop;
                 drawSpectrogramRegion(pixels, canvas.width, spec.L.frames, numBins, 0, halfH, sr);
-                drawSpectrogramRegion(pixels, canvas.width, spec.R.frames, numBins, halfH, canvas.height - halfH, sr);
-                // Draw divider line
+                drawSpectrogramRegion(pixels, canvas.width, spec.R.frames, numBins, rTop, rHeight, sr);
                 ctx.putImageData(imgData, 0, 0);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.beginPath();
-                ctx.moveTo(0, halfH);
-                ctx.lineTo(canvas.width, halfH);
-                ctx.stroke();
+                // Fill gap with background color
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, halfH, canvas.width, specGap);
             } else {
                 // Mono: full height
                 drawSpectrogramRegion(pixels, canvas.width, spec.L.frames, numBins, 0, canvas.height, sr);
@@ -3229,8 +3243,12 @@
             drawSpectrogram(slot);
         }
 
-        async function decodeAndComputeAudioViz(slot, arrayBuffer) {
+        async function decodeAndComputeAudioViz(slot, source) {
             try {
+                // source can be an ArrayBuffer (audio files) or a File (video files)
+                const arrayBuffer = source instanceof File
+                    ? await source.arrayBuffer()
+                    : source;
                 const ctx = getAudioContext();
                 const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
                 waveformData[slot] = computeWaveformData(audioBuffer, 600);
@@ -3266,12 +3284,6 @@
             const controls = document.getElementById('videoControls');
             if (controls) controls.classList.toggle('audio-viz-active', audioVizVisible);
             if (audioVizVisible) {
-                // Lazy-decode: on first W press, decode any pending audio buffers
-                for (const slot of Object.keys(audioFileBuffers)) {
-                    if (!waveformData[slot] && audioFileBuffers[slot]) {
-                        decodeAndComputeAudioViz(slot, audioFileBuffers[slot]);
-                    }
-                }
                 const slot = currentAudioSource || assetOrder[currentAssetIndex];
                 // Redraw once canvases have dimensions (after first frame)
                 requestAnimationFrame(() => updateAudioVisForSlot(slot));
@@ -4036,16 +4048,13 @@
                 const sr = spec.sampleRate;
 
                 if (spec.R && spec.R.frames.length) {
-                    const halfSpecH = Math.floor(specH / 2);
+                    const specGap = Math.round(6 * dpr);
+                    const halfSpecH = Math.floor((specH - specGap) / 2);
+                    const rHeight = specH - halfSpecH - specGap;
                     const imgData = ctx.createImageData(fillW, specH);
                     drawSpectrogramRegion(imgData.data, fillW, spec.L.frames, numBins, 0, halfSpecH, sr);
-                    drawSpectrogramRegion(imgData.data, fillW, spec.R.frames, numBins, halfSpecH, specH - halfSpecH, sr);
+                    drawSpectrogramRegion(imgData.data, fillW, spec.R.frames, numBins, halfSpecH + specGap, rHeight, sr);
                     ctx.putImageData(imgData, labelMargin, waveH);
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                    ctx.beginPath();
-                    ctx.moveTo(labelMargin, waveH + halfSpecH);
-                    ctx.lineTo(labelMargin + fillW, waveH + halfSpecH);
-                    ctx.stroke();
                 } else {
                     const imgData = ctx.createImageData(fillW, specH);
                     drawSpectrogramRegion(imgData.data, fillW, spec.L.frames, numBins, 0, specH, sr);
@@ -4073,43 +4082,73 @@
             }
 
             // ── Draw labels in the left margin ──
-            const fontSize = Math.round(9 * dpr);
-            ctx.font = fontSize + 'px monospace';
-            ctx.textAlign = 'center';
+            // ── Label layout ──
+            // Left sub-col: channel (L/R), right sub-col: freq scale
+            const chFontSize = Math.round(10 * dpr);
+            const freqFontSize = Math.round(7 * dpr);
+            const chX = Math.round(labelMargin * 0.25);   // channel label center
+            const freqX = Math.round(labelMargin * 0.72);  // freq label center
             ctx.textBaseline = 'middle';
-            const labelX = labelMargin / 2;
 
-            // Waveform channel labels (centered in padded region)
+            // Waveform channel labels (centered vertically in each channel)
+            ctx.font = 'bold ' + chFontSize + 'px monospace';
+            ctx.textAlign = 'center';
             if (isStereo) {
                 const halfH = Math.floor(wfInnerH / 2);
                 ctx.fillStyle = '#6ab4ff';
-                ctx.fillText('L', labelX, wfPad + halfH / 2);
+                ctx.fillText('L', chX, wfPad + halfH / 2);
                 ctx.fillStyle = '#ffa050';
-                ctx.fillText('R', labelX, wfPad + halfH + (wfInnerH - halfH) / 2);
+                ctx.fillText('R', chX, wfPad + halfH + (wfInnerH - halfH) / 2);
+            } else {
+                ctx.fillStyle = '#888';
+                ctx.font = freqFontSize + 'px monospace';
+                ctx.fillText('Mono', labelMargin / 2, wfPad + wfInnerH / 2);
             }
 
-            // Spectrogram frequency labels
-            ctx.fillStyle = '#888';
-            ctx.font = Math.round(8 * dpr) + 'px monospace';
+            // Spectrogram labels
             if (isStereo) {
-                const halfSpecH = Math.floor(specH / 2);
-                // L channel spectrogram labels
+                const specGap = Math.round(6 * dpr); // gap between L and R spectrograms
+                const halfSpecH = Math.floor((specH - specGap) / 2);
+                const specRTop = waveH + halfSpecH + specGap; // top of R spectrogram
+                // L/R centered in their halves (left sub-column)
+                ctx.font = 'bold ' + chFontSize + 'px monospace';
+                ctx.textAlign = 'center';
                 ctx.fillStyle = '#6ab4ff';
-                ctx.fillText('L', labelX, waveH + halfSpecH / 2);
-                // R channel spectrogram labels
+                ctx.fillText('L', chX, waveH + halfSpecH / 2);
                 ctx.fillStyle = '#ffa050';
-                ctx.fillText('R', labelX, waveH + halfSpecH + (specH - halfSpecH) / 2);
+                ctx.fillText('R', chX, specRTop + (specH - halfSpecH - specGap) / 2);
+                // Freq labels in right sub-column
+                ctx.font = freqFontSize + 'px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#666';
+                const freqsS = spectrogramLogScale
+                    ? ['20k', '10k', '1k', '100', '20']
+                    : ['20k', '10k', '5k', '1k', '100'];
+                const halfFf = freqFontSize / 2;
+                const nf = freqsS.length;
+                for (let fi = 0; fi < nf; fi++) {
+                    const t = nf > 1 ? fi / (nf - 1) : 0.5;
+                    // L half
+                    ctx.fillText(freqsS[fi], freqX, waveH + halfFf + t * (halfSpecH - freqFontSize));
+                    // R half
+                    ctx.fillText(freqsS[fi], freqX, specRTop + halfFf + t * (specH - halfSpecH - specGap - freqFontSize));
+                }
+                // Draw gap between L and R spectrograms (full width including label margin)
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, waveH + halfSpecH, canvas.width, specGap);
             } else {
-                // Mono: frequency scale labels
+                // Mono: frequency scale labels centered in label margin
+                ctx.font = freqFontSize + 'px monospace';
+                ctx.textAlign = 'center';
                 const freqLabels = spectrogramLogScale
                     ? ['20k', '10k', '1k', '100', '20']
                     : ['20k', '10k', '5k', '1k', '100'];
                 ctx.fillStyle = '#888';
                 const n = freqLabels.length;
+                const halfFfM = freqFontSize / 2;
                 for (let i = 0; i < n; i++) {
-                    const t = i / (n - 1); // 0 = top, 1 = bottom
-                    const y = waveH + t * (specH - fontSize) + fontSize / 2;
-                    ctx.fillText(freqLabels[i], labelX, y);
+                    const t = i / (n - 1);
+                    ctx.fillText(freqLabels[i], labelMargin / 2, waveH + halfFfM + t * (specH - freqFontSize));
                 }
             }
         }
@@ -4198,7 +4237,6 @@
                     hasAudios = true;
 
                     let infoBar = layer.querySelector('.asset-info-bar');
-                    let zoomIndicator = layer.querySelector('.split-zoom-indicator');
 
                     const slotLabel = slot === 'original' ? 'AUDIO GT' : slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
                     if (!infoBar) {
@@ -4210,18 +4248,11 @@
                         <span class="asset-channels"></span>
                         <span class="asset-sample-rate"></span>
                         <span class="asset-bit-depth"></span>
-                        <span class="asset-duration">-</span>
+                        <span class="asset-duration"></span>
                         <span class="asset-file-size"></span>
                         <span class="asset-filename"></span>
                     `;
                     if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
-
-                    if (!zoomIndicator) {
-                        zoomIndicator = document.createElement('div');
-                        zoomIndicator.className = 'split-zoom-indicator';
-                        zoomIndicator.id = `zoom${capitalize(slot)}`;
-                        zoomIndicator.textContent = '';
-                    }
 
                     const videoWrapper = document.createElement('div');
                     videoWrapper.className = 'video-wrapper audio-slot-group';
@@ -4241,7 +4272,6 @@
                     canvasWrap.appendChild(cursor);
 
                     videoWrapper.appendChild(canvasWrap);
-                    videoWrapper.appendChild(zoomIndicator);
                     mediaContainer.appendChild(videoWrapper);
                     layer.appendChild(mediaContainer);
                     layer.style.opacity = '0';
@@ -4255,90 +4285,75 @@
                 return;
             }
 
-            // Videos: read as ArrayBuffer once, create blob URL for playback,
-            // reuse the same buffer for audio visualization.
-            // Images: read as data URL (unchanged).
+            // Videos: create blob URL directly from File (fast — no full read needed).
+            // Store the File object for lazy audio decode when user presses W.
             if (isVideo) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const arrayBuffer = e.target.result;
-                    const blob = new Blob([arrayBuffer], { type: file.type });
-                    const blobUrl = URL.createObjectURL(blob);
-                    _blobUrls.push(blobUrl);
+                const blobUrl = URL.createObjectURL(file);
+                _blobUrls.push(blobUrl);
 
-                    mediaData[slot] = {
-                        type: 'video',
-                        src: blobUrl,
-                        name: file.name,
-                        size: file.size,
-                        lastModified: file.lastModified
-                    };
-
-                    const layer = getLayer(slot);
-                    const oldContainer = layer.querySelector('.media-container');
-                    if (oldContainer) oldContainer.remove();
-
-                    const mediaContainer = document.createElement('div');
-                    mediaContainer.className = 'media-container';
-
-                    const video = document.createElement('video');
-                    video.src = blobUrl;
-                    video.controls = false;
-                    video.volume = _prefs.load('volume', 100) / 100;
-
-                    video.addEventListener('loadedmetadata', function() {
-                        if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
-                        updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
-                        updateDurationDisplay(slot, video.duration);
-                        setupVideoHandlers(video, slot);
-                        checkAllLoaded();
-                        positionLabelsToMediaDebounced();
-                    });
-
-                    mediaContainer.appendChild(video);
-                    hasVideos = true;
-
-                    // Find or create info bar and zoom indicator
-                    let infoBar = layer.querySelector('.asset-info-bar');
-                    let zoomIndicator = layer.querySelector('.split-zoom-indicator');
-
-                    if (!infoBar) {
-                        infoBar = document.createElement('div');
-                        infoBar.className = 'asset-info-bar';
-                        const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
-                        infoBar.innerHTML = `
-                            <span class="asset-name">${slotLabel}</span>
-                            <span class="asset-resolution">-</span>
-                            <span class="asset-aspect">-</span>
-                            <span class="asset-fps"></span>
-                            <span class="asset-duration">-</span>
-                            <span class="asset-filename"></span>
-                        `;
-                    }
-                    if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
-
-                    if (!zoomIndicator) {
-                        zoomIndicator = document.createElement('div');
-                        zoomIndicator.className = 'split-zoom-indicator';
-                        zoomIndicator.id = `zoom${capitalize(slot)}`;
-                        zoomIndicator.textContent = '1.0×';
-                    }
-
-                    const videoWrapper = document.createElement('div');
-                    videoWrapper.className = 'video-wrapper';
-                    const mediaEl = mediaContainer.querySelector('video');
-                    if (mediaEl) videoWrapper.appendChild(mediaEl);
-                    videoWrapper.appendChild(zoomIndicator);
-                    videoWrapper.appendChild(infoBar);
-                    mediaContainer.appendChild(videoWrapper);
-
-                    layer.appendChild(mediaContainer);
-                    layer.style.opacity = '0';
-
-                    // Store ArrayBuffer for lazy audio decode (triggered on first W press)
-                    audioFileBuffers[slot] = arrayBuffer;
+                mediaData[slot] = {
+                    type: 'video',
+                    src: blobUrl,
+                    name: file.name,
+                    size: file.size,
+                    lastModified: file.lastModified
                 };
-                reader.readAsArrayBuffer(file);
+
+                const layer = getLayer(slot);
+                const oldContainer = layer.querySelector('.media-container');
+                if (oldContainer) oldContainer.remove();
+
+                const mediaContainer = document.createElement('div');
+                mediaContainer.className = 'media-container';
+
+                const video = document.createElement('video');
+                video.src = blobUrl;
+                video.controls = false;
+                video.volume = _prefs.load('volume', 100) / 100;
+
+                video.addEventListener('loadedmetadata', function() {
+                    if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
+                    updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
+                    updateDurationDisplay(slot, video.duration);
+                    setupVideoHandlers(video, slot);
+                    checkAllLoaded();
+                    positionLabelsToMediaDebounced();
+                });
+
+                mediaContainer.appendChild(video);
+                hasVideos = true;
+
+                // Find or create info bar
+                let infoBar = layer.querySelector('.asset-info-bar');
+
+                if (!infoBar) {
+                    infoBar = document.createElement('div');
+                    infoBar.className = 'asset-info-bar';
+                    const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
+                    infoBar.innerHTML = `
+                        <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-zoom"></span>
+                        <span class="asset-resolution">-</span>
+                        <span class="asset-aspect">-</span>
+                        <span class="asset-fps"></span>
+                        <span class="asset-duration"></span>
+                        <span class="asset-filename"></span>
+                    `;
+                }
+                if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
+
+                const videoWrapper = document.createElement('div');
+                videoWrapper.className = 'video-wrapper';
+                const mediaEl = mediaContainer.querySelector('video');
+                if (mediaEl) videoWrapper.appendChild(mediaEl);
+                videoWrapper.appendChild(infoBar);
+                mediaContainer.appendChild(videoWrapper);
+
+                layer.appendChild(mediaContainer);
+                layer.style.opacity = '0';
+
+                // Store File for lazy audio decode (read on demand, not upfront)
+                audioFileBuffers[slot] = file;
                 return;
             }
 
@@ -4380,7 +4395,6 @@
 
                     if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
                     updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
-                    updateSplitViewZoomIndicators();
 
                     // Dimensions are now available — safe to activate the view.
                     // checkAllLoaded() is called here (not in reader.onload) so that
@@ -4392,38 +4406,29 @@
                 });
                 mediaContainer.appendChild(img);
 
-                // Find or create info bar and zoom indicator, then add to media container
+                // Find or create info bar, then add to media container
                 let infoBar = layer.querySelector('.asset-info-bar');
-                let zoomIndicator = layer.querySelector('.split-zoom-indicator');
 
-                // If they don't exist (shouldn't happen but safety check), create them
                 if (!infoBar) {
                     infoBar = document.createElement('div');
                     infoBar.className = 'asset-info-bar';
                     const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
                     infoBar.innerHTML = `
                         <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-duration">-</span>
+                        <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     `;
                 }
                 if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
 
-                if (!zoomIndicator) {
-                    zoomIndicator = document.createElement('div');
-                    zoomIndicator.className = 'split-zoom-indicator';
-                    zoomIndicator.id = `zoom${capitalize(slot)}`;
-                    zoomIndicator.textContent = '1.0×';
-                }
-
                 // Build the asset structure:
                 //   media-container (position:relative, fills layer)
                 //     └── video-wrapper   ← JS-sized to exact rendered video bounds
                 //           ├── video/img
-                //           ├── split-zoom-indicator  ← always bottom-right of wrapper
                 //           └── asset-info-bar        ← CSS-positioned flush above (bottom:100%)
 
                 const videoWrapper = document.createElement('div');
@@ -4432,9 +4437,6 @@
                 // Move the media element into the wrapper
                 const mediaEl = mediaContainer.querySelector('img, video, canvas.audio-viz-slot-canvas');
                 if (mediaEl) videoWrapper.appendChild(mediaEl);
-
-                // Zoom indicator lives inside the wrapper — always at bottom-right of video bounds
-                videoWrapper.appendChild(zoomIndicator);
 
                 // Info bar lives inside video-wrapper — CSS positions it flush above via bottom:100%
                 videoWrapper.appendChild(infoBar);
@@ -5362,11 +5364,12 @@
                     media.style.transform = '';
                 }
 
-                // Update per-asset zoom badge (actual pixel ratio for this specific asset)
+                // Update per-asset zoom in info bar (actual pixel ratio for this specific asset)
                 if (!isAudioCanvas) {
                     const perAssetScale = minNW > 0 ? (minNW / nw) * zoomLevel : zoomLevel;
-                    const badge = vw.querySelector('.split-zoom-indicator');
-                    if (badge) badge.textContent = perAssetScale.toFixed(2) + '×';
+                    const infoBarLocal = layer.querySelector('.asset-info-bar');
+                    const zoomSpan = infoBarLocal && infoBarLocal.querySelector('.asset-zoom');
+                    if (zoomSpan) zoomSpan.textContent = formatZoom(perAssetScale);
                 }
 
             });
@@ -5377,7 +5380,11 @@
 
         function zoomIn() {
             if (isSplitMode) {
-                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, ZOOM_MAX);
+                if (splitStepZoom >= 1.0) {
+                    showToast('Max zoom in Grid — use Stack or Loupe (Z)', 4000);
+                    return;
+                }
+                splitStepZoom = Math.min(splitStepZoom * ZOOM_STEP, 1.0);
                 positionLabelsToMedia();
                 return;
             }
@@ -5627,15 +5634,15 @@
                     const fn = infoBar.querySelector('.asset-filename');
                     if (res) res.textContent = '-';
                     if (asp) asp.textContent = '-';
-                    if (dur) dur.textContent = '-';
+                    if (dur) dur.textContent = '';
                     if (fn) fn.textContent = '';
+                    const fps = infoBar.querySelector('.asset-fps');
+                    if (fps) fps.textContent = '';
                 }
 
-                // Reset zoom indicator
-                const zoomIndicator = layer.querySelector('.split-zoom-indicator');
-                if (zoomIndicator) {
-                    zoomIndicator.textContent = '1.0×';
-                }
+                // Reset zoom indicator in info bar
+                const zoomSpan = layer.querySelector('.asset-info-bar .asset-zoom');
+                if (zoomSpan) zoomSpan.textContent = '';
             });
 
             // Restore default asset labels (may have been changed to IMAGE/VIDEO A/B in 2-asset mode).
@@ -5750,41 +5757,9 @@
             return vertArea > horizArea ? 'vertical' : 'horizontal';
         }
         
-        function updateSplitViewZoomIndicators() {
-            // Only update in split view modes
-            if (!isSplitMode && !document.body.classList.contains('vertical-stack')) {
-                return;
-            }
-            
-            assetOrder.forEach(slot => {
-                if (!mediaData[slot]) return;
+        // Format zoom level as percentage for info bar display
+        function formatZoom(ratio) { return Math.round(ratio * 100) + '%'; }
 
-                const slotName = capitalize(slot);
-                const layer = getLayer(slot);
-                const media = layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
-                const indicator = document.getElementById(`zoom${slotName}`);
-
-                if (!media || !indicator) return;
-                
-                const { w: nativeWidth, h: nativeHeight } = mediaDims(media);
-                if (nativeWidth === 0 || nativeHeight === 0) return;
-                
-                // Get displayed dimensions
-                const displayedWidth = media.offsetWidth;
-                const displayedHeight = media.offsetHeight;
-                
-                // Calculate zoom based on width (primary dimension)
-                const zoomX = displayedWidth / nativeWidth;
-                const zoomY = displayedHeight / nativeHeight;
-                
-                // Use the smaller zoom to ensure fit
-                const actualZoom = Math.min(zoomX, zoomY);
-                
-                // Update indicator
-                indicator.textContent = actualZoom.toFixed(2) + '×';
-            });
-        }
-        
         // Zoom indicators are updated inside positionLabelsToMedia (split) / applyZoom (overlay),
         // both of which are debounced on resize below — no separate listener needed.
 
@@ -5996,7 +5971,7 @@
                 // the group in the viewport, so gaps don't grow between images when zooming out.
                 if (isEqualLayout) {
                     const isColumns = document.body.classList.contains('tripartite-columns');
-                    const gap = isColumns ? 8 : 2; // columns: 8px horizontal gap; rows: 2px vertical gap
+                    const gap = isColumns ? 4 : 2; // columns: 4px horizontal gap; rows: 2px vertical gap
                     const loadedSlots = slots.filter(s => tripartiteLayout[s]);
                     if (isColumns && loadedSlots.length > 0) {
                         // Equal-area layout for mixed orientations: each asset gets
@@ -6047,13 +6022,13 @@
                             // Area multiplier = linearZoom²
                             let targetArea = fitArea * linearZoom * linearZoom;
 
-                            // Clamp so nothing overflows viewport (skip when at 100% native — allow overflow)
+                            // Clamp so nothing overflows viewport (including at 100% native)
                             const projW = loadedSlots.reduce((sum, s) => sum + Math.sqrt(targetArea * ratios[s]), 0);
                             const projMaxH = Math.max(...loadedSlots.map(s => Math.sqrt(targetArea / ratios[s])));
                             const clamped = projW > availW || projMaxH > availH;
-                            if (clamped && splitZoomLevel !== 1) targetArea = fitArea;
+                            if (clamped) targetArea = fitArea;
 
-                            _tripartiteZoomWasCapped = clamped && splitZoomLevel !== 1 && splitStepZoom > 1;
+                            _tripartiteZoomWasCapped = clamped && splitStepZoom > 1;
 
                             loadedSlots.forEach(s => {
                                 const d = tripartiteLayout[s];
@@ -6182,9 +6157,9 @@
                         }
                     });
                     if (splitZoomLevel === 1 && verticalSharedScale !== null) {
-                        // Zoom to native pixels (1:1) for the reference asset.
-                        // sharedScale=1 makes the reference asset render at native size.
-                        verticalSharedScale = 1;
+                        // Zoom to native pixels (1:1) for the reference asset, but
+                        // cap at fit scale so nothing overflows the viewport.
+                        verticalSharedScale = Math.min(verticalSharedScale, 1);
                     }
                 }
             }
@@ -6248,9 +6223,10 @@
                     const baseH = naturalHeight * refScale;
                     // Clamp to fit-to-viewport at base zoom (splitStepZoom=1); splitStepZoom
                     // can then push past the cell boundary (same as overlay zoom going past fit).
-                    // When splitZoomLevel===1, zoom to native pixel size (1:1).
+                    // When splitZoomLevel===1, the smallest asset shows at 1:1 native pixels
+                    // and larger assets scale down to match the same visual size (no overflow).
                     let clampScale = Math.min(containerW / baseW, fitH / baseH);
-                    if (splitZoomLevel === 1) clampScale = 1 / refScale;
+                    if (splitZoomLevel === 1) clampScale = Math.min(clampScale, 1);
                     renderedW = Math.round(baseW * clampScale * splitStepZoom);
                     renderedH = Math.round(baseH * clampScale * splitStepZoom);
                     // Keep the whole group centered around the screen midpoint.
@@ -6259,7 +6235,7 @@
                     const loadedSlots = slots.filter(s => mediaData[s]);
                     const slotIdx = loadedSlots.indexOf(slot);
                     const nSlots = loadedSlots.length;
-                    const gap = 8;
+                    const gap = 4;
                     const groupW = renderedW * nSlots + gap * (nSlots - 1);
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
                     // offsetX is relative to each cell's own origin (cell i starts at i * containerW)
@@ -6286,8 +6262,8 @@
                         } else {
                             fitScale = containerW / naturalWidth;
                         }
-                        // splitZoomLevel===1: zoom to native pixel size (1:1)
-                        scale = splitZoomLevel === 1 ? 1 : fitScale;
+                        // splitZoomLevel===1: zoom to native pixel size (1:1), capped at fit
+                        scale = splitZoomLevel === 1 ? Math.min(fitScale, 1) : fitScale;
                         renderedW = naturalWidth  * scale * splitStepZoom;
                         renderedH = naturalHeight * scale * splitStepZoom;
                     }
@@ -6325,7 +6301,7 @@
                         } else {
                             ty = td.ibH || 0; // flush top, below the info bar
                         }
-                        // Original: flush right with 8px gap from centre; A/B: flush left with 8px gap.
+                        // Original: flush right with 4px gap from centre; A/B: flush left with 4px gap.
                         // 16px total between the centre column edges, matching compare mode.
                         // Clamp so images don't extend past the outer edge of their cell.
                         if (slot === 'original') {
@@ -6343,10 +6319,8 @@
                     videoWrapper.style.transform = '';
                     videoWrapper.style.transformOrigin = '';
 
-                    const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
-                    if (zoomIndicator) {
-                        zoomIndicator.textContent = td.sharedZoom.toFixed(2) + '×';
-                    }
+                    const infoBarZoom = layer.querySelector('.asset-info-bar .asset-zoom');
+                    if (infoBarZoom) infoBarZoom.textContent = formatZoom(td.sharedZoom);
 
                     return; // skip the standard positioning below
                 }
@@ -6371,11 +6345,11 @@
                     media.style.maxHeight = 'none';
                 }
 
-                // Update zoom indicator to reflect actual displayed size
-                const zoomIndicator = videoWrapper.querySelector('.split-zoom-indicator');
-                if (zoomIndicator) {
+                // Update zoom indicator in info bar
+                const infoBarZoom = layer.querySelector('.asset-info-bar .asset-zoom');
+                if (infoBarZoom) {
                     const actualZoom = renderedW / naturalWidth;
-                    zoomIndicator.textContent = actualZoom.toFixed(2) + '×';
+                    infoBarZoom.textContent = formatZoom(actualZoom);
                 }
 
             });
@@ -6628,11 +6602,6 @@
                     }
                     document.body.classList.toggle('two-asset', loadedSlotCount === 2);
 
-                    // zoom-indicator bottom/right offsets left by positionLabelsToMedia
-                    document.querySelectorAll('.video-wrapper .split-zoom-indicator').forEach(zi => {
-                        zi.style.bottom = '';
-                        zi.style.right = '';
-                    });
 
                 };
 
@@ -6643,15 +6612,13 @@
                     requestAnimationFrame(() => {
                         applyLayout();
                         requestAnimationFrame(() => {
-                            updateSplitViewZoomIndicators();
-                            positionLabelsToMedia(10);
+                                    positionLabelsToMedia(10);
                         });
                     });
                 } else {
                     requestAnimationFrame(() => {
                         applyLayout();
-                        updateSplitViewZoomIndicators();
-                        positionLabelsToMedia();
+                            positionLabelsToMedia();
                     });
                 }
             }
@@ -6671,54 +6638,108 @@
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
             const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
 
-            // If we're leaving overlay mode and the asset group is currently visible,
-            // animate it out before rebuilding so the mode buttons slide back to the right.
-            if (normalised !== 'overlay') {
-                const existingAssetGroup = strip.querySelector('.asset-group.visible');
-                const existingModeCore   = strip.querySelector('.mode-core');
-                if (existingAssetGroup && existingModeCore) {
-                    const groupW = existingAssetGroup.offsetWidth;
-                    existingModeCore.style.setProperty('--asset-group-width', `${groupW}px`);
-                    const underline = document.getElementById('assetUnderline');
-                    if (underline) underline.classList.remove('visible');
-                    existingAssetGroup.classList.remove('visible');
-                    existingAssetGroup.classList.add('hiding');
-                    existingModeCore.classList.remove('sliding');
-                    existingModeCore.classList.add('sliding-out');
-                    setTimeout(() => updateModeStrip(activeMode), 220);
-                    return; // let the animation play; the setTimeout will rebuild
-                }
-            }
+            // No sequential close-then-open — rebuild immediately and let
+            // incoming animations (grid width expand / overlay slide-in) play naturally.
 
             strip.style.display = 'flex';
             strip.innerHTML = '';
 
-            // Split mode first, STACK last: GRID / STACK
-            const modes = loadedCount === 3
-                ? [['tripartite', 'GRID'], ['overlay', 'STACK']]
-                : [['compare', 'GRID'], ['overlay', 'STACK']];
+            const isGridWith3 = normalised !== 'overlay' && loadedCount === 3;
 
-            // Wrap mode buttons in a flex group so they slide together
+            // Split mode first, STACK last: GRID  [grid-options]  STACK  [asset-options]
+            const gridMode = loadedCount === 3 ? 'tripartite' : 'compare';
+
+            // Wrap mode buttons + grid sub-options in a flex group
             const modeCore = document.createElement('div');
             modeCore.className = 'mode-core';
 
-            modes.forEach(([mode, label], i) => {
-                if (i > 0) {
+            // GRID button
+            const gridBtn = document.createElement('button');
+            gridBtn.className = 'mode-btn' + (normalised !== 'overlay' ? ' active' : '');
+            gridBtn.textContent = 'GRID';
+            gridBtn.onclick = () => {
+                if (gridMode === 'compare') setViewMode(layoutMode);
+                else setViewMode('tripartite');
+            };
+            modeCore.appendChild(gridBtn);
+
+            // Grid sub-options (Inline/Offset) — inserted between GRID and STACK
+            if (isGridWith3) {
+                const gridGroup = document.createElement('div');
+                gridGroup.className = 'asset-group';
+                gridGroup.dataset.groupType = 'grid';
+
+                const gridOpts = [
+                    { label: 'INLINE', is3Col: true },
+                    { label: 'OFFSET', is3Col: false }
+                ];
+                gridOpts.forEach((opt, i) => {
                     const sep = document.createElement('span');
-                    sep.className = 'strip-sep';
-                    sep.textContent = '/';
-                    modeCore.appendChild(sep);
-                }
-                const btn = document.createElement('button');
-                btn.className = 'mode-btn' + (mode === normalised ? ' active' : '');
-                btn.textContent = label;
-                btn.onclick = () => {
-                    if (mode === 'compare') setViewMode(layoutMode); // use auto-picked H/V
-                    else setViewMode(mode);
-                };
-                modeCore.appendChild(btn);
-            });
+                    sep.className = 'strip-sep asset-sep';
+                    sep.textContent = '·';
+                    gridGroup.appendChild(sep);
+
+                    const btn = document.createElement('button');
+                    const isActive = tripartiteLayout3Col === opt.is3Col;
+                    const posClass = (i === 0 ? ' first-asset' : '') + (i === gridOpts.length - 1 ? ' last-asset' : '');
+                    btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
+                    btn.textContent = opt.label;
+                    btn.onclick = () => {
+                        if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
+                        const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
+                        const land3 = dims3.filter(m => m.w >= m.h).length;
+                        if (!opt.is3Col && land3 > 0 && land3 < dims3.length) {
+                            showToast('Offset layout unavailable for mixed orientations');
+                            return;
+                        }
+                        tripartiteLayout3Col = opt.is3Col;
+                        localStorage.setItem('tripartiteLayout3Col', tripartiteLayout3Col);
+                        setViewMode('tripartite');
+                    };
+                    gridGroup.appendChild(btn);
+                });
+                modeCore.appendChild(gridGroup);
+            }
+
+            // STACK button
+            const stackBtn = document.createElement('button');
+            stackBtn.className = 'mode-btn' + (normalised === 'overlay' ? ' active' : '');
+            stackBtn.textContent = 'STACK';
+            stackBtn.onclick = () => setViewMode('overlay');
+            modeCore.appendChild(stackBtn);
+
             strip.appendChild(modeCore);
+
+            // Animate grid sub-options expanding between GRID and STACK
+            if (isGridWith3) {
+                const gridGroup = modeCore.querySelector('.asset-group');
+                let underline = document.getElementById('assetUnderline');
+                if (!underline) {
+                    underline = document.createElement('div');
+                    underline.id = 'assetUnderline';
+                }
+                strip.appendChild(underline);
+
+                requestAnimationFrame(() => {
+                    // Measure natural width: temporarily remove max-width constraint
+                    gridGroup.style.maxWidth = 'none';
+                    gridGroup.style.opacity = '0';
+                    const naturalW = gridGroup.scrollWidth;
+                    // Reset to 0 so the transition animates from 0 → natural
+                    gridGroup.style.maxWidth = '0px';
+                    gridGroup.style.opacity = '';
+
+                    // Force layout at 0, then transition to natural width
+                    void gridGroup.offsetWidth;
+                    gridGroup.style.maxWidth = naturalW + 'px';
+                    gridGroup.classList.add('visible');
+
+                    underline.style.transition = 'none';
+                    // Position underline after width transition completes
+                    setTimeout(() => positionAssetUnderline(), 260);
+                    requestAnimationFrame(() => { underline.style.transition = ''; });
+                });
+            }
 
             // When overlay is active, build the asset group and animate it sliding in
             if (normalised === 'overlay') {
@@ -6727,6 +6748,7 @@
                 const assetGroup = document.createElement('div');
                 // Render invisible but in-flow so we can measure its width before animating
                 assetGroup.className = 'asset-group';
+                assetGroup.dataset.groupType = 'overlay';
 
                 loaded.forEach((slot, i) => {
                     const sep = document.createElement('span');
@@ -7029,6 +7051,20 @@
                 // Show video controls if any videos or audio
                 if (hasVideos || hasAudios) {
                     document.getElementById('videoControls').classList.add('active');
+                }
+
+                // Eagerly decode video audio tracks for waveform/spectrogram
+                // so they're ready when the user presses W.
+                // Delay until after fade-in completes to avoid blocking the UI.
+                if (hasVideos) {
+                    const fadeDelay = loadedLayers.length * 60 + 400;
+                    setTimeout(() => {
+                        for (const s of assetOrder) {
+                            if (audioFileBuffers[s] && !waveformData[s]) {
+                                decodeAndComputeAudioViz(s, audioFileBuffers[s]);
+                            }
+                        }
+                    }, fadeDelay);
                 }
 
                 // Audio mode: redraw all slot canvases after layout is committed.
