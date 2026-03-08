@@ -469,6 +469,95 @@
             color: #ccc;
         }
 
+        .landing-cta {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .landing-cta.hidden { display: none; }
+
+        .landing-dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 48px 64px;
+            border: 2px dashed #333;
+            border-radius: 16px;
+            animation: dropzone-pulse 3s ease-in-out infinite;
+        }
+        .landing-logo { margin-bottom: 8px; }
+        @keyframes dropzone-pulse {
+            0%, 100% { border-color: #333; }
+            50% { border-color: #555; }
+        }
+        .landing-logo {
+            width: 64px;
+            height: 64px;
+            opacity: 0.6;
+            animation: logo-pulse 3s ease-in-out infinite;
+        }
+        @keyframes logo-pulse {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        .landing-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        .landing-formats {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: -2px;
+        }
+        .landing-capsule {
+            font-size: 11px;
+            color: #777;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            padding: 3px 12px;
+            border-radius: 999px;
+            letter-spacing: 0.03em;
+        }
+        .landing-capsule-sep {
+            font-size: 11px;
+            color: #555;
+        }
+        .landing-load-btn {
+            margin-top: 8px;
+            padding: 8px 28px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #ccc;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .landing-load-btn:hover {
+            background: #3a3a3a;
+            border-color: #666;
+            color: #fff;
+        }
+        .landing-hints {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #555;
+        }
+        .landing-hints kbd {
+            background: #222;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #777;
+            border: 1px solid #333;
+        }
+
         .comparison-view {
             flex: 1;
             position: relative;
@@ -1685,6 +1774,23 @@
         <div id="promptBar">
             <div class="prompt-label" id="promptLabel"></div>
             <div class="prompt-text" id="promptText"></div>
+        </div>
+
+        <div class="landing-cta" id="landingCta">
+            <div class="landing-dropzone">
+                <img src="WarpDiff_Logo_v1.png" alt="" class="landing-logo">
+                <div class="landing-title">Drop 2–3 files to compare</div>
+                <div class="landing-formats">
+                    <span class="landing-capsule">Image</span>
+                    <span class="landing-capsule">Video</span>
+                    <span class="landing-capsule-sep">or</span>
+                    <span class="landing-capsule">Audio</span>
+                </div>
+                <button class="landing-load-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();">Load Files</button>
+                <div class="landing-hints">
+                    <kbd>L</kbd> load files · <kbd>K</kbd> hotkeys · <kbd>?</kbd> help
+                </div>
+            </div>
         </div>
 
         <div class="comparison-view" id="comparisonView">
@@ -5266,6 +5372,7 @@
                 layer.style.display = '';
             });
             document.getElementById('comparisonView').classList.remove('active');
+            document.getElementById('landingCta').classList.remove('hidden');
             document.getElementById('resetBtn').style.display = 'none';
             // Hide mode and asset strips — they'll be rebuilt when assets load
             document.getElementById('modeStrip').style.display = 'none';
@@ -6556,6 +6663,7 @@
                 localStorage.setItem('lastSeenVersion', APP_VERSION);
 
                 document.getElementById('comparisonView').classList.add('active');
+                document.getElementById('landingCta').classList.add('hidden');
 
                 document.getElementById('resetBtn').style.display = 'block';
 
@@ -7072,17 +7180,7 @@
                     col.appendChild(_buildPairedRow(action));
                     // Append Esc Esc row right after loop points
                     if (action.paired === 'loopPoints') {
-                        const escEscRow = document.createElement('div');
-                        escEscRow.className = 'shortcut-row';
-                        const escEscKey = document.createElement('span');
-                        escEscKey.className = 'shortcut-key';
-                        escEscKey.innerHTML = '<kbd>Esc</kbd> <kbd>Esc</kbd>';
-                        escEscRow.appendChild(escEscKey);
-                        const escEscDesc = document.createElement('span');
-                        escEscDesc.className = 'shortcut-desc';
-                        escEscDesc.textContent = 'Clear loop markers';
-                        escEscRow.appendChild(escEscDesc);
-                        col.appendChild(escEscRow);
+                        col.appendChild(_buildFixedRow('<kbd>Esc</kbd> <kbd>Esc</kbd>', 'Clear loop markers'));
                     }
                     continue;
                 }
@@ -7091,17 +7189,7 @@
             }
 
             // "Escape" row in right column (non-reassignable, same section as panels)
-            const escRow = document.createElement('div');
-            escRow.className = 'shortcut-row';
-            const escKey = document.createElement('span');
-            escKey.className = 'shortcut-key';
-            escKey.innerHTML = '<kbd>Esc</kbd>';
-            escRow.appendChild(escKey);
-            const escDesc = document.createElement('span');
-            escDesc.className = 'shortcut-desc';
-            escDesc.textContent = 'Dismiss any overlay';
-            escRow.appendChild(escDesc);
-            rightCol.appendChild(escRow);
+            rightCol.appendChild(_buildFixedRow('<kbd>Esc</kbd>', 'Dismiss any overlay'));
 
             list.appendChild(leftCol);
             list.appendChild(rightCol);
@@ -7183,6 +7271,33 @@
             return rst;
         }
 
+        function _buildFixedRow(keyHtml, label) {
+            const row = document.createElement('div');
+            row.className = 'shortcut-row';
+            const keySpan = document.createElement('span');
+            keySpan.className = 'shortcut-key';
+            keySpan.innerHTML = keyHtml;
+            // Flash "not reassignable" on click
+            keySpan.querySelectorAll('kbd').forEach(kbd => {
+                kbd.className = 'shortcut-kbd-clickable';
+                kbd.style.cursor = 'pointer';
+                kbd.addEventListener('click', () => {
+                    kbd.textContent = 'Not reassignable';
+                    kbd.classList.add('conflict-flash');
+                    setTimeout(() => {
+                        kbd.classList.remove('conflict-flash');
+                        kbd.innerHTML = keyHtml.includes('Esc</kbd> <kbd>') ? 'Esc' : keyHtml.replace(/<\/?kbd>/g, '');
+                    }, 1200);
+                });
+            });
+            row.appendChild(keySpan);
+            const descSpan = document.createElement('span');
+            descSpan.className = 'shortcut-desc';
+            descSpan.textContent = label;
+            row.appendChild(descSpan);
+            return row;
+        }
+
         function _startReassign(ev) {
             ev.stopPropagation();
             const actionId = ev.currentTarget.dataset.actionId;
@@ -7203,9 +7318,19 @@
             e.stopPropagation();
             e.stopImmediatePropagation();
             if (e.key === 'Escape') {
-                // Cancel reassignment
-                _reassigningActionId = null;
-                _renderShortcutsList();
+                // Show feedback then cancel reassignment
+                const activeKbd = document.querySelector('.shortcut-kbd-clickable.reassigning');
+                if (activeKbd) {
+                    activeKbd.textContent = 'Esc not reassignable';
+                    activeKbd.classList.add('conflict-flash');
+                    setTimeout(() => {
+                        _reassigningActionId = null;
+                        _renderShortcutsList();
+                    }, 1000);
+                } else {
+                    _reassigningActionId = null;
+                    _renderShortcutsList();
+                }
                 return;
             }
             if (_RESERVED_KEYS.has(e.key)) return; // ignore modifier-only presses
