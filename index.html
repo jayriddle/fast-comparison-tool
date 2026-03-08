@@ -3293,15 +3293,16 @@
 
         // ── Video Scopes (Histogram, Waveform Monitor, Vectorscope) ────
 
+        const _SCOPE_W = 640, _SCOPE_H = 360;
         function sampleVideoFrame(media) {
             if (!_scopeOffscreen) {
                 _scopeOffscreen = document.createElement('canvas');
-                _scopeOffscreen.width = 320;
-                _scopeOffscreen.height = 180;
+                _scopeOffscreen.width = _SCOPE_W;
+                _scopeOffscreen.height = _SCOPE_H;
             }
             const ctx = _scopeOffscreen.getContext('2d', { willReadFrequently: true });
-            ctx.drawImage(media, 0, 0, 320, 180);
-            return ctx.getImageData(0, 0, 320, 180);
+            ctx.drawImage(media, 0, 0, _SCOPE_W, _SCOPE_H);
+            return ctx.getImageData(0, 0, _SCOPE_W, _SCOPE_H);
         }
 
         function drawHistogram(imageData, canvas) {
@@ -3344,9 +3345,11 @@
                 ctx.fill();
             };
 
-            drawChannel(rBins, 'rgba(255, 40, 40, 0.45)');
-            drawChannel(gBins, 'rgba(40, 255, 40, 0.45)');
-            drawChannel(bBins, 'rgba(40, 80, 255, 0.45)');
+            ctx.globalCompositeOperation = 'lighter';
+            drawChannel(rBins, 'rgba(255, 40, 40, 0.5)');
+            drawChannel(gBins, 'rgba(40, 255, 40, 0.5)');
+            drawChannel(bBins, 'rgba(40, 80, 255, 0.5)');
+            ctx.globalCompositeOperation = 'source-over';
         }
 
         function drawWaveformMonitor(imageData, canvas) {
@@ -3369,12 +3372,15 @@
             const srcH = imageData.height;
 
             for (let sx = 0; sx < srcW; sx++) {
-                const ox = Math.floor((sx / srcW) * w);
+                const ox0 = Math.floor((sx / srcW) * w);
+                const ox1 = Math.floor(((sx + 1) / srcW) * w);
                 for (let sy = 0; sy < srcH; sy++) {
                     const idx = (sy * srcW + sx) * 4;
                     const luma = (0.299 * pixels[idx] + 0.587 * pixels[idx + 1] + 0.114 * pixels[idx + 2]) / 255;
                     const oy = Math.floor((1 - luma) * (h - 1));
-                    hits[oy * w + ox]++;
+                    for (let ox = ox0; ox < ox1; ox++) {
+                        hits[oy * w + ox]++;
+                    }
                 }
             }
 
@@ -3413,10 +3419,14 @@
             }
             const ctx = canvas.getContext('2d');
 
-            // Build pixel buffer for the dot plot
+            // Build pixel buffer for the dot plot — colored dots
             const buf = ctx.createImageData(size, size);
             const out = buf.data;
-            const hits = new Uint16Array(size * size);
+            // Accumulate color + hit count per output pixel
+            const hitR = new Float32Array(size * size);
+            const hitG = new Float32Array(size * size);
+            const hitB = new Float32Array(size * size);
+            const hitN = new Uint16Array(size * size);
 
             const cx = size / 2;
             const cy = size / 2;
@@ -3431,18 +3441,28 @@
                 const px = Math.round(cx + cb * plotScale);
                 const py = Math.round(cy - cr * plotScale);
                 if (px >= 0 && px < size && py >= 0 && py < size) {
-                    hits[py * size + px]++;
+                    const idx = py * size + px;
+                    hitR[idx] += r;
+                    hitG[idx] += g;
+                    hitB[idx] += b;
+                    hitN[idx]++;
                 }
             }
 
+            // Map accumulated colors to output — boost saturation for visibility
             const maxHits = Math.max(1, pixels.length / 4 * 0.0001);
-            for (let i = 0; i < hits.length; i++) {
-                if (hits[i] > 0) {
-                    const intensity = Math.min(1, hits[i] / maxHits);
+            for (let i = 0; i < hitN.length; i++) {
+                if (hitN[i] > 0) {
+                    const n = hitN[i];
+                    const intensity = Math.min(1, n / maxHits);
+                    // Average color, boosted toward full brightness for readability
+                    let ar = hitR[i] / n, ag = hitG[i] / n, ab = hitB[i] / n;
+                    const maxC = Math.max(ar, ag, ab, 1);
+                    const boost = 0.4 + 0.6 * intensity;
                     const p = i * 4;
-                    out[p]     = Math.round(intensity * 80);
-                    out[p + 1] = Math.round(140 + intensity * 115);
-                    out[p + 2] = Math.round(intensity * 40);
+                    out[p]     = Math.round(Math.min(255, (ar / maxC) * 255 * boost));
+                    out[p + 1] = Math.round(Math.min(255, (ag / maxC) * 255 * boost));
+                    out[p + 2] = Math.round(Math.min(255, (ab / maxC) * 255 * boost));
                     out[p + 3] = 255;
                 }
             }
@@ -4826,6 +4846,16 @@
                 else updateVideoProgressFromTime(video, t);
             }
 
+            function progressBarXToTime(e) {
+                const rect = _scrubContainerRect;
+                if (!rect) return null;
+                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const media = _scrubVideo;
+                if (!media || isNaN(media.duration)) return null;
+                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : media.duration;
+                return Math.min(pct * seekDur, media.duration);
+            }
+
             // Scrub from audio/video viz canvas clicks — translate canvas X to progress pct
             function canvasScrubToPosition(e, canvasEl) {
                 const rect = canvasEl.getBoundingClientRect();
@@ -4929,24 +4959,28 @@
                 _scrubAllVideos = Array.from(document.querySelectorAll('.overlay-layer ' + tag));
                 _scrubContainerRect = progressContainer.getBoundingClientRect();
 
-                if (_scrubVideo) {
-                    wasPlaying = !_scrubVideo.paused;
-                    if (wasPlaying) pauseAllMedia();
+                if (e.shiftKey) {
+                    _regionSelectStart = progressBarXToTime(e);
+                } else {
+                    _regionSelectStart = null;
+                    if (_scrubVideo) {
+                        wasPlaying = !_scrubVideo.paused;
+                        if (wasPlaying) pauseAllMedia();
+                    }
+                    scrubToPosition(e);
                 }
-
-                scrubToPosition(e);
             });
 
             document.addEventListener('mousemove', function(e) {
                 if (!isDragging) return;
-                if (_scrubCanvas && _regionSelectStart !== null) {
+                if (_regionSelectStart !== null) {
                     // Shift+drag: preview the region as loop markers
-                    const t = canvasXToTime(e, _scrubCanvas);
+                    const t = _scrubCanvas ? canvasXToTime(e, _scrubCanvas) : progressBarXToTime(e);
                     if (t !== null) {
                         _loopInPoint = Math.min(_regionSelectStart, t);
                         _loopOutPoint = Math.max(_regionSelectStart, t);
                         updateLoopMarkerUI();
-                        redrawAudioSlotCanvases();
+                        if (_scrubCanvas) redrawAudioSlotCanvases();
                     }
                 } else if (_scrubCanvas) {
                     canvasScrubToPosition(e, _scrubCanvas);
@@ -4958,9 +4992,9 @@
             document.addEventListener('mouseup', function(e) {
                 if (isDragging) {
                     isDragging = false;
-                    if (_scrubCanvas && _regionSelectStart !== null) {
+                    if (_regionSelectStart !== null) {
                         // Finalize shift+drag region selection
-                        const t = canvasXToTime(e, _scrubCanvas);
+                        const t = _scrubCanvas ? canvasXToTime(e, _scrubCanvas) : progressBarXToTime(e);
                         if (t !== null) {
                             _loopInPoint = Math.min(_regionSelectStart, t);
                             _loopOutPoint = Math.max(_regionSelectStart, t);
@@ -4970,7 +5004,7 @@
                                 _loopOutPoint = null;
                             }
                             updateLoopMarkerUI();
-                            redrawAudioSlotCanvases();
+                            if (_scrubCanvas) redrawAudioSlotCanvases();
                             if (_loopInPoint !== null) {
                                 showToast('Loop: ' + formatLoopTime(_loopInPoint) + ' → ' + formatLoopTime(_loopOutPoint));
                             }

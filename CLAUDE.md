@@ -3,7 +3,8 @@
 A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 
 - **Repo**: https://github.com/jayriddle/warpdiff
-- **Architecture**: Single-file app — everything lives in `index.html` (~6500 lines of HTML, CSS, and JS)
+- **Architecture**: Single-file app — everything lives in `index.html` (~7000 lines of HTML, CSS, and JS)
+- **PWA**: `manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png` — installable, offline-capable
 
 ## Key Technical Patterns
 
@@ -14,6 +15,8 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 - Scope rendering uses Uint16Array hit counts + putImageData for performance
 - Audio viz uses `decodeAudioData()` → waveform/spectrogram computation, drawn to canvas
 - Loading overlay (`#loadingOverlay`) shows status during audio decode; hidden at `startFadeIn()`
+- Grid layout auto-picks horizontal vs vertical via `pickBestGridLayout(n)` — computes rendered area for each option given viewport dimensions and asset aspect ratios; re-evaluated on resize
+- Waveform rendering uses Path2D with gradient fill, anti-aliased stroke, and clipped dB zone bands
 
 ## Naming Conventions
 
@@ -29,3 +32,4 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 - CSS is in a single `<style>` block at the top; JS is in a single `<script>` block
 - Use `_prefixed` names for module-level private state (e.g., `_frameStepping`, `_audioSlotVizData`)
 - Debounced layout functions use the pattern `functionNameDebounced` wrapping `functionName`
+- `APP_VERSION` in `index.html` and `CACHE_NAME` in `sw.js` must be kept in sync on version bumps
