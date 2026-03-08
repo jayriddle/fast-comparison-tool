@@ -740,7 +740,7 @@
             font-size: 13px;
             font-weight: 500;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 300;
+            z-index: 3000;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.15s ease;
@@ -884,7 +884,6 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) scale(0.95);
-            width: 340px;
             max-height: 70vh;
             background: #1a1a1a;
             border: 1px solid #333;
@@ -898,6 +897,8 @@
             pointer-events: none;
             transition: opacity 0.15s ease, transform 0.15s ease;
         }
+        .shortcuts-panel { width: 560px; }
+        .manual-panel { width: 340px; }
 
         .shortcuts-panel.open,
         .manual-panel.open {
@@ -1000,6 +1001,12 @@
             padding: 8px 14px;
             overflow-y: auto;
             flex: 1;
+            display: flex;
+            gap: 20px;
+        }
+        .shortcuts-col {
+            flex: 1;
+            min-width: 0;
         }
 
         .shortcut-row {
@@ -1036,11 +1043,77 @@
             border: 1px solid #444;
         }
 
+        .shortcut-section-header {
+            font-size: 10px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 0 2px;
+        }
         .shortcut-divider {
             border: none;
             border-top: 1px solid #2a2a2a;
             margin: 4px 0;
         }
+
+        .shortcut-kbd-clickable {
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .shortcut-kbd-clickable:hover {
+            background: #444;
+            border-color: #666;
+            color: #fff;
+        }
+        .shortcut-kbd-clickable.reassigning {
+            background: #2a5a8a;
+            border-color: #4a8ad4;
+            color: #fff;
+            animation: reassign-pulse 1s ease-in-out infinite;
+            min-width: 80px;
+            text-align: center;
+            font-size: 11px;
+        }
+        .shortcut-kbd-clickable.conflict-flash {
+            background: #8a2a2a !important;
+            border-color: #d44a4a !important;
+            color: #fcc !important;
+            animation: none;
+            min-width: 120px;
+        }
+        @keyframes reassign-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .shortcut-kbd-clickable.customised {
+            background: #2a3a2a;
+            border-color: #4a7a4a;
+            color: #8c8;
+        }
+        .shortcut-reset {
+            cursor: pointer;
+            color: #666;
+            font-size: 13px;
+            margin-left: 2px;
+            transition: color 0.15s;
+        }
+        .shortcut-reset:hover { color: #f88; }
+        .shortcut-reset-all-row {
+            text-align: center;
+            padding: 8px 0 4px;
+        }
+        .shortcut-reset-all {
+            background: #333;
+            border: 1px solid #555;
+            color: #aaa;
+            padding: 4px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .shortcut-reset-all:hover { background: #555; color: #fff; }
 
         .video-controls {
             background: rgba(0, 0, 0, 0.85);
@@ -3346,10 +3419,16 @@
             videoScopesVisible = !videoScopesVisible;
             const panel = document.getElementById('scopesPanel');
             if (panel) panel.classList.toggle('active', videoScopesVisible);
-            showToast('Video Scopes ' + (videoScopesVisible ? 'ON' : 'OFF'));
+            // Ensure video controls bar is visible (images don't show it by default)
+            const controls = document.getElementById('videoControls');
             if (videoScopesVisible) {
+                if (controls) controls.classList.add('active');
                 requestAnimationFrame(() => updateVideoScopes());
+            } else if (!hasVideos && !hasAudios) {
+                // Hide controls bar again for image-only mode when scopes are off
+                if (controls) controls.classList.remove('active');
             }
+            showToast('Video Scopes ' + (videoScopesVisible ? 'ON' : 'OFF'));
             animateRelayout(350);
         }
 
@@ -6638,10 +6717,520 @@
             btn.textContent = isMuted ? '🔇' : '🔊';
         }
 
-        // Keyboard navigation
+        // ── Hotkey system: action registry + reassignable keymap ──
+
+        // Reserved keys that cannot be reassigned
+        const _RESERVED_KEYS = new Set(['Escape', 'Meta', 'Control', 'Alt', 'Shift', 'Tab', 'Enter', 'CapsLock']);
+
+        // Display-friendly names for special keys
+        const _KEY_DISPLAY = {
+            ' ': 'Space', 'ArrowLeft': '←', 'ArrowRight': '→', 'ArrowUp': '↑', 'ArrowDown': '↓',
+            '+': '+', '-': '−', '=': '=', '_': '_',
+        };
+        function _keyDisplay(key, shift) {
+            return (shift ? '⇧' : '') + (_KEY_DISPLAY[key] || key.toUpperCase());
+        }
+
+        // Load custom key overrides from localStorage
+        let _customKeys = JSON.parse(localStorage.getItem('customHotkeys') || '{}');
+
+        // Action registry — each entry defines an assignable hotkey action.
+        // Fields: id, defaultKey, shift (optional), label, section (for grouping),
+        //         global (works outside comparison view), fn (callback).
+        // Actions with `paired` share a row in the panel (e.g. frame back/forward).
+        const _hotkeyActions = [
+            // ── Files ──
+            { id: 'loadFiles', defaultKey: 'l', label: 'Load files', section: 'files', global: true,
+              fn: () => { document.getElementById('multiFileInput').click(); } },
+
+            // ── View ──
+            { id: 'overlayMode', defaultKey: 'o', label: 'Overlay mode', section: 'view',
+              fn: () => {
+                  const allThreeLoaded = getLoadedSlotCount() === 3;
+                  if (isSplitMode) { setViewMode('overlay'); }
+                  else if (hasAudios) {
+                      if (allThreeLoaded) { tripartiteLayout3Col = true; setViewMode('tripartite'); } else { setViewMode('vertical'); }
+                  } else if (allThreeLoaded) { setViewMode('tripartite'); }
+                  else { setViewMode(layoutMode); }
+              } },
+            { id: 'gridMode', defaultKey: 'g', label: 'Grid mode', section: 'view',
+              fn: () => {
+                  const allThreeLoaded = getLoadedSlotCount() === 3;
+                  if (hasAudios) {
+                      if (!isSplitMode) {
+                          if (allThreeLoaded) { tripartiteLayout3Col = true; setViewMode('tripartite'); } else setViewMode('vertical');
+                      } else { setViewMode('overlay'); }
+                  } else if (allThreeLoaded) {
+                      if (!isSplitMode) setViewMode('tripartite'); else setViewMode('overlay');
+                  } else {
+                      if (!isSplitMode) setViewMode(layoutMode); else setViewMode('overlay');
+                  }
+              } },
+            { id: 'toggleOffset', defaultKey: '3', label: 'Grid: Inline / Offset', section: 'view',
+              fn: () => {
+                  if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
+                  const isAnyTripartiteNow = isTripartiteMode();
+                  if (isSplitMode && isAnyTripartiteNow) {
+                      const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
+                      const land3 = dims3.filter(m => m.w >= m.h).length;
+                      if (land3 > 0 && land3 < dims3.length) { showToast('Offset layout unavailable for mixed orientations'); return; }
+                      tripartiteLayout3Col = !tripartiteLayout3Col;
+                      localStorage.setItem('tripartiteLayout3Col', tripartiteLayout3Col);
+                      setViewMode('tripartite');
+                  }
+              } },
+            { id: 'fullscreen', defaultKey: 'f', label: 'Browser fullscreen', section: 'view',
+              fn: () => {
+                  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+                  else document.exitFullscreen();
+              } },
+
+            // ── Zoom ──
+            { id: 'zoomFit', defaultKey: '0', label: 'Zoom to fit', section: 'zoom',
+              fn: () => resetFitZoom() },
+            { id: 'zoom100', defaultKey: '1', label: 'Zoom to 100%', section: 'zoom',
+              fn: () => {
+                  if (!isSplitMode) {
+                      zoomLevel = 1; panOffsetX = 0; panOffsetY = 0; applyZoom();
+                  } else {
+                      const atTrue100 = splitZoomLevel === 1 && splitStepZoom === 1.0;
+                      splitZoomLevel = atTrue100 ? null : 1;
+                      splitStepZoom = 1.0;
+                      document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
+                      positionLabelsToMedia();
+                      showToast(splitZoomLevel === 1 ? '100% native pixels' : 'Fit to panel');
+                  }
+              } },
+            { id: 'zoomIn', defaultKey: '+', altKey: '=', label: 'Zoom / Speed up', section: 'zoom', paired: 'zoomInOut',
+              fn: () => {
+                  if (hasAudios) {
+                      if (playbackRateIndex < PLAYBACK_RATES.length - 1) {
+                          playbackRateIndex++;
+                          const rate = PLAYBACK_RATES[playbackRateIndex];
+                          getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
+                          showToast('Speed ' + rate + '×');
+                      }
+                  } else if (magnifierEnabled) {
+                      magnifierZoom = Math.min(magnifierZoom * 2, MAGNIFIER_ZOOM_MAX);
+                      _prefs.save('magnifierZoom', magnifierZoom);
+                      showToast('Zoom ' + magnifierZoom + '×');
+                      if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
+                  } else { zoomIn(); }
+              } },
+            { id: 'zoomOut', defaultKey: '-', altKey: '_', label: 'Zoom / Speed down', section: 'zoom', paired: 'zoomInOut',
+              fn: () => {
+                  if (hasAudios) {
+                      if (playbackRateIndex > 0) {
+                          playbackRateIndex--;
+                          const rate = PLAYBACK_RATES[playbackRateIndex];
+                          getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
+                          showToast('Speed ' + rate + '×');
+                      }
+                  } else if (magnifierEnabled) {
+                      magnifierZoom = Math.max(magnifierZoom / 2, MAGNIFIER_ZOOM_MIN);
+                      _prefs.save('magnifierZoom', magnifierZoom);
+                      showToast('Zoom ' + magnifierZoom + '×');
+                      if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
+                  } else { zoomOut(); }
+              } },
+            { id: 'zoomLoupe', defaultKey: 'z', label: 'Zoom loupe', section: 'zoom',
+              fn: () => {
+                  if (hasAudios) { showToast('Magnifier not available in audio mode'); return; }
+                  toggleMagnifier();
+              } },
+            { id: 'linkedZoom', defaultKey: 'z', shift: true, label: 'Linked zoom', section: 'zoom',
+              fn: () => {
+                  if (hasAudios) return;
+                  magnifierLinked = !magnifierLinked;
+                  _prefs.save('magnifierLinked', magnifierLinked);
+                  showToast('Linked zoom ' + (magnifierLinked ? 'ON' : 'OFF'));
+                  if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
+              } },
+            { id: 'loupeSmaller', defaultKey: '[', label: 'Resize loupe −', section: 'zoom', paired: 'loupeSize',
+              fn: () => { if (magnifierEnabled) resizeMagnifier(-magnifierSize_STEP); } },
+            { id: 'loupeBigger', defaultKey: ']', label: 'Resize loupe +', section: 'zoom', paired: 'loupeSize',
+              fn: () => { if (magnifierEnabled) resizeMagnifier(magnifierSize_STEP); } },
+
+            // ── Transport ──
+            { id: 'prevAsset', defaultKey: 'ArrowLeft', altKey: 'ArrowUp', label: 'Previous asset', section: 'transport', paired: 'switchAsset',
+              fn: () => {
+                  let ni = (currentAssetIndex - 1 + assetOrder.length) % assetOrder.length;
+                  let a = 0;
+                  while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni - 1 + assetOrder.length) % assetOrder.length; a++; }
+                  if (mediaData[assetOrder[ni]]) switchToAsset(ni);
+              } },
+            { id: 'nextAsset', defaultKey: 'ArrowRight', altKey: 'ArrowDown', label: 'Next asset', section: 'transport', paired: 'switchAsset',
+              fn: () => {
+                  let ni = (currentAssetIndex + 1) % assetOrder.length;
+                  let a = 0;
+                  while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni + 1) % assetOrder.length; a++; }
+                  if (mediaData[assetOrder[ni]]) switchToAsset(ni);
+              } },
+            { id: 'playPause', defaultKey: ' ', label: 'Play / Pause', section: 'transport',
+              fn: () => togglePlayPause() },
+            { id: 'frameBack', defaultKey: ',', label: 'Frame back', section: 'transport', paired: 'frameStepping',
+              fn: () => {
+                  if (hasAudios) {
+                      getAllPlayableMedia().forEach(a => { a.currentTime = Math.max(0, a.currentTime - 0.05); });
+                      const primary = getAllPlayableMedia()[0];
+                      if (primary) { updateAudioProgress(primary); updateAllAudioSlotCursors(primary); }
+                  } else { stepFrame(-1); }
+              } },
+            { id: 'frameForward', defaultKey: '.', label: 'Frame forward', section: 'transport', paired: 'frameStepping',
+              fn: () => {
+                  if (hasAudios) {
+                      getAllPlayableMedia().forEach(a => { a.currentTime = Math.min(a.duration, a.currentTime + 0.05); });
+                      const primary = getAllPlayableMedia()[0];
+                      if (primary) { updateAudioProgress(primary); updateAllAudioSlotCursors(primary); }
+                  } else { stepFrame(1); }
+              } },
+            { id: 'restart', defaultKey: 'r', label: 'Restart from head', section: 'transport',
+              fn: () => restartAllVideos() },
+            { id: 'mute', defaultKey: 'm', label: 'Mute', section: 'transport',
+              fn: () => toggleMute() },
+            { id: 'cycleSpeed', defaultKey: 'j', label: 'Playback speed', section: 'transport',
+              fn: () => {
+                  if (hasVideos || hasAudios) {
+                      playbackRateIndex = (playbackRateIndex + 1) % PLAYBACK_RATES.length;
+                      const rate = PLAYBACK_RATES[playbackRateIndex];
+                      getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
+                      showToast('Speed ' + rate + '×');
+                  }
+              } },
+            { id: 'loopIn', defaultKey: 'i', label: 'Loop in point', section: 'transport', paired: 'loopPoints',
+              fn: () => { if (hasVideos || hasAudios) setLoopPoint('in'); } },
+            { id: 'loopOut', defaultKey: 'p', label: 'Loop out point', section: 'transport', paired: 'loopPoints',
+              fn: () => { if (hasVideos || hasAudios) setLoopPoint('out'); } },
+
+            // ── Analysis ──
+            { id: 'videoScopes', defaultKey: 'v', label: 'Video scopes', section: 'analysis',
+              fn: () => {
+                  if (hasAudios) { showToast('Video scopes not available in audio mode'); return; }
+                  if (document.getElementById('comparisonView').classList.contains('active')) toggleVideoScopes();
+              } },
+            { id: 'audioViz', defaultKey: 'w', label: 'Audio waveform / spectrogram', section: 'analysis',
+              fn: () => {
+                  if (hasAudios) { showToast('Audio visualization is shown in main view'); }
+                  else if (hasVideos) { toggleAudioViz(); }
+              } },
+            { id: 'spectroScale', defaultKey: 'w', shift: true, label: 'Linear / log frequency', section: 'analysis',
+              fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale(); } },
+            { id: 'spectroPalette', defaultKey: 'c', shift: true, label: 'Cycle color palette', section: 'analysis',
+              fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette(); } },
+
+            // ── Panels ──
+            { id: 'help', defaultKey: '?', altKey: '/', label: 'Help', section: 'panels', global: true,
+              fn: () => toggleQuickStart() },
+            { id: 'shortcuts', defaultKey: 'k', label: 'This panel', section: 'panels', global: true,
+              fn: () => toggleShortcutsPanel() },
+        ];
+
+        // Panel display: which paired groups to show together, with custom combined labels
+        const _pairedLabels = {
+            switchAsset:   'Switch asset',
+            loupeSize:     'Resize loupe',
+            frameStepping: 'Frame back / forward',
+            zoomInOut:     'Zoom / Speed up / down',
+            loopPoints:    'Loop in / out point',
+        };
+
+        // Build keymap: maps key (with shift prefix) → action id
+        let _keymap = {};
+        function _buildKeymap() {
+            _keymap = {};
+            for (const action of _hotkeyActions) {
+                const key = _customKeys[action.id] !== undefined ? _customKeys[action.id] : action.defaultKey;
+                const prefix = action.shift ? 'S+' : '';
+                _keymap[prefix + key] = action.id;
+                // Also register altKey if present and not overridden
+                if (action.altKey && _customKeys[action.id] === undefined) {
+                    _keymap[prefix + action.altKey] = action.id;
+                }
+            }
+        }
+        _buildKeymap();
+
+        // Get current key for an action (custom or default)
+        function _actionKey(actionId) {
+            const action = _hotkeyActions.find(a => a.id === actionId);
+            if (!action) return '';
+            return _customKeys[actionId] !== undefined ? _customKeys[actionId] : action.defaultKey;
+        }
+
+        // Check if an action has been customised
+        function _isCustomised(actionId) {
+            return _customKeys[actionId] !== undefined;
+        }
+
+        // Reassign a hotkey
+        function _reassignKey(actionId, newKey) {
+            const action = _hotkeyActions.find(a => a.id === actionId);
+            if (!action) return false;
+            if (_RESERVED_KEYS.has(newKey)) {
+                showToast('Key "' + _keyDisplay(newKey, false) + '" is reserved');
+                return 'conflict';
+            }
+            // Normalize to lowercase for letter keys
+            if (newKey.length === 1) newKey = newKey.toLowerCase();
+            // Check for conflicts (same key + same shift state)
+            const prefix = action.shift ? 'S+' : '';
+            const conflictId = _keymap[prefix + newKey] || _keymap[prefix + newKey.toLowerCase()];
+            if (conflictId && conflictId !== actionId) {
+                const conflict = _hotkeyActions.find(a => a.id === conflictId);
+                // Show conflict message inline on the reassigning kbd element
+                const activeKbd = document.querySelector('.shortcut-kbd-clickable.reassigning');
+                if (activeKbd) {
+                    activeKbd.textContent = _keyDisplay(newKey, action.shift) + ' → ' + conflict.label;
+                    activeKbd.classList.add('conflict-flash');
+                    setTimeout(() => {
+                        activeKbd.classList.remove('conflict-flash');
+                        activeKbd.textContent = 'Press a key…';
+                    }, 1500);
+                }
+                showToast(_keyDisplay(newKey, action.shift) + ' is already assigned to "' + conflict.label + '"');
+                return 'conflict';
+            }
+            if (newKey === action.defaultKey) {
+                delete _customKeys[actionId]; // revert to default
+            } else {
+                _customKeys[actionId] = newKey;
+            }
+            localStorage.setItem('customHotkeys', JSON.stringify(_customKeys));
+            _buildKeymap();
+            _renderShortcutsList();
+            return true;
+        }
+
+        // Reset one or all hotkeys
+        function _resetHotkey(actionId) {
+            delete _customKeys[actionId];
+            localStorage.setItem('customHotkeys', JSON.stringify(_customKeys));
+            _buildKeymap();
+            _renderShortcutsList();
+        }
+        function _resetAllHotkeys() {
+            _customKeys = {};
+            localStorage.setItem('customHotkeys', '{}');
+            _buildKeymap();
+            _renderShortcutsList();
+            showToast('All hotkeys reset to defaults');
+        }
+
+        // Render the shortcuts list dynamically
+        let _reassigningActionId = null; // currently waiting for a key press
+
+        // Which sections go in which column, with display headers
+        const _leftSections = new Set(['files', 'view', 'zoom', 'analysis']);
+        const _rightSections = new Set(['transport', 'panels']);
+        const _sectionHeaders = {
+            files: 'Files', view: 'View', zoom: 'Zoom',
+            transport: 'Transport', analysis: 'Analysis',
+        };
+
+        function _renderShortcutsList() {
+            const list = document.querySelector('#shortcutsPanel .shortcuts-list');
+            if (!list) return;
+            list.innerHTML = '';
+            // Remove any previous reset-all row
+            const oldReset = list.parentElement.querySelector('.shortcut-reset-all-row');
+            if (oldReset) oldReset.remove();
+
+            const leftCol = document.createElement('div');
+            leftCol.className = 'shortcuts-col';
+            const rightCol = document.createElement('div');
+            rightCol.className = 'shortcuts-col';
+
+            const renderedPairs = new Set();
+            let lastLeftSection = null;
+            let lastRightSection = null;
+
+            for (const action of _hotkeyActions) {
+                const isLeft = _leftSections.has(action.section);
+                const col = isLeft ? leftCol : rightCol;
+                const lastSection = isLeft ? lastLeftSection : lastRightSection;
+
+                // Section headers
+                if (action.section !== lastSection) {
+                    const header = _sectionHeaders[action.section];
+                    if (header) {
+                        if (lastSection) col.appendChild(document.createElement('hr')).className = 'shortcut-divider';
+                        const h = document.createElement('div');
+                        h.className = 'shortcut-section-header';
+                        h.textContent = header;
+                        col.appendChild(h);
+                    } else if (lastSection) {
+                        col.appendChild(document.createElement('hr')).className = 'shortcut-divider';
+                    }
+                }
+                if (isLeft) lastLeftSection = action.section;
+                else lastRightSection = action.section;
+
+                // Handle paired actions (show on one row)
+                if (action.paired) {
+                    if (renderedPairs.has(action.paired)) continue;
+                    renderedPairs.add(action.paired);
+                    col.appendChild(_buildPairedRow(action));
+                    // Append Esc Esc row right after loop points
+                    if (action.paired === 'loopPoints') {
+                        const escEscRow = document.createElement('div');
+                        escEscRow.className = 'shortcut-row';
+                        const escEscKey = document.createElement('span');
+                        escEscKey.className = 'shortcut-key';
+                        escEscKey.innerHTML = '<kbd>Esc</kbd> <kbd>Esc</kbd>';
+                        escEscRow.appendChild(escEscKey);
+                        const escEscDesc = document.createElement('span');
+                        escEscDesc.className = 'shortcut-desc';
+                        escEscDesc.textContent = 'Clear loop markers';
+                        escEscRow.appendChild(escEscDesc);
+                        col.appendChild(escEscRow);
+                    }
+                    continue;
+                }
+
+                col.appendChild(_buildSingleRow(action));
+            }
+
+            // "Escape" row in right column (non-reassignable, same section as panels)
+            const escRow = document.createElement('div');
+            escRow.className = 'shortcut-row';
+            const escKey = document.createElement('span');
+            escKey.className = 'shortcut-key';
+            escKey.innerHTML = '<kbd>Esc</kbd>';
+            escRow.appendChild(escKey);
+            const escDesc = document.createElement('span');
+            escDesc.className = 'shortcut-desc';
+            escDesc.textContent = 'Dismiss any overlay';
+            escRow.appendChild(escDesc);
+            rightCol.appendChild(escRow);
+
+            list.appendChild(leftCol);
+            list.appendChild(rightCol);
+
+            // Reset All button (only show if any customised)
+            if (Object.keys(_customKeys).length > 0) {
+                const resetRow = document.createElement('div');
+                resetRow.className = 'shortcut-reset-all-row';
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'shortcut-reset-all';
+                resetBtn.textContent = 'Reset All to Defaults';
+                resetBtn.addEventListener('click', _resetAllHotkeys);
+                resetRow.appendChild(resetBtn);
+                // Append below the columns
+                list.parentElement.appendChild(resetRow);
+            }
+        }
+
+        function _buildPairedRow(action) {
+            const partners = _hotkeyActions.filter(a => a.paired === action.paired);
+            const row = document.createElement('div');
+            row.className = 'shortcut-row';
+            if (partners.some(p => p.id === 'fullscreen') && window.matchMedia('(display-mode: standalone)').matches) {
+                row.classList.add('disabled');
+            }
+            const keySpan = document.createElement('span');
+            keySpan.className = 'shortcut-key';
+            partners.forEach((p, idx) => {
+                if (idx > 0) keySpan.appendChild(document.createTextNode(' '));
+                keySpan.appendChild(_buildKbd(p));
+                if (_isCustomised(p.id)) keySpan.appendChild(_buildResetIcon(p));
+            });
+            row.appendChild(keySpan);
+            const descSpan = document.createElement('span');
+            descSpan.className = 'shortcut-desc';
+            descSpan.textContent = _pairedLabels[action.paired] || partners.map(p => p.label).join(' / ');
+            row.appendChild(descSpan);
+            return row;
+        }
+
+        function _buildSingleRow(action) {
+            const row = document.createElement('div');
+            row.className = 'shortcut-row';
+            if (action.id === 'fullscreen' && window.matchMedia('(display-mode: standalone)').matches) {
+                row.classList.add('disabled');
+                row.id = 'shortcutFullscreen';
+            }
+            const keySpan = document.createElement('span');
+            keySpan.className = 'shortcut-key';
+            keySpan.appendChild(_buildKbd(action));
+            if (_isCustomised(action.id)) keySpan.appendChild(_buildResetIcon(action));
+            row.appendChild(keySpan);
+            const descSpan = document.createElement('span');
+            descSpan.className = 'shortcut-desc';
+            descSpan.textContent = action.label;
+            if (action.id === 'fullscreen' && window.matchMedia('(display-mode: standalone)').matches) {
+                descSpan.innerHTML = 'Browser fullscreen <span class="shortcut-note">(N/A in app mode)</span>';
+            }
+            row.appendChild(descSpan);
+            return row;
+        }
+
+        function _buildKbd(action) {
+            const kbd = document.createElement('kbd');
+            kbd.textContent = _reassigningActionId === action.id ? 'Press a key…' : _keyDisplay(_actionKey(action.id), action.shift);
+            kbd.className = 'shortcut-kbd-clickable' + (_reassigningActionId === action.id ? ' reassigning' : '') + (_isCustomised(action.id) ? ' customised' : '');
+            kbd.title = 'Click to reassign';
+            kbd.dataset.actionId = action.id;
+            kbd.addEventListener('click', _startReassign);
+            return kbd;
+        }
+
+        function _buildResetIcon(action) {
+            const rst = document.createElement('span');
+            rst.className = 'shortcut-reset';
+            rst.textContent = '↺';
+            rst.title = 'Reset to default (' + _keyDisplay(action.defaultKey, action.shift) + ')';
+            rst.addEventListener('click', (ev) => { ev.stopPropagation(); _resetHotkey(action.id); });
+            return rst;
+        }
+
+        function _startReassign(ev) {
+            ev.stopPropagation();
+            const actionId = ev.currentTarget.dataset.actionId;
+            if (_reassigningActionId === actionId) {
+                // Cancel reassignment on second click
+                _reassigningActionId = null;
+                _renderShortcutsList();
+                return;
+            }
+            _reassigningActionId = actionId;
+            _renderShortcutsList();
+        }
+
+        // Listen for the reassignment key press
+        document.addEventListener('keydown', function _reassignListener(e) {
+            if (!_reassigningActionId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.key === 'Escape') {
+                // Cancel reassignment
+                _reassigningActionId = null;
+                _renderShortcutsList();
+                return;
+            }
+            if (_RESERVED_KEYS.has(e.key)) return; // ignore modifier-only presses
+
+            const result = _reassignKey(_reassigningActionId, e.key);
+            if (result === true) {
+                _reassigningActionId = null;
+                _renderShortcutsList();
+            } else if (result === 'conflict') {
+                // Keep reassign mode open, flash the kbd to show the conflict
+                const activeKbd = document.querySelector('.shortcut-kbd-clickable.reassigning');
+                if (activeKbd) {
+                    activeKbd.classList.add('conflict-flash');
+                    setTimeout(() => activeKbd.classList.remove('conflict-flash'), 600);
+                }
+            }
+        }, true); // capture phase to intercept before normal keydown
+
+        // Keyboard navigation (lookup-based dispatcher)
         document.addEventListener('keydown', (e) => {
             // Let browser-native shortcuts (Cmd+R, Ctrl+R, etc.) pass through
             if (e.metaKey || e.ctrlKey) return;
+
+            // Skip when reassigning a key
+            if (_reassigningActionId) return;
 
             // Escape: dismiss magnifier, close panels, or double-tap to clear loop markers
             if (e.key === 'Escape') {
@@ -6664,273 +7253,21 @@
                 return;
             }
 
-            // L key opens file picker — works at any time
-            if (e.key === 'l' || e.key === 'L') {
-                e.preventDefault();
-                document.getElementById('multiFileInput').click();
-                return;
-            }
+            // Look up the action for this key
+            // Try shift-prefixed first, then unprefixed (for keys like ? that are Shift+/ but not flagged as shift actions)
+            const actionId = e.shiftKey
+                ? (_keymap['S+' + e.key] || _keymap['S+' + e.key.toLowerCase()] || _keymap[e.key] || _keymap[e.key.toLowerCase()])
+                : (_keymap[e.key] || _keymap[e.key.toLowerCase()]);
+            if (!actionId) return;
 
-            // ? or / key toggles Quick Start popup — works at any time
-            if (e.key === '?' || e.key === '/') {
-                e.preventDefault();
-                toggleQuickStart();
-                return;
-            }
+            const action = _hotkeyActions.find(a => a.id === actionId);
+            if (!action) return;
 
-            // K key toggles shortcuts panel — works at any time
-            if (e.key === 'k' || e.key === 'K') {
-                e.preventDefault();
-                toggleShortcutsPanel();
-                return;
-            }
+            // Non-global actions require comparison view to be active
+            if (!action.global && !document.getElementById('comparisonView').classList.contains('active')) return;
 
-            // Only work if comparison view is active
-            if (!document.getElementById('comparisonView').classList.contains('active')) {
-                return;
-            }
-
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                // Move to previous non-empty slot
-                let nextIndex = (currentAssetIndex - 1 + assetOrder.length) % assetOrder.length;
-                let attempts = 0;
-                while (!mediaData[assetOrder[nextIndex]] && attempts < assetOrder.length) {
-                    nextIndex = (nextIndex - 1 + assetOrder.length) % assetOrder.length;
-                    attempts++;
-                }
-                if (mediaData[assetOrder[nextIndex]]) {
-                    switchToAsset(nextIndex);
-                }
-            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                e.preventDefault();
-                // Move to next non-empty slot
-                let nextIndex = (currentAssetIndex + 1) % assetOrder.length;
-                let attempts = 0;
-                while (!mediaData[assetOrder[nextIndex]] && attempts < assetOrder.length) {
-                    nextIndex = (nextIndex + 1) % assetOrder.length;
-                    attempts++;
-                }
-                if (mediaData[assetOrder[nextIndex]]) {
-                    switchToAsset(nextIndex);
-                }
-            } else if (e.key === 'f' || e.key === 'F') {
-                // F toggles browser fullscreen (hides browser chrome)
-                e.preventDefault();
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().catch(() => {});
-                } else {
-                    document.exitFullscreen();
-                }
-            } else if (e.key === '+' || e.key === '=') {
-                e.preventDefault();
-                if (hasAudios) {
-                    if (playbackRateIndex < PLAYBACK_RATES.length - 1) {
-                        playbackRateIndex++;
-                        const rate = PLAYBACK_RATES[playbackRateIndex];
-                        getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
-                        showToast('Speed ' + rate + '×');
-                    }
-                } else if (magnifierEnabled) {
-                    magnifierZoom = Math.min(magnifierZoom * 2, MAGNIFIER_ZOOM_MAX);
-                    _prefs.save('magnifierZoom', magnifierZoom);
-                    showToast('Zoom ' + magnifierZoom + '×');
-                    if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
-                } else {
-                    zoomIn();
-                }
-            } else if (e.key === '-' || e.key === '_') {
-                e.preventDefault();
-                if (hasAudios) {
-                    if (playbackRateIndex > 0) {
-                        playbackRateIndex--;
-                        const rate = PLAYBACK_RATES[playbackRateIndex];
-                        getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
-                        showToast('Speed ' + rate + '×');
-                    }
-                } else if (magnifierEnabled) {
-                    magnifierZoom = Math.max(magnifierZoom / 2, MAGNIFIER_ZOOM_MIN);
-                    _prefs.save('magnifierZoom', magnifierZoom);
-                    showToast('Zoom ' + magnifierZoom + '×');
-                    if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
-                } else {
-                    zoomOut();
-                }
-            } else if (e.key === '0') {
-                e.preventDefault();
-                resetFitZoom();
-            } else if (e.key === '1') {
-                // Snap to 100% actual pixels
-                e.preventDefault();
-                if (!isSplitMode) {
-                    // Overlay: snap to 100% actual pixels, reset pan
-                    zoomLevel = 1;
-                    panOffsetX = 0;
-                    panOffsetY = 0;
-                    applyZoom();
-                } else {
-                    // Split modes: toggle between fit-to-panel and 100%-anchor (smallest asset at native pixels).
-                    // Only toggle back to fit if already at true 100% (no step zoom applied).
-                    // If the user zoomed away from 100% with +/-, pressing 1 should re-snap to 100%.
-                    const atTrue100 = splitZoomLevel === 1 && splitStepZoom === 1.0;
-                    splitZoomLevel = atTrue100 ? null : 1;
-                    // Reset step zoom so the baseline is clean.
-                    splitStepZoom = 1.0;
-                    document.body.classList.toggle('zoom-100', splitZoomLevel === 1);
-                    positionLabelsToMedia();
-                    showToast(splitZoomLevel === 1 ? '100% native pixels' : 'Fit to panel');
-                }
-            } else if (e.key === '3') {
-                // Toggle between L-shaped and equal-layout 3-UP
-                e.preventDefault();
-                if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
-                const isAnyTripartiteNow = isTripartiteMode();
-                if (isSplitMode && isAnyTripartiteNow) {
-                    // Skip toggle when orientations are mixed — L-shaped doesn't work
-                    const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
-                    const land3 = dims3.filter(m => m.w >= m.h).length;
-                    if (land3 > 0 && land3 < dims3.length) {
-                        showToast('Offset layout unavailable for mixed orientations');
-                        return;
-                    }
-                    tripartiteLayout3Col = !tripartiteLayout3Col;
-                    localStorage.setItem('tripartiteLayout3Col', tripartiteLayout3Col);
-                    setViewMode('tripartite');
-                }
-            } else if (e.key === ' ') {
-                // Spacebar toggles play/pause for videos
-                e.preventDefault();
-                togglePlayPause();
-            } else if (e.key === 'r' || e.key === 'R') {
-                // R key restarts from beginning
-                e.preventDefault();
-                restartAllVideos();
-            } else if (e.key === 'W' && e.shiftKey) {
-                // Shift+W toggles log/linear frequency scale
-                e.preventDefault();
-                if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale();
-            } else if (e.key === 'C' && e.shiftKey) {
-                // Shift+C cycles spectrogram color palette
-                e.preventDefault();
-                if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette();
-            } else if (e.key === 'w') {
-                // W key toggles audio visualization (spectrogram)
-                e.preventDefault();
-                if (hasAudios) {
-                    showToast('Audio visualization is shown in main view');
-                } else if (hasVideos) {
-                    toggleAudioViz();
-                }
-            } else if (e.key === 'v') {
-                // V key toggles video scopes (histogram, waveform monitor, vectorscope)
-                e.preventDefault();
-                if (hasAudios) { showToast('Video scopes not available in audio mode'); return; }
-                if (document.getElementById('comparisonView').classList.contains('active')) toggleVideoScopes();
-            } else if (e.key === 'Z' && e.shiftKey) {
-                // Shift+Z toggles linked loupes in split mode
-                e.preventDefault();
-                if (hasAudios) return;
-                magnifierLinked = !magnifierLinked;
-                _prefs.save('magnifierLinked', magnifierLinked);
-                showToast('Linked zoom ' + (magnifierLinked ? 'ON' : 'OFF'));
-                if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
-            } else if (e.key === 'z' || e.key === 'Z') {
-                // Z key toggles zoom/magnifier (industry standard)
-                e.preventDefault();
-                if (hasAudios) { showToast('Magnifier not available in audio mode'); return; }
-                toggleMagnifier();
-            } else if (e.key === '[') {
-                e.preventDefault();
-                if (magnifierEnabled) resizeMagnifier(-magnifierSize_STEP);
-            } else if (e.key === ']') {
-                e.preventDefault();
-                if (magnifierEnabled) resizeMagnifier(magnifierSize_STEP);
-            } else if (e.key === 'j' || e.key === 'J') {
-                // J key cycles playback speed
-                e.preventDefault();
-                if (hasVideos || hasAudios) {
-                    playbackRateIndex = (playbackRateIndex + 1) % PLAYBACK_RATES.length;
-                    const rate = PLAYBACK_RATES[playbackRateIndex];
-                    getAllPlayableMedia().forEach(m => { m.playbackRate = rate; });
-                    showToast('Speed ' + rate + '×');
-                }
-            } else if (e.key === 'i' || e.key === 'I') {
-                // I key sets loop in-point
-                e.preventDefault();
-                if (hasVideos || hasAudios) setLoopPoint('in');
-            } else if (e.key === 'p' || e.key === 'P') {
-                // P key sets loop out-point
-                e.preventDefault();
-                if (hasVideos || hasAudios) setLoopPoint('out');
-            } else if (e.key === 'm' || e.key === 'M') {
-                // M key toggles mute
-                e.preventDefault();
-                toggleMute();
-            } else if (e.key === 'o' || e.key === 'O') {
-                // O key toggles overlay <-> split (tripartite for 3 assets, auto-layout for 2).
-                e.preventDefault();
-                const allThreeLoaded = getLoadedSlotCount() === 3;
-                if (isSplitMode) {
-                    setViewMode('overlay');
-                } else if (hasAudios) {
-                    // Audio: always vertical stack
-                    if (allThreeLoaded) {
-                        tripartiteLayout3Col = true;
-                        setViewMode('tripartite');
-                    } else {
-                        setViewMode('vertical');
-                    }
-                } else if (allThreeLoaded) {
-                    setViewMode('tripartite');
-                } else {
-                    setViewMode(layoutMode);
-                }
-            } else if (e.key === ',') {
-                e.preventDefault();
-                if (hasAudios) {
-                    getAllPlayableMedia().forEach(a => { a.currentTime = Math.max(0, a.currentTime - 0.05); });
-                    const primary = getAllPlayableMedia()[0];
-                    if (primary) { updateAudioProgress(primary); updateAllAudioSlotCursors(primary); }
-                } else {
-                    stepFrame(-1);
-                }
-            } else if (e.key === '.') {
-                e.preventDefault();
-                if (hasAudios) {
-                    getAllPlayableMedia().forEach(a => { a.currentTime = Math.min(a.duration, a.currentTime + 0.05); });
-                    const primary = getAllPlayableMedia()[0];
-                    if (primary) { updateAudioProgress(primary); updateAllAudioSlotCursors(primary); }
-                } else {
-                    stepFrame(1);
-                }
-            } else if (e.key === 'g' || e.key === 'G') {
-                // G key toggles grid mode depending on asset count.
-                e.preventDefault();
-                const allThreeLoaded = getLoadedSlotCount() === 3;
-                if (hasAudios) {
-                    // Audio: always vertical stack
-                    if (!isSplitMode) {
-                        if (allThreeLoaded) { tripartiteLayout3Col = true; setViewMode('tripartite'); }
-                        else setViewMode('vertical');
-                    } else {
-                        setViewMode('overlay');
-                    }
-                } else if (allThreeLoaded) {
-                    // 3-asset cycle: overlay <-> tripartite
-                    if (!isSplitMode) {
-                        setViewMode('tripartite');
-                    } else {
-                        setViewMode('overlay');
-                    }
-                } else {
-                    // 2-asset: toggle overlay <-> the auto-picked split layout
-                    if (!isSplitMode) {
-                        setViewMode(layoutMode); // return to auto-picked horizontal or vertical
-                    } else {
-                        setViewMode('overlay');
-                    }
-                }
-            }
+            e.preventDefault();
+            action.fn(e);
         });
 
         // Initialize
@@ -6978,13 +7315,13 @@
         });
 
         function toggleShortcutsPanel() {
-            document.getElementById('shortcutsPanel').classList.toggle('open');
+            const panel = document.getElementById('shortcutsPanel');
+            const opening = !panel.classList.contains('open');
+            panel.classList.toggle('open');
             document.getElementById('shortcutsBackdrop').classList.toggle('open');
-            // Disable fullscreen shortcut in standalone PWA mode
-            const fsRow = document.getElementById('shortcutFullscreen');
-            if (fsRow && window.matchMedia('(display-mode: standalone)').matches) {
-                fsRow.classList.add('disabled');
-                fsRow.querySelector('.shortcut-desc').innerHTML = 'Browser fullscreen <span class="shortcut-note">(N/A in app mode)</span>';
+            if (opening) {
+                _reassigningActionId = null;
+                _renderShortcutsList();
             }
         }
 
@@ -7302,38 +7639,7 @@
             <span>Hotkeys</span>
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
-        <div class="shortcuts-list">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>L</kbd></span><span class="shortcut-desc">Load files</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>Z</kbd></span><span class="shortcut-desc">Zoom loupe</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>⇧Z</kbd></span><span class="shortcut-desc">Linked zoom (Grid mode)</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>[</kbd> <kbd>]</kbd></span><span class="shortcut-desc">Resize loupe</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>−</kbd></span><span class="shortcut-desc">Loupe zoom level (when active)</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>← → ↑ ↓</kbd></span><span class="shortcut-desc">Switch asset</span></div>
-            <hr class="shortcut-divider">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>O</kbd></span><span class="shortcut-desc">Overlay mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>G</kbd></span><span class="shortcut-desc">Grid mode</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>3</kbd></span><span class="shortcut-desc">Grid: Inline / Offset</span></div>
-            <div class="shortcut-row" id="shortcutFullscreen"><span class="shortcut-key"><kbd>F</kbd></span><span class="shortcut-desc">Browser fullscreen</span></div>
-            <hr class="shortcut-divider">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>+</kbd> <kbd>-</kbd></span><span class="shortcut-desc">Zoom in / out · Speed up / down</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>0</kbd></span><span class="shortcut-desc">Zoom to fit</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>1</kbd></span><span class="shortcut-desc">Zoom to 100%</span></div>
-            <hr class="shortcut-divider">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>Space</kbd></span><span class="shortcut-desc">Play / Pause</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>,</kbd> <kbd>.</kbd></span><span class="shortcut-desc">Frame back / forward</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>M</kbd></span><span class="shortcut-desc">Mute</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>R</kbd></span><span class="shortcut-desc">Restart</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>J</kbd></span><span class="shortcut-desc">Playback speed</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>I</kbd> <kbd>P</kbd></span><span class="shortcut-desc">Loop in / out point</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>V</kbd></span><span class="shortcut-desc">Video scopes</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>W</kbd></span><span class="shortcut-desc">Audio waveform / spectrogram</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>⇧W</kbd></span><span class="shortcut-desc">Linear / log frequency</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>⇧C</kbd></span><span class="shortcut-desc">Cycle color palette</span></div>
-            <hr class="shortcut-divider">
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>?</kbd></span><span class="shortcut-desc">Help</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>K</kbd></span><span class="shortcut-desc">Toggle this panel</span></div>
-            <div class="shortcut-row"><span class="shortcut-key"><kbd>Esc</kbd></span><span class="shortcut-desc">Dismiss loupe / close panel</span></div>
-        </div>
+        <div class="shortcuts-list"></div>
     </div>
 
 </body>
