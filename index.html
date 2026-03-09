@@ -2006,21 +2006,6 @@
             return Object.values(mediaData).filter(m => m !== null).length;
         }
 
-        // Returns the smallest "longest dimension" across all loaded assets.
-        function computeMinLongest() {
-            let minLong = Infinity;
-            assetOrder.forEach(slot => {
-                if (!mediaData[slot]) return;
-                const layer = getLayer(slot);
-                const media = layer && layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
-                if (!media) return;
-                const { w, h } = mediaDims(media);
-                if (!w || !h) return;
-                minLong = Math.min(minLong, Math.max(w, h));
-            });
-            return minLong === Infinity ? 0 : minLong;
-        }
-
         function clearVideoWrapperStyles(vw) {
             vw.style.position = '';
             vw.style.width = '';
@@ -6317,78 +6302,63 @@
                 if (infoBarZoom) infoBarZoom.textContent = formatZoom(g.zoom);
             });
 
-            // Group-centering pass for vertical-stack: shrink each layer to its content height
-            // (info-bar + video) and vertically center the whole group in the viewport.
-            // Always runs so landscape videos don't have gaps between them.
+            // Vertical-stack post-pass: fill viewport height and center the group.
+            // At default zoom, landscape videos leave gaps at the bottom because width
+            // constrains before height. The fill-scale expands them to use the full viewport.
             if (isVertical && Object.keys(slotRenderedH).length > 0) {
                 const headerH = getHeaderHeight();
                 const controlsEl = document.getElementById('videoControls');
                 const controlsH = (controlsEl && controlsEl.classList.contains('active')) ? controlsEl.offsetHeight : 0;
-                const availH = window.innerHeight - headerH - controlsH;
+                const viewportH = window.innerHeight - headerH - controlsH;
+                const viewW = window.innerWidth;
                 const loadedSlots = slots.filter(s => slotRenderedH[s] !== undefined);
 
-                // Compute total content height and total info bar height
-                let totalVideoH = 0;
-                let totalIbH = 0;
+                // Gather info bar heights (audio slots have ibH inside the wrapper, so skip)
+                let totalVideoH = 0, totalIbH = 0;
                 const slotIbH = {};
-                loadedSlots.forEach(slot => {
-                    const m = measured.data[slot];
-                    // Audio slots: info bar is inside the video-wrapper (audio-slot-group), no external offset needed
+                loadedSlots.forEach(s => {
+                    const m = measured.data[s];
                     const ibInGroup = m && m.infoBar && m.infoBar.parentElement &&
                                       m.infoBar.parentElement.classList.contains('audio-slot-group');
                     const ibH = (m && m.ibH && !ibInGroup) ? m.ibH : 0;
-                    slotIbH[slot] = ibH;
+                    slotIbH[s] = ibH;
                     totalIbH += ibH;
-                    totalVideoH += slotRenderedH[slot];
+                    totalVideoH += slotRenderedH[s];
                 });
-                const totalH = totalIbH + totalVideoH;
 
-                // At default fit zoom, scale up the group to fill the viewport height.
-                // This eliminates the gap at the bottom for landscape videos whose width
-                // constrains before height, leaving unused vertical space in each cell.
+                // Compute fill scale using slotGeometry (no DOM reads needed)
                 let fillScale = 1;
-                if (splitStepZoom === 1.0 && splitZoomLevel !== 1 && totalH < availH && totalVideoH > 0) {
-                    fillScale = (availH - totalIbH) / totalVideoH;
-                    // Clamp so no video extends beyond the viewport width
-                    const viewW = window.innerWidth;
-                    loadedSlots.forEach(slot => {
-                        const m = measured.data[slot];
-                        const vw = m ? m.videoWrapper : null;
-                        const curW = vw ? parseFloat(vw.style.width || 0) : 0;
-                        const curH = slotRenderedH[slot] || 1;
-                        if (curW > 0 && curH > 0) {
-                            const maxScale = viewW / curW;
-                            if (maxScale < fillScale) fillScale = maxScale;
+                if (splitStepZoom === 1.0 && splitZoomLevel !== 1 &&
+                    totalIbH + totalVideoH < viewportH && totalVideoH > 0) {
+                    fillScale = (viewportH - totalIbH) / totalVideoH;
+                    loadedSlots.forEach(s => {
+                        const g = slotGeometry[s];
+                        if (g && g.rw > 0) {
+                            fillScale = Math.min(fillScale, viewW / g.rw);
                         }
                     });
                 }
 
-                // Apply per-slot: shrink layer to ibReserve + scaled video height
-                loadedSlots.forEach(slot => {
-                    const m = measured.data[slot];
-                    if (!m) return;
-                    const { layer, mediaContainer, videoWrapper } = m;
-                    const ibH = slotIbH[slot] || 0;
-                    const scaledH = Math.round(slotRenderedH[slot] * fillScale);
-                    const scaledW = Math.round((slotRenderedH[slot] > 0 ? scaledH / slotRenderedH[slot] : 1) * parseFloat(videoWrapper?.style.width || 0));
-                    layer.style.height = (ibH + scaledH) + 'px';
-                    if (videoWrapper) {
-                        videoWrapper.style.top = ibH + 'px';
-                        videoWrapper.style.height = scaledH + 'px';
-                        videoWrapper.style.width = scaledW + 'px';
-                        // Re-center horizontally after width change
-                        const containerW = mediaContainer.offsetWidth;
-                        videoWrapper.style.left = Math.round((containerW - scaledW) / 2) + 'px';
-                    }
+                // Apply: shrink layers to content height and update wrapper geometry
+                loadedSlots.forEach(s => {
+                    const m = measured.data[s];
+                    const g = slotGeometry[s];
+                    if (!m || !g) return;
+                    const ibH = slotIbH[s] || 0;
+                    const scaledH = Math.round(slotRenderedH[s] * fillScale);
+                    const scaledW = Math.round(g.rw * fillScale);
+                    m.layer.style.height = (ibH + scaledH) + 'px';
+                    m.videoWrapper.style.top = ibH + 'px';
+                    m.videoWrapper.style.height = scaledH + 'px';
+                    m.videoWrapper.style.width = scaledW + 'px';
+                    m.videoWrapper.style.left = Math.round((m.mediaContainer.offsetWidth - scaledW) / 2) + 'px';
                 });
 
-                // Vertically center the group in the viewport
+                // Vertically center the group
                 const scaledTotalH = totalIbH + Math.round(totalVideoH * fillScale);
-                const topPad = Math.max(0, Math.round((availH - scaledTotalH) / 2));
+                const topPad = Math.max(0, Math.round((viewportH - scaledTotalH) / 2));
                 const firstM = measured.data[loadedSlots[0]];
-                if (firstM && firstM.layer) firstM.layer.style.marginTop = topPad + 'px';
-
-                // Controls are in document flow — no positioning needed
+                if (firstM) firstM.layer.style.marginTop = topPad + 'px';
             }
 
             // If any loaded slot had a zero-dimension container (layout not yet committed),
