@@ -5859,8 +5859,6 @@
             const isTripartite = isTripartiteMode();
             const isEqualLayout = document.body.classList.contains('inline-cols') ||
                                   document.body.classList.contains('inline-rows');
-            const isOverlay = !isGridMode && !isVertical;
-
             // Reset video controls position when not in vertical-stack (CSS takes over)
             if (!isVertical) {
                 const controls = document.querySelector('.video-controls');
@@ -6024,6 +6022,41 @@
                     b.rw = sharedW;
                 }
 
+                // L-shaped offset: compute shared contain-fit scale and per-slot positions
+                // in the pre-pass so the forEach only applies geometry.
+                if (!isEqualLayout) {
+                    let minScale = Infinity;
+                    slots.forEach(s => {
+                        const d = gridLayout[s];
+                        if (!d) return;
+                        const aH = d.ch - (d.ibH || 0);
+                        const sc = Math.min(d.cw / d.nw, aH / d.nh);
+                        minScale = Math.min(minScale, sc);
+                    });
+                    if (splitZoomLevel === 1) minScale = Math.min(minScale, 1);
+                    slots.forEach(s => {
+                        const d = gridLayout[s];
+                        if (!d) return;
+                        d.rw = Math.round(d.nw * minScale * splitStepZoom);
+                        d.rh = Math.round(d.nh * minScale * splitStepZoom);
+                        d.sharedZoom = d.rw / d.nw;
+                        // Vertical positioning: Original centered, EditA flush bottom, EditB flush top
+                        if (s === 'original') {
+                            d._ty = Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2));
+                        } else if (s === 'editA') {
+                            d._ty = Math.max(d.ibH || 0, Math.round(d.ch - d.rh));
+                        } else {
+                            d._ty = d.ibH || 0;
+                        }
+                        // Horizontal: Original flush right, A/B flush left. 4px gap from cell edge.
+                        if (s === 'original') {
+                            d._tx = Math.max(0, Math.round(d.cw - d.rw) - 4);
+                        } else {
+                            d._tx = Math.min(4, Math.round(d.cw - d.rw));
+                        }
+                    });
+                }
+
                 // Group-centering for equal layouts: cluster images together and center
                 // the group in the viewport, so gaps don't grow between images when zooming out.
                 if (isEqualLayout) {
@@ -6172,14 +6205,8 @@
             // Horizontal compare pre-pass: scale all assets so their longest side matches
             // the smallest longest-side across loaded assets.
             let compareRefLong = 0;
-            if (!isVertical && !isTripartite && !isOverlay) {
+            if (!isVertical && !isTripartite) {
                 compareRefLong = minLongestFromMeasured();
-            }
-
-            // Overlay mode: find the smallest "longest side" across all loaded assets.
-            let overlayRefLong = 0;
-            if (isOverlay) {
-                overlayRefLong = minLongestFromMeasured();
             }
 
             // Track rendered heights so the vertical-stack group-centering pass can use them.
@@ -6230,28 +6257,7 @@
                         layer, mediaContainer, media, videoWrapper, infoBar } = m;
 
                 let renderedW, renderedH, offsetX, offsetY;
-                if (isOverlay && overlayRefLong > 0) {
-                    // Scale each asset so its longest side = overlayRefLong px on screen.
-                    // The asset with the shortest longest-side renders at 1:1 (100% zoom);
-                    // larger assets scale down proportionally so they match that same footprint.
-                    const longestSide = Math.max(naturalWidth, naturalHeight);
-                    const scale = overlayRefLong / longestSide;
-                    const baseW = Math.round(naturalWidth * scale);
-                    const baseH = Math.round(naturalHeight * scale);
-                    // Clamp to viewport in case even the reference asset is larger than the screen.
-                    // Apply the same clampScale to the reference box too so the anchor is stable.
-                    const clampScale = Math.min(1, containerW / overlayRefLong, fitH / overlayRefLong);
-                    renderedW = Math.round(baseW * clampScale);
-                    renderedH = Math.round(baseH * clampScale);
-                    // Anchor: center the overlayRefLong × overlayRefLong reference box, then
-                    // place each asset centered within that fixed box. This keeps the anchor
-                    // point identical for all assets regardless of their individual heights.
-                    const refPx = Math.round(overlayRefLong * clampScale);
-                    const boxLeft = Math.round((containerW - refPx) / 2);
-                    const boxTop  = Math.round((fitH - refPx) / 2);
-                    offsetX = boxLeft + Math.round((refPx - renderedW) / 2);
-                    offsetY = boxTop  + Math.round((refPx - renderedH) / 2);
-                } else if (!isVertical && !isTripartite && compareRefLong > 0) {
+                if (!isVertical && !isTripartite && compareRefLong > 0) {
                     // Horizontal compare: scale each asset so its longest side = compareRefLong,
                     // then apply splitStepZoom so +/- keys scale the whole group.
                     // Anchoring on the longest side gives the same dominant dimension on screen
@@ -6313,64 +6319,16 @@
                     if (isVertical) slotRenderedH[slot] = Math.round(renderedH);
                 }
 
-                // In offset mode: use the shared zoom dimensions computed in the pre-pass.
-                // Original is flush-right in its cell; EditA/EditB are flush-left in theirs.
-                // All three are vertically centered. This makes right-edge of Original meet
-                // the left-edge of A/B at the column midpoint, with the whole group centered.
+                // Grid sub-layouts (offset, inline-cols, inline-rows): all geometry
+                // is pre-computed in gridLayout — just apply positions.
                 if (isTripartite && gridLayout[slot]) {
                     const td = gridLayout[slot];
-                    let tw = Math.round(td.rw);
-                    let th = Math.round(td.rh);
-                    let ty, tx;
-                    if (isEqualLayout) {
-                        // Equal layout (inline-cols / inline-rows):
-                        // Use group-centered positions computed in the pre-pass.
-                        tx = td._tx !== undefined ? td._tx : Math.round((td.cw - td.rw) / 2);
-                        ty = td._ty !== undefined ? td._ty : td.ibH;
-                    } else {
-                        // L-shaped layout (offset): all images render at the same size.
-                        // Use the minimum contain-fit scale across all cells so they match.
-                        // Original: flush right; EditA: flush bottom-left; EditB: flush top-left.
-                        if (!td._lSharedScale) {
-                            // Compute shared scale once from the measurement pass data
-                            let minScale = Infinity;
-                            slots.forEach(s => {
-                                const d = gridLayout[s];
-                                if (!d) return;
-                                const aH = d.ch - (d.ibH || 0);
-                                const sc = Math.min(d.cw / d.nw, aH / d.nh);
-                                minScale = Math.min(minScale, sc);
-                            });
-                            if (splitZoomLevel === 1) minScale = Math.min(minScale, 1);
-                            slots.forEach(s => {
-                                if (gridLayout[s]) gridLayout[s]._lSharedScale = minScale;
-                            });
-                        }
-                        const cellScale = td._lSharedScale;
-                        td.rw = Math.round(td.nw * cellScale * splitStepZoom);
-                        td.rh = Math.round(td.nh * cellScale * splitStepZoom);
-                        td.sharedZoom = td.rw / td.nw;
-                        tw = td.rw;
-                        th = td.rh;
-
-                        if (slot === 'original') {
-                            ty = Math.max(td.ibH || 0, Math.round((td.ch - td.rh) / 2));
-                        } else if (slot === 'editA') {
-                            ty = Math.max(td.ibH || 0, Math.round(td.ch - td.rh)); // flush bottom, but below info bar
-                        } else {
-                            ty = td.ibH || 0; // flush top, below the info bar
-                        }
-                        // Original: flush right; A/B: flush left. 4px gap from cell edge.
-                        if (slot === 'original') {
-                            tx = Math.max(0, Math.round(td.cw - td.rw) - 4);
-                        } else {
-                            tx = Math.min(4, Math.round(td.cw - td.rw));
-                        }
-                    }
+                    const tx = td._tx !== undefined ? td._tx : Math.round((td.cw - td.rw) / 2);
+                    const ty = td._ty !== undefined ? td._ty : td.ibH;
 
                     videoWrapper.style.position = '';
-                    videoWrapper.style.width = tw + 'px';
-                    videoWrapper.style.height = th + 'px';
+                    videoWrapper.style.width = Math.round(td.rw) + 'px';
+                    videoWrapper.style.height = Math.round(td.rh) + 'px';
                     videoWrapper.style.top = ty + 'px';
                     videoWrapper.style.left = tx + 'px';
                     videoWrapper.style.transform = '';
@@ -6391,16 +6349,6 @@
                 videoWrapper.style.left = Math.round(offsetX) + 'px';
                 videoWrapper.style.transform = '';
                 videoWrapper.style.transformOrigin = '';
-
-                // In overlay mode the .asset-layer img CSS rule sets width:auto which
-                // prevents the image from filling the JS-sized wrapper. Force 100%×100%
-                // so the image scales to exactly the wrapper dimensions.
-                if (isOverlay) {
-                    media.style.width = '100%';
-                    media.style.height = '100%';
-                    media.style.maxWidth = 'none';
-                    media.style.maxHeight = 'none';
-                }
 
                 // Update zoom indicator in info bar
                 const infoBarZoom = layer.querySelector('.asset-info-bar .asset-zoom');
