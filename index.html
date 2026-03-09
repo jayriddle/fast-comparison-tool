@@ -5882,10 +5882,8 @@
                     // EditB is flush-top; reserve space for its info bar so the image
                     // is sized to fit below the bar rather than behind it.
                     const ibEl = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
-                    // Equal layouts: every slot has a visible info bar so reserve its height for all slots.
-                    // L-shaped (tripartite): reserve info bar height for editA and editB (both need space).
-                    // Original's bar overlaps its image (vertically centered, bar floats at top).
-                    const ibH = ibEl ? (isEqualLayout ? (ibEl.offsetHeight || 28) : (slot !== 'original' ? (ibEl.offsetHeight || 28) : 0)) : 0;
+                    // Reserve info bar height for all slots in all grid layouts.
+                    const ibH = ibEl ? (ibEl.offsetHeight || 28) : 0;
                     const availH = ch - ibH;
                     // Contain-fit rendered size within available cell height
                     const fitW = Math.min(cw, Math.floor(availH * nw / nh));
@@ -6340,11 +6338,25 @@
                         tx = td._tx !== undefined ? td._tx : Math.round((td.cw - td.rw) / 2);
                         ty = td._ty !== undefined ? td._ty : td.ibH;
                     } else {
-                        // L-shaped layout (tripartite): each image independently fills its cell.
+                        // L-shaped layout (tripartite): all images render at the same size.
+                        // Use the minimum contain-fit scale across all cells so they match.
                         // Original: flush right; EditA: flush bottom-left; EditB: flush top-left.
-                        const cellAvailH = td.ch - (td.ibH || 0);
-                        const cellFitScale = Math.min(td.cw / td.nw, cellAvailH / td.nh);
-                        const cellScale = splitZoomLevel === 1 ? Math.min(cellFitScale, 1) : cellFitScale;
+                        if (!td._lSharedScale) {
+                            // Compute shared scale once from the measurement pass data
+                            let minScale = Infinity;
+                            slots.forEach(s => {
+                                const d = tripartiteLayout[s];
+                                if (!d) return;
+                                const aH = d.ch - (d.ibH || 0);
+                                const sc = Math.min(d.cw / d.nw, aH / d.nh);
+                                minScale = Math.min(minScale, sc);
+                            });
+                            if (splitZoomLevel === 1) minScale = Math.min(minScale, 1);
+                            slots.forEach(s => {
+                                if (tripartiteLayout[s]) tripartiteLayout[s]._lSharedScale = minScale;
+                            });
+                        }
+                        const cellScale = td._lSharedScale;
                         td.rw = Math.round(td.nw * cellScale * splitStepZoom);
                         td.rh = Math.round(td.nh * cellScale * splitStepZoom);
                         td.sharedZoom = td.rw / td.nw;
@@ -6352,7 +6364,7 @@
                         th = td.rh;
 
                         if (slot === 'original') {
-                            ty = Math.round((td.ch - td.rh) / 2);
+                            ty = Math.max(td.ibH || 0, Math.round((td.ch - td.rh) / 2));
                         } else if (slot === 'editA') {
                             ty = Math.max(td.ibH || 0, Math.round(td.ch - td.rh)); // flush bottom, but below info bar
                         } else {
