@@ -1955,7 +1955,7 @@
     </div>
 
     <script>
-        const APP_VERSION = '3.5';
+        const APP_VERSION = '3.6';
         document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
         document.getElementById('appVersion').style.cursor = 'pointer';
         document.getElementById('appVersion').addEventListener('click', () => {
@@ -8183,6 +8183,14 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.6</h3>
+            <ul>
+                <li>Single-file mode — load 1 file for solo review, 2 for A/B, 3 for A/B/GT</li>
+                <li>BPM detection for audio files — displayed in the info bar</li>
+                <li>Expanded waveform/spectrogram mode — toggle 2× height for detail</li>
+                <li>Audio loop fix — correct track used as primary, drift correction for multi-track loops</li>
+                <li>Smoother playback — RAF-deferred play after seek, .catch() on play calls</li>
+            </ul>
             <h3>v3.5</h3>
             <ul>
                 <li>Zoom level shown as percentage pill in the info bar — always visible</li>
