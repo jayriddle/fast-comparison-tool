@@ -67,7 +67,7 @@ Zoom range: 5% – 3200%. Each step multiplies/divides by √2 (~1.41×).
 
 In **Grid mode**, pressing **1** toggles between fit-to-panel and 100% native pixels. Assets zoom to their actual pixel size, even if that means overflowing the panel.
 
-A zoom indicator appears in the info bar showing the current scale (e.g. `1.5×`).
+A zoom indicator appears in the info bar showing the current scale as a percentage (e.g. `150%`).
 
 ---
 
