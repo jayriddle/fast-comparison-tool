@@ -839,22 +839,47 @@
         }
 
         /* Prompt bar below header */
-        #promptBar {
-            overflow: hidden;
-            max-height: 0;
+        /* IHWA info strip: prompt/instructions left, ratings right */
+        #ihwaStrip {
+            display: none;
             background: rgba(20, 20, 20, 0.95);
             border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            z-index: 99;
+        }
+        #ihwaStrip.active {
+            display: flex;
+            align-items: flex-start;
+        }
+        #instructionsPane {
+            overflow: hidden;
+            max-height: 0;
             padding: 0 20px;
             font-size: 15px;
             color: #ccc;
-            z-index: 99;
+            flex: 0 1 auto;
+            min-width: 0;
             transition: max-height 0.25s ease, padding 0.25s ease;
         }
-        #promptBar.active {
+        #instructionsPane.active {
             max-height: 500px;
             padding: 8px 20px;
         }
-        #promptBar .prompt-label {
+        #promptPane {
+            overflow: hidden;
+            max-height: 0;
+            max-width: 65ch;
+            padding: 0 20px;
+            font-size: 15px;
+            color: #ccc;
+            flex: 1;
+            min-width: 0;
+            transition: max-height 0.25s ease, padding 0.25s ease;
+        }
+        #promptPane.active {
+            max-height: 500px;
+            padding: 8px 20px;
+        }
+        #promptPane .prompt-label {
             font-weight: 600;
             color: #888;
             font-size: 11px;
@@ -862,11 +887,11 @@
             letter-spacing: 0.04em;
             margin-bottom: 4px;
         }
-        #promptBar .prompt-text {
+        #promptPane .prompt-text {
             max-width: 65ch;
             line-height: 1.45;
         }
-        #promptBar .criteria-summary {
+        #instructionsPane .criteria-summary {
             font-weight: 600;
             color: #888;
             font-size: 11px;
@@ -877,17 +902,156 @@
             user-select: none;
             list-style: none;
         }
-        #promptBar .criteria-summary::-webkit-details-marker { display: none; }
-        #promptBar .criteria-summary::before { content: '▸ '; }
-        #promptBar details[open] .criteria-summary::before { content: '▾ '; }
-        #promptBar .criteria-list {
+        #instructionsPane .criteria-summary::-webkit-details-marker { display: none; }
+        #instructionsPane .criteria-summary::before { content: '▸ '; }
+        #instructionsPane details[open] .criteria-summary::before { content: '▾ '; }
+        #instructionsPane .criteria-list {
             margin: 6px 0 0 0;
             padding-left: 1.2em;
             line-height: 1.5;
             font-size: 14px;
             color: #bbb;
         }
-        #promptBar .criteria-list li { margin-bottom: 3px; }
+        #instructionsPane .criteria-list li { margin-bottom: 3px; }
+
+        /* Rating panel */
+        #ratingPanel {
+            overflow: hidden;
+            max-height: 0;
+            padding: 0 20px;
+            font-size: 14px;
+            color: #ccc;
+            flex-shrink: 0;
+            margin-left: auto;
+            transition: max-height 0.25s ease, padding 0.25s ease;
+        }
+        #ratingPanel.active {
+            max-height: 600px;
+            padding: 6px 20px 8px;
+        }
+        .rating-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 3px;
+            flex-direction: row-reverse;
+        }
+        .rating-row:last-child { margin-bottom: 0; }
+        .rating-question {
+            font-size: 11px;
+            color: #888;
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+            text-align: right;
+        }
+        .rating-options {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+            min-width: 180px;
+        }
+        .rating-options .rating-btn,
+        .rating-options .rating-check {
+            flex: 1;
+            text-align: center;
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+        .rating-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #999;
+            padding: 3px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.12s;
+            font-family: inherit;
+            line-height: 1.3;
+        }
+        .rating-btn:first-child { border-radius: 4px 0 0 4px; }
+        .rating-btn:last-child { border-radius: 0 4px 4px 0; }
+        .rating-btn:hover { background: rgba(255,255,255,0.12); color: #ddd; }
+        .rating-btn.selected-a {
+            background: rgba(0, 140, 255, 0.35);
+            border-color: rgba(0, 140, 255, 0.6);
+            color: #fff;
+        }
+        .rating-btn.selected-b {
+            background: rgba(255, 60, 60, 0.35);
+            border-color: rgba(255, 60, 60, 0.6);
+            color: #fff;
+        }
+        .rating-btn.selected-tie {
+            background: rgba(255, 180, 0, 0.3);
+            border-color: rgba(255, 180, 0, 0.55);
+            color: #fff;
+        }
+        /* Likert scale: 5-option A++|A+|=|B+|B++ */
+        .rating-btn.selected-a2 {
+            background: rgba(0, 140, 255, 0.5);
+            border-color: rgba(0, 140, 255, 0.7);
+            color: #fff;
+        }
+        .rating-btn.selected-a1 {
+            background: rgba(0, 140, 255, 0.25);
+            border-color: rgba(0, 140, 255, 0.45);
+            color: #fff;
+        }
+        .rating-btn.selected-b1 {
+            background: rgba(255, 60, 60, 0.25);
+            border-color: rgba(255, 60, 60, 0.45);
+            color: #fff;
+        }
+        .rating-btn.selected-b2 {
+            background: rgba(255, 60, 60, 0.5);
+            border-color: rgba(255, 60, 60, 0.7);
+            color: #fff;
+        }
+        .rating-btn.selected-eq {
+            background: rgba(255, 180, 0, 0.3);
+            border-color: rgba(255, 180, 0, 0.55);
+            color: #fff;
+        }
+        /* Checkbox toggles */
+        .rating-check {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #999;
+            padding: 3px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.12s;
+            font-family: inherit;
+            line-height: 1.3;
+            border-radius: 4px;
+        }
+        .rating-check:hover { background: rgba(255,255,255,0.12); color: #ddd; }
+        .rating-check.checked {
+            background: rgba(120, 200, 120, 0.3);
+            border-color: rgba(120, 200, 120, 0.55);
+            color: #fff;
+        }
+        .rating-textarea-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-top: 3px;
+        }
+        .rating-textarea {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #ddd;
+            padding: 5px 8px;
+            font-size: 13px;
+            font-family: inherit;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 28px;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+        .rating-textarea:focus { border-color: rgba(255,255,255,0.3); outline: none; }
 
         /* Active asset indicator - brighter info bar in overlay mode */
         body:not(.grid-mode) .asset-layer.active .asset-info-bar {
@@ -1788,20 +1952,25 @@
             <!-- Asset strip: overlay mode only — shows asset names, active one highlighted -->
             <div id="assetStrip" style="display:none;"></div>
         </div>
-        <div id="promptBar">
-            <details id="criteriaDetails" style="display:none;">
-                <summary id="criteriaSummary" class="criteria-summary"></summary>
-                <ul id="criteriaList" class="criteria-list"></ul>
-            </details>
-            <div class="prompt-label" id="promptLabel"></div>
-            <div class="prompt-text" id="promptText"></div>
+        <div id="ihwaStrip">
+            <div id="instructionsPane">
+                <details id="criteriaDetails" style="display:none;">
+                    <summary id="criteriaSummary" class="criteria-summary"></summary>
+                    <ul id="criteriaList" class="criteria-list"></ul>
+                </details>
+            </div>
+            <div id="promptPane">
+                <div class="prompt-label" id="promptLabel"></div>
+                <div class="prompt-text" id="promptText"></div>
+            </div>
+            <div id="ratingPanel"></div>
         </div>
 
         <div class="landing-cta" id="landingCta">
             <div class="landing-dropzone">
                 <svg class="dropzone-border" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" rx="16" ry="16" width="calc(100% - 2px)" height="calc(100% - 2px)" fill="none" stroke="#444" stroke-width="2" stroke-dasharray="16 12"/></svg>
                 <img src="WarpDiff_Logo_v1.png" alt="" class="landing-logo">
-                <div class="landing-title">Drop 2–3 files to compare</div>
+                <div class="landing-title">Drop 1–3 files to review</div>
             </div>
             <div class="landing-hints">
                 <kbd>L</kbd> load files · <kbd>H</kbd> hotkeys · <kbd>?</kbd> help
@@ -1955,7 +2124,7 @@
     </div>
 
     <script>
-        const APP_VERSION = '3.6';
+        const APP_VERSION = '3.65';
         document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
         document.getElementById('appVersion').style.cursor = 'pointer';
         document.getElementById('appVersion').addEventListener('click', () => {
@@ -2443,6 +2612,13 @@
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
         let videoScopesVisible = false; // V key toggle
         let _scopeOffscreen = null;     // offscreen canvas for frame sampling
+
+        // ── Difference mode (D key) ──
+        let _diffMode = false;          // difference composite active
+        let _diffPairIndex = 0;         // which pair to diff
+        let _diffCanvas = null;         // overlay canvas element
+        let _diffCtx = null;            // 2d context
+        let _diffOffscreen = null;      // offscreen canvas for compositing
         let _waveformMode = 'luma';     // 'luma' | 'parade' | 'overlay'
         const _waveformModes = ['luma', 'parade', 'overlay'];
         const _waveformModeLabels = { luma: 'Luma', parade: 'RGB Parade', overlay: 'RGB Overlay' };
@@ -2470,8 +2646,8 @@
         function getHeaderHeight() {
             const headerEl = getHeaderEl();
             const h = headerEl ? headerEl.offsetHeight : 50;
-            const promptBar = document.getElementById('promptBar');
-            return h + (promptBar ? promptBar.offsetHeight : 0);
+            const ihwaStrip = document.getElementById('ihwaStrip');
+            return h + (ihwaStrip ? ihwaStrip.offsetHeight : 0);
         }
 
 
@@ -2576,6 +2752,7 @@
                     btn.disabled = false;
                     handleMultipleFiles(files, { skipToast: true });
                     showPrompt(event.data.prompt, event.data.criteria);
+                    showRatingPanel(event.data.questions);
                     return;
                 } catch (e) {
                     // CORS or network error — fall back to base64 via background
@@ -2614,10 +2791,12 @@
             btn.disabled = false;
             handleMultipleFiles(files, { skipToast: true });
             showPrompt(event.data.prompt, event.data.criteria);
+            showRatingPanel(event.data.questions);
         });
 
         function showPrompt(prompt, criteria) {
-            const bar = document.getElementById('promptBar');
+            const instrPane = document.getElementById('instructionsPane');
+            const promptPane = document.getElementById('promptPane');
             const label = document.getElementById('promptLabel');
             const text = document.getElementById('promptText');
             const detailsEl = document.getElementById('criteriaDetails');
@@ -2626,26 +2805,6 @@
 
             const hasPrompt = prompt && prompt.text;
             const hasCriteria = criteria && criteria.items && criteria.items.length > 0;
-
-            if (!hasPrompt && !hasCriteria) {
-                bar.classList.remove('active');
-                detailsEl.style.display = 'none';
-                setTimeout(() => {
-                    if (isGridMode) positionLabelsToMediaRaf();
-                    else applyZoomRaf();
-                }, 260);
-                return;
-            }
-
-            if (hasPrompt) {
-                label.textContent = prompt.label || 'Prompt';
-                text.textContent = prompt.text;
-                label.style.display = '';
-                text.style.display = '';
-            } else {
-                label.style.display = 'none';
-                text.style.display = 'none';
-            }
 
             if (hasCriteria) {
                 summaryEl.textContent = (criteria.label || 'Evaluation Criteria') + ' (' + criteria.items.length + ')';
@@ -2656,12 +2815,25 @@
                     listEl.appendChild(li);
                 }
                 detailsEl.style.display = '';
+                instrPane.classList.add('active');
             } else {
                 detailsEl.style.display = 'none';
+                instrPane.classList.remove('active');
             }
 
-            bar.classList.add('active');
-            // Recalc layout after drawer transition so assets resize
+            if (hasPrompt) {
+                label.textContent = prompt.label || 'Prompt';
+                text.textContent = prompt.text;
+                label.style.display = '';
+                text.style.display = '';
+                promptPane.classList.add('active');
+            } else {
+                label.style.display = 'none';
+                text.style.display = 'none';
+                promptPane.classList.remove('active');
+            }
+
+            updateIhwaStrip();
             setTimeout(() => {
                 if (isGridMode) positionLabelsToMediaRaf();
                 else applyZoomRaf();
@@ -2676,14 +2848,249 @@
             }, 50);
         });
 
+        function updateIhwaStrip() {
+            const strip = document.getElementById('ihwaStrip');
+            const instr = document.getElementById('instructionsPane');
+            const prompt = document.getElementById('promptPane');
+            const rating = document.getElementById('ratingPanel');
+            const hasContent = instr.classList.contains('active') || prompt.classList.contains('active') || rating.classList.contains('active');
+            strip.classList.toggle('active', hasContent);
+        }
+
+        // Rating panel: compact A/B/Tie buttons synced back to IHWA
+        let _ratingQuestions = null;
+
+        function abbreviateQuestion(q) {
+            // Strip leading emoji
+            let s = q.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]+\s*/u, '');
+            // "Overall" questions → just "Overall"
+            if (/^overall/i.test(s)) return 'Overall';
+            // Strip common prefixes: "Which video has better...", "Which video is more..."
+            // Strip everything after first newline (multi-line descriptions)
+            s = s.replace(/\n[\s\S]*$/, '').trim();
+            s = s.replace(/^Which (?:video|image|audio|response)(?: file)? (?:\([^)]*\) )?(?:has |is |do you )?(?:better |more |closer |prefer\?)?\s*/i, '');
+            // Strip parenthetical details and trailing ?
+            s = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\?\s*$/, '').trim();
+            // Rephrase common patterns to noun phrases
+            s = s.replace(/^consistent with reference subjects?$/i, 'Subject consistency');
+            s = s.replace(/^consistent with (?:the )?(?:reference |source )?(?:prompt|text|description).*$/i, 'Prompt adherence');
+            s = s.replace(/^visual quality$/i, 'Visual quality');
+            s = s.replace(/^audio quality.*$/i, 'Audio quality');
+            s = s.replace(/^motion quality.*$/i, 'Motion quality');
+            s = s.replace(/^follows the prompt.*$/i, 'Prompt adherence');
+            s = s.replace(/^(?:to )?(?:the )?ground[- ]?truth.*$/i, 'GT closeness');
+            s = s.replace(/^Comparing to.*(?:artifacts|artifact).*$/i, 'Artifacts');
+            s = s.replace(/^(?:which|what).*(?:artifacts|artifact).*$/i, 'Artifacts');
+            s = s.replace(/^Are there any (?:critical )?(?:unacceptable )?failures.*$/i, 'Critical failures');
+            s = s.replace(/^If there are failures.*$/i, 'Describe failures');
+            // Strip filler
+            s = s.replace(/\.?\s*Consider all factors above\.?$/i, '').trim();
+            // Capitalize first letter
+            if (s) s = s.charAt(0).toUpperCase() + s.slice(1);
+            return s || q;
+        }
+
+        function showRatingPanel(questions) {
+            const panel = document.getElementById('ratingPanel');
+            _ratingQuestions = questions;
+
+            if (!questions || questions.length === 0) {
+                panel.classList.remove('active');
+                updateIhwaStrip();
+                panel.innerHTML = '';
+                setTimeout(() => {
+                    if (isGridMode) positionLabelsToMediaRaf();
+                    else applyZoomRaf();
+                }, 260);
+                return;
+            }
+
+            panel.innerHTML = '';
+            questions.forEach((q, qi) => {
+                if (q.type === 'radio') {
+                    const row = document.createElement('div');
+                    row.className = 'rating-row';
+
+                    const opts = document.createElement('div');
+                    opts.className = 'rating-options';
+
+                    // Detect Likert (5-option) vs A/B/Tie (3-4 option)
+                    const isLikert = q.options.length >= 5;
+                    const hasABTie = q.options.some(o => /\bA\b/.test(o.label)) &&
+                                     q.options.some(o => /\bB\b/.test(o.label)) &&
+                                     q.options.some(o => /Tie|Equal|Similar/i.test(o.label));
+                    const is3way = !isLikert && hasABTie;
+
+                    if (isLikert) {
+                        // 5-option Likert: "Audio A has much better..." / "A slightly" / "Similar" / "B slightly" / "B much"
+                        const optA2 = q.options.find(o => /\bA\b.*\bmuch\b/i.test(o.label));
+                        const optA1 = q.options.find(o => /\bA\b.*\bslight/i.test(o.label));
+                        const optEq = q.options.find(o => /similar|equal|same/i.test(o.label));
+                        const optB1 = q.options.find(o => /\bB\b.*\bslight/i.test(o.label));
+                        const optB2 = q.options.find(o => /\bB\b.*\bmuch\b/i.test(o.label));
+                        const ordered = [optA2, optA1, optEq, optB1, optB2].filter(Boolean);
+                        // Fallback: if pattern matching missed, use original order
+                        const items = ordered.length === q.options.length ? ordered : q.options;
+                        const shortLabels = ordered.length === q.options.length
+                            ? ['A+', 'A', '=', 'B', 'B+']
+                            : items.map(o => o.label.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]\s*/gu, '').trim());
+                        const selClasses = ordered.length === q.options.length
+                            ? ['selected-a2', 'selected-a1', 'selected-eq', 'selected-b1', 'selected-b2']
+                            : items.map(() => 'selected-tie');
+
+                        items.forEach((opt, oi) => {
+                            const btn = document.createElement('button');
+                            btn.textContent = shortLabels[oi];
+                            btn.className = 'rating-btn';
+                            if (opt.checked) btn.classList.add(selClasses[oi]);
+                            btn.addEventListener('click', () => {
+                                opts.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
+                                btn.classList.add(selClasses[oi]);
+                                window.postMessage({ type: 'WARPDIFF_SET_ANSWER', questionIndex: qi, value: opt.label }, '*');
+                            });
+                            opts.appendChild(btn);
+                        });
+                    } else if (is3way) {
+                        // 3-4 option: A/Tie/B (+ optional extras like "Both are bad")
+                        const optMid = q.options.find(o => /Tie|Equal/i.test(o.label) && /\bA\b/.test(o.label) && /\bB\b/.test(o.label))
+                                    || q.options.find(o => /Tie|Equal|Similar/i.test(o.label));
+                        const optA = q.options.find(o => o !== optMid && /\bA\b/.test(o.label));
+                        const optB = q.options.find(o => o !== optMid && /\bB\b/.test(o.label));
+                        const core = [optA, optMid, optB].filter(Boolean);
+                        const extras = q.options.filter(o => !core.includes(o));
+                        const items = core.length === 3 ? [...core, ...extras] : q.options;
+
+                        for (const opt of items) {
+                            const btn = document.createElement('button');
+                            const isMid = opt === optMid;
+                            const isA = opt === optA;
+                            const isB = opt === optB;
+                            const isExtra = !isA && !isB && !isMid;
+                            const shortLabel = isA ? 'A' : isB ? 'B' :
+                                isMid ? (opt.label.includes('Tie') ? 'Tie' : '=') :
+                                opt.label.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]\s*/gu, '').replace(/^Both (?:are |have )/i, '').replace(/^Neither (?:has |have )/i, 'No ').trim();
+                            btn.textContent = shortLabel;
+                            btn.className = 'rating-btn';
+                            if (isExtra) btn.style.marginLeft = '4px';
+                            if (opt.checked) {
+                                btn.classList.add(isA ? 'selected-a' : isB ? 'selected-b' : 'selected-tie');
+                            }
+                            btn.addEventListener('click', () => {
+                                opts.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
+                                btn.classList.add(isA ? 'selected-a' : isB ? 'selected-b' : 'selected-tie');
+                                window.postMessage({ type: 'WARPDIFF_SET_ANSWER', questionIndex: qi, value: opt.label }, '*');
+                            });
+                            opts.appendChild(btn);
+                        }
+                    } else {
+                        // Generic: abbreviate A/B/Both/Neither patterns
+                        for (const opt of q.options) {
+                            const btn = document.createElement('button');
+                            const raw = opt.label.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]\s*/gu, '').trim();
+                            const isA = /\bA\b/.test(raw) && !/\bB\b/.test(raw) && !/^(?:No|Neither)\b/i.test(raw);
+                            const isB = /\bB\b/.test(raw) && !/\bA\b/.test(raw) && !/^(?:No|Neither)\b/i.test(raw);
+                            const shortLabel = isA ? 'A' : isB ? 'B' :
+                                /^(?:No|Neither)\b/i.test(raw) ? 'None' :
+                                /^Both\b/i.test(raw) ? 'Both' : raw;
+                            btn.textContent = shortLabel;
+                            btn.title = raw;
+                            btn.className = 'rating-btn';
+                            if (opt.checked) btn.classList.add(isA ? 'selected-a' : isB ? 'selected-b' : 'selected-tie');
+                            btn.addEventListener('click', () => {
+                                opts.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
+                                btn.classList.add(isA ? 'selected-a' : isB ? 'selected-b' : 'selected-tie');
+                                window.postMessage({ type: 'WARPDIFF_SET_ANSWER', questionIndex: qi, value: opt.label }, '*');
+                            });
+                            opts.appendChild(btn);
+                        }
+                    }
+
+                    const shortQ = abbreviateQuestion(q.question);
+                    const label = document.createElement('div');
+                    label.className = 'rating-question';
+                    label.textContent = shortQ;
+                    label.title = q.question;
+
+                    row.appendChild(opts);
+                    row.appendChild(label);
+                    panel.appendChild(row);
+                } else if (q.type === 'checkbox') {
+                    const row = document.createElement('div');
+                    row.className = 'rating-row';
+
+                    const opts = document.createElement('div');
+                    opts.className = 'rating-options';
+                    opts.style.gap = '4px';
+
+                    for (const opt of q.options) {
+                        const btn = document.createElement('button');
+                        const raw = opt.label.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F]\s*/gu, '').trim();
+                        // Abbreviate: "Audio A has..." → "A", "No/Neither..." → "None", "Both..." → "Both"
+                        const shortLabel = /\bA\b/.test(raw) && !/\bB\b/.test(raw) && !/^No\b/i.test(raw) ? 'A' :
+                                           /\bB\b/.test(raw) && !/\bA\b/.test(raw) && !/^No\b/i.test(raw) ? 'B' :
+                                           /^(?:No|Neither)\b/i.test(raw) ? 'None' :
+                                           /^Both\b/i.test(raw) ? 'Both' : raw;
+                        btn.textContent = shortLabel;
+                        btn.title = raw;
+                        btn.className = 'rating-check';
+                        if (opt.checked) btn.classList.add('checked');
+                        btn.addEventListener('click', () => {
+                            btn.classList.toggle('checked');
+                            window.postMessage({ type: 'WARPDIFF_SET_ANSWER', questionIndex: qi, value: opt.label }, '*');
+                        });
+                        opts.appendChild(btn);
+                    }
+
+                    const shortQ = abbreviateQuestion(q.question);
+                    const label = document.createElement('div');
+                    label.className = 'rating-question';
+                    label.textContent = shortQ;
+                    label.title = q.question;
+
+                    row.appendChild(opts);
+                    row.appendChild(label);
+                    panel.appendChild(row);
+                } else if (q.type === 'textarea') {
+                    const row = document.createElement('div');
+                    row.className = 'rating-textarea-row';
+
+                    const ta = document.createElement('textarea');
+                    ta.className = 'rating-textarea';
+                    ta.value = q.value || '';
+                    ta.rows = 1;
+                    ta.placeholder = abbreviateQuestion(q.question);
+                    let _syncTimer = null;
+                    ta.addEventListener('input', () => {
+                        clearTimeout(_syncTimer);
+                        _syncTimer = setTimeout(() => {
+                            window.postMessage({
+                                type: 'WARPDIFF_SET_ANSWER',
+                                questionIndex: qi,
+                                value: ta.value
+                            }, '*');
+                        }, 500);
+                    });
+                    row.appendChild(ta);
+                    panel.appendChild(row);
+                }
+            });
+
+            panel.classList.add('active');
+            updateIhwaStrip();
+            setTimeout(() => {
+                if (isGridMode) positionLabelsToMediaRaf();
+                else applyZoomRaf();
+            }, 260);
+        }
+
         function handleMultipleFiles(files, opts) {
             // Filter for images, videos, and audio
             const mediaFiles = files.filter(f =>
                 f.type.startsWith('image/') || f.type.startsWith('video/') || f.type.startsWith('audio/')
             );
 
-            if (mediaFiles.length !== 2 && mediaFiles.length !== 3) {
-                alert(`Please select 2 or 3 media files.\nYou selected ${mediaFiles.length} media file(s).\n\n2 files = Edit A vs Edit B (no original)\n3 files = Original vs Edit A vs Edit B`);
+            if (mediaFiles.length < 1 || mediaFiles.length > 3) {
+                alert(`Please select 1–3 media files.\nYou selected ${mediaFiles.length} media file(s).\n\n1 file = single asset review\n2 files = A vs B\n3 files = Original vs Edit A vs Edit B`);
                 return;
             }
 
@@ -2698,6 +3105,7 @@
             // (e.g., a mediaData.original left over from a prior 3-file session) never
             // bleeds into the new load. This mirrors resetAll() but without the dialog.
             clearAllMedia();
+            _ihwaMode = !!(opts && opts.skipToast);
             showLoading('Reading files…');
 
             // Tell checkAllLoaded() how many files to wait for before activating the view.
@@ -3819,6 +4227,114 @@
             if (vecCanvas) drawVectorscope(imageData, vecCanvas);
         }
 
+        // ── Difference composite mode ──
+
+        function _getDiffPairs() {
+            // Build available pairs from loaded slots
+            const loaded = assetOrder.filter(s => mediaData[s]);
+            if (loaded.length < 2) return [];
+            const pairs = [];
+            for (let i = 0; i < loaded.length; i++) {
+                for (let j = i + 1; j < loaded.length; j++) {
+                    pairs.push([loaded[i], loaded[j]]);
+                }
+            }
+            return pairs;
+        }
+
+        function _diffPairLabel(pair) {
+            const names = { original: 'GT', editA: 'A', editB: 'B' };
+            return (names[pair[0]] || pair[0]) + ' – ' + (names[pair[1]] || pair[1]);
+        }
+
+        function _ensureDiffCanvas() {
+            if (_diffCanvas) return;
+            _diffCanvas = document.createElement('canvas');
+            _diffCanvas.id = 'diffOverlay';
+            _diffCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:50;';
+            _diffCtx = _diffCanvas.getContext('2d');
+            document.body.appendChild(_diffCanvas);
+        }
+
+        function drawDiffComposite() {
+            if (!_diffMode) return;
+            const pairs = _getDiffPairs();
+            if (pairs.length === 0) return;
+            if (_diffPairIndex >= pairs.length) _diffPairIndex = 0;
+            const [slotA, slotB] = pairs[_diffPairIndex];
+
+            const layerA = getLayer(slotA);
+            const layerB = getLayer(slotB);
+            const mediaA = layerA && layerA.querySelector('img, video');
+            const mediaB = layerB && layerB.querySelector('img, video');
+            if (!mediaA || !mediaB) return;
+
+            const { w: wA, h: hA } = mediaDims(mediaA);
+            const { w: wB, h: hB } = mediaDims(mediaB);
+            if (wA === 0 || wB === 0) return;
+
+            // Use the larger dimensions for the composite
+            const cw = Math.max(wA, wB);
+            const ch = Math.max(hA, hB);
+
+            // Offscreen canvas for compositing at native resolution
+            if (!_diffOffscreen || _diffOffscreen.width !== cw || _diffOffscreen.height !== ch) {
+                _diffOffscreen = document.createElement('canvas');
+                _diffOffscreen.width = cw;
+                _diffOffscreen.height = ch;
+            }
+            const octx = _diffOffscreen.getContext('2d');
+
+            // Draw asset A, then asset B with difference blend
+            octx.globalCompositeOperation = 'source-over';
+            octx.drawImage(mediaA, 0, 0, cw, ch);
+            octx.globalCompositeOperation = 'difference';
+            octx.drawImage(mediaB, 0, 0, cw, ch);
+            octx.globalCompositeOperation = 'source-over';
+
+            // Size the overlay canvas to match the active layer's wrapper
+            _ensureDiffCanvas();
+            const activeLayer = document.querySelector('.asset-layer.active');
+            const wrapper = activeLayer && activeLayer.querySelector('.video-wrapper');
+            if (wrapper) {
+                const rect = wrapper.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                _diffCanvas.width = Math.round(rect.width * dpr);
+                _diffCanvas.height = Math.round(rect.height * dpr);
+                _diffCanvas.style.left = rect.left + 'px';
+                _diffCanvas.style.top = rect.top + 'px';
+                _diffCanvas.style.width = rect.width + 'px';
+                _diffCanvas.style.height = rect.height + 'px';
+                _diffCtx.drawImage(_diffOffscreen, 0, 0, _diffCanvas.width, _diffCanvas.height);
+            }
+        }
+
+        function toggleDiffMode() {
+            if (hasAudios) { showToast('Difference mode not available for audio'); return; }
+            const pairs = _getDiffPairs();
+            if (pairs.length === 0) { showToast('Need at least 2 files for difference mode'); return; }
+
+            _diffMode = !_diffMode;
+            if (_diffMode) {
+                _ensureDiffCanvas();
+                _diffCanvas.style.display = 'block';
+                drawDiffComposite();
+                showToast('Difference: ' + _diffPairLabel(pairs[_diffPairIndex]));
+            } else {
+                if (_diffCanvas) _diffCanvas.style.display = 'none';
+                showToast('Difference off');
+            }
+        }
+
+        function cycleDiffPair() {
+            if (!_diffMode) return;
+            const pairs = _getDiffPairs();
+            if (pairs.length <= 1) return;
+            _diffPairIndex = (_diffPairIndex + 1) % pairs.length;
+            drawDiffComposite();
+            showToast('Difference: ' + _diffPairLabel(pairs[_diffPairIndex]));
+        }
+
         function toggleVideoScopes() {
             videoScopesVisible = !videoScopesVisible;
             const panel = document.getElementById('scopesPanel');
@@ -4457,16 +4973,17 @@
 
                     let infoBar = layer.querySelector('.asset-info-bar');
 
-                    const slotLabel = slot === 'original' ? 'AUDIO GT' : slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
+                    const sl = slotLabel(slot);
                     if (!infoBar) {
                         infoBar = document.createElement('div');
                         infoBar.className = 'asset-info-bar';
                     }
                     infoBar.innerHTML = `
-                        <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-name">${sl}</span>
                         <span class="asset-channels"></span>
                         <span class="asset-sample-rate"></span>
                         <span class="asset-bit-depth"></span>
+                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-file-size"></span>
                         <span class="asset-filename"></span>
@@ -4548,17 +5065,18 @@
                 if (!infoBar) {
                     infoBar = document.createElement('div');
                     infoBar.className = 'asset-info-bar';
-                    const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
                     infoBar.innerHTML = `
-                        <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-name"></span>
                         <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
+                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     `;
                 }
+                infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
                 if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
 
                 const videoWrapper = document.createElement('div');
@@ -4631,17 +5149,18 @@
                 if (!infoBar) {
                     infoBar = document.createElement('div');
                     infoBar.className = 'asset-info-bar';
-                    const slotLabel = slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
                     infoBar.innerHTML = `
-                        <span class="asset-name">${slotLabel}</span>
+                        <span class="asset-name"></span>
                         <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
+                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     `;
                 }
+                infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
                 if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
 
                 // Build the asset structure:
@@ -4830,6 +5349,7 @@
                     }
                     if (!hasAudios && magnifierEnabled && _lastMouseEvent) updateMagnifier(_lastMouseEvent);
                     if (!hasAudios && videoScopesVisible) updateVideoScopes();
+                    if (!hasAudios && _diffMode) drawDiffComposite();
                     globalAnimationId = requestAnimationFrame(updateLoop);
                 } else {
                     globalAnimationId = null;
@@ -5211,6 +5731,8 @@
             if (!hasAudios && magnifierEnabled && _lastMouseEvent) updateMagnifier(_lastMouseEvent);
             // Refresh video scopes for the new asset
             if (!hasAudios && videoScopesVisible) updateVideoScopes();
+            // Refresh difference overlay
+            if (!hasAudios && _diffMode) requestAnimationFrame(drawDiffComposite);
         }
 
         // Click on an overlay layer (asset or info bar) to make it active
@@ -5614,6 +6136,9 @@
 
             // Redraw audio canvases after wrapper dimensions are finalized
             if (hasAudios) redrawAudioSlotCanvases();
+
+            // Reposition difference overlay
+            if (_diffMode) requestAnimationFrame(drawDiffComposite);
         }
 
         function zoomIn() {
@@ -5762,12 +6287,19 @@
             mediaData.original = null;
             mediaData.editA = null;
             mediaData.editB = null;
-            document.getElementById('promptBar').classList.remove('active');
+            document.getElementById('instructionsPane').classList.remove('active');
+            document.getElementById('promptPane').classList.remove('active');
             document.getElementById('criteriaDetails').style.display = 'none';
+            showRatingPanel(null);
+            updateIhwaStrip();
             currentAssetIndex = 0;
             expectedFileCount = 0;
             hasVideos = false;
             hasAudios = false;
+            // Reset difference mode
+            _diffMode = false;
+            _diffPairIndex = 0;
+            if (_diffCanvas) { _diffCanvas.style.display = 'none'; }
             zoomLevel = 1;
             splitZoomLevel = null;
             splitStepZoom = 1.0;
@@ -5895,8 +6427,8 @@
             // may no longer exist in the DOM until the next loadFile() recreates it.
             const elEditA = document.querySelector('#layerEditA .asset-name');
             const elEditB = document.querySelector('#layerEditB .asset-name');
-            if (elEditA) elEditA.textContent = 'EDIT A';
-            if (elEditB) elEditB.textContent = 'EDIT B';
+            if (elEditA) elEditA.textContent = slotLabel('editA');
+            if (elEditB) elEditB.textContent = slotLabel('editB');
 
             // Reset audio source button label (GT → O)
             const btnO = document.getElementById('audioOriginal');
@@ -5913,6 +6445,7 @@
         function resetAll() {
             if (confirm('Reset all assets and start over?')) {
                 clearAllMedia();
+                _ihwaMode = false;
             }
         }
 
@@ -5968,12 +6501,32 @@
             if (videoScopesVisible) {
                 requestAnimationFrame(() => updateVideoScopes());
             }
+            // Refresh difference overlay after frame step
+            if (_diffMode) {
+                requestAnimationFrame(() => drawDiffComposite());
+            }
         }
 
         let isGridMode = false;
         let viewActivating = false;    // true while checkAllLoaded() activation is in progress for current load batch
         let pendingViewActivation = false; // true when fps queue is still draining at the time checkAllLoaded() first completes
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
+        let _ihwaMode = false; // true when assets loaded from IHWA
+
+        function slotLabel(slot) {
+            if (_ihwaMode) {
+                const isAudio = document.body.classList.contains('audio-mode');
+                if (isAudio) {
+                    return slot === 'original' ? 'GROUND-TRUTH AUDIO' : slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
+                }
+                const isVideo = !!(mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video');
+                if (isVideo) {
+                    return slot === 'original' ? 'REFERENCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+                }
+                return slot === 'original' ? 'REFERENCE IMAGE' : slot === 'editA' ? 'RESPONSE A' : 'RESPONSE B';
+            }
+            return slot === 'original' ? 'ORIGINAL' : slot === 'editA' ? 'EDIT A' : 'EDIT B';
+        }
 
         // Pick horizontal vs vertical layout based on which gives larger rendered images
         // for the current viewport dimensions and asset aspect ratios.
@@ -6687,6 +7240,8 @@
                 }
                 if (!isGridMode) {
                     isGridMode = true;
+                    // Turn off diff mode when entering grid
+                    if (_diffMode) { _diffMode = false; if (_diffCanvas) _diffCanvas.style.display = 'none'; }
                     selectAudioSource(currentAudioSource);
                 }
                 layoutMode = targetMode;
@@ -7134,16 +7689,28 @@
                     .filter(Boolean);
                 loadedLayers.forEach(layer => { layer.style.opacity = '0'; });
 
-                if (hasAudios) {
+                if (loadedCount === 1) {
+                    // Single asset review — use overlay (Stack) mode
+                    const slot = mediaData.editA ? 'editA' : mediaData.original ? 'original' : 'editB';
+                    const md = mediaData[slot];
+                    if (hasAudios) {
+                        document.body.classList.add('audio-mode');
+                        document.querySelector('#layerEditA .asset-name').textContent = md.name || 'AUDIO';
+                        setViewMode('vertical');
+                    } else {
+                        document.querySelector('#layerEditA .asset-name').textContent = md.name || (md.type === 'video' ? 'VIDEO' : 'IMAGE');
+                        setViewMode('overlay');
+                    }
+                } else if (hasAudios) {
                     document.body.classList.add('audio-mode');
-                    // Audio mode: force vertical stack, label as AUDIO A/B/O
+                    // Audio mode: force vertical stack, update labels
                     if (loadedCount === 2 && !mediaData.original) {
-                        document.querySelector('#layerEditA .asset-name').textContent = 'AUDIO A';
-                        document.querySelector('#layerEditB .asset-name').textContent = 'AUDIO B';
+                        document.querySelector('#layerEditA .asset-name').textContent = slotLabel('editA');
+                        document.querySelector('#layerEditB .asset-name').textContent = slotLabel('editB');
                     } else if (loadedCount === 3) {
-                        document.querySelector('#layerOriginal .asset-name').textContent = 'AUDIO GT';
-                        document.querySelector('#layerEditA .asset-name').textContent = 'AUDIO A';
-                        document.querySelector('#layerEditB .asset-name').textContent = 'AUDIO B';
+                        document.querySelector('#layerOriginal .asset-name').textContent = slotLabel('original');
+                        document.querySelector('#layerEditA .asset-name').textContent = slotLabel('editA');
+                        document.querySelector('#layerEditB .asset-name').textContent = slotLabel('editB');
                     }
                     // Audio always uses vertical stack in grid
                     if (loadedCount === 3) {
@@ -7153,11 +7720,16 @@
                         setViewMode('vertical');
                     }
                 } else if (loadedCount === 2 && !mediaData.original) {
-                    // Relabel: IMAGE A/B or VIDEO A/B (no "EDIT" label when there's no original)
-                    const mediaType = (mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video')
-                        ? 'VIDEO' : 'IMAGE';
-                    document.querySelector('#layerEditA .asset-name').textContent = mediaType + ' A';
-                    document.querySelector('#layerEditB .asset-name').textContent = mediaType + ' B';
+                    if (_ihwaMode) {
+                        document.querySelector('#layerEditA .asset-name').textContent = slotLabel('editA');
+                        document.querySelector('#layerEditB .asset-name').textContent = slotLabel('editB');
+                    } else {
+                        // Relabel: IMAGE A/B or VIDEO A/B (no "EDIT" label when there's no original)
+                        const mediaType = (mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video')
+                            ? 'VIDEO' : 'IMAGE';
+                        document.querySelector('#layerEditA .asset-name').textContent = mediaType + ' A';
+                        document.querySelector('#layerEditB .asset-name').textContent = mediaType + ' B';
+                    }
 
                     // Pick layout that gives largest images for the current viewport
                     setViewMode(pickBestGridLayout(2));
@@ -7390,6 +7962,15 @@
             // ── Transport ──
             { id: 'prevAsset', defaultKey: 'ArrowLeft', altKey: 'ArrowUp', label: 'Previous asset', section: 'transport',
               fn: () => {
+                  if (_diffMode) {
+                      const pairs = _getDiffPairs();
+                      if (pairs.length > 1) {
+                          _diffPairIndex = (_diffPairIndex - 1 + pairs.length) % pairs.length;
+                          drawDiffComposite();
+                          showToast('Difference: ' + _diffPairLabel(pairs[_diffPairIndex]));
+                      }
+                      return;
+                  }
                   let ni = (currentAssetIndex - 1 + assetOrder.length) % assetOrder.length;
                   let a = 0;
                   while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni - 1 + assetOrder.length) % assetOrder.length; a++; }
@@ -7397,6 +7978,15 @@
               } },
             { id: 'nextAsset', defaultKey: 'ArrowRight', altKey: 'ArrowDown', label: 'Next asset', section: 'transport',
               fn: () => {
+                  if (_diffMode) {
+                      const pairs = _getDiffPairs();
+                      if (pairs.length > 1) {
+                          _diffPairIndex = (_diffPairIndex + 1) % pairs.length;
+                          drawDiffComposite();
+                          showToast('Difference: ' + _diffPairLabel(pairs[_diffPairIndex]));
+                      }
+                      return;
+                  }
                   let ni = (currentAssetIndex + 1) % assetOrder.length;
                   let a = 0;
                   while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni + 1) % assetOrder.length; a++; }
@@ -7448,6 +8038,16 @@
               fn: () => toggleMute() },
 
             // ── Analysis ──
+            { id: 'diffMode', defaultKey: 'd', label: 'Difference mode', section: 'analysis',
+              fn: () => {
+                  if (!document.getElementById('comparisonView').classList.contains('active')) return;
+                  if (isGridMode) { showToast('Difference mode available in Stack only'); return; }
+                  toggleDiffMode();
+              } },
+            { id: 'diffCycle', defaultKey: 'd', shift: true, label: 'Cycle diff pair', section: 'analysis',
+              fn: () => {
+                  if (_diffMode) cycleDiffPair();
+              } },
             { id: 'videoScopes', defaultKey: 'v', label: 'Video scopes', section: 'analysis',
               fn: () => {
                   if (hasAudios) { showToast('Video scopes not available in audio mode'); return; }
@@ -8156,6 +8756,7 @@
 
             <h3>Analysis</h3>
             <ul>
+                <li><kbd>D</kbd> difference mode — pixel difference between two assets (Stack mode); <kbd>Shift+D</kbd> cycle pairs</li>
                 <li><kbd>V</kbd> video scopes — histogram, waveform monitor, vectorscope</li>
                 <li><kbd>W</kbd> audio waveform with dB color coding + spectrogram</li>
             </ul>
@@ -8183,6 +8784,12 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.65</h3>
+            <ul>
+                <li>Difference mode — press <kbd>D</kbd> in Stack mode to see pixel differences between two assets; identical pixels are black, differences glow</li>
+                <li>Arrow keys cycle through pairs (GT–A, GT–B, A–B) when difference mode is active; <kbd>Shift+D</kbd> also cycles</li>
+                <li>Works with images and video — updates live during playback and on frame step</li>
+            </ul>
             <h3>v3.6</h3>
             <ul>
                 <li>Single-file mode — load 1 file for solo review, 2 for A/B, 3 for A/B/GT</li>

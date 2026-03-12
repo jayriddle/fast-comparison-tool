@@ -32,6 +32,7 @@ A browser-based comparison tool for reviewing 2–3 versions of images, videos, 
 - Automatic BPM detection via spectral flux onset analysis
 
 **Analysis**
+- `D` difference mode — pixel difference between two assets in Stack mode; arrow keys or `Shift+D` cycle pairs (GT–A, GT–B, A–B)
 - `V` video scopes — histogram (RGB / RGB+luma / CDF), waveform (luma / RGB parade / overlay), and vectorscope; click each scope to cycle modes
 - `W` audio waveform with dB color coding + spectrogram
 - `Shift+W` toggle linear/log frequency, `Shift+C` cycle spectrogram palettes

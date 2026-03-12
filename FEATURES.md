@@ -29,6 +29,10 @@ All videos play in sync with shared transport controls. Scrub, frame-step with `
 - `I`/`O` set loop in/out points; Shift+drag on the progress bar to select a loop region
 - Loop markers shown as orange triangles on the progress bar
 
+## Difference mode
+
+Press `D` in Stack mode to overlay a pixel-difference composite of two assets. Identical pixels appear black; differences glow in proportion to the delta. Arrow keys cycle through available pairs (GT–A, GT–B, A–B with 3 files). Works with images and video — updates live during playback and on frame step. Press `D` again to turn it off.
+
 ## Video scopes
 
 Press `V` to toggle the video scopes panel. Three scopes are displayed side by side — click the histogram or waveform to cycle through modes:

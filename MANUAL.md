@@ -167,6 +167,21 @@ Scopes update in real time during playback and on frame step. Works on both vide
 
 ---
 
+## Difference Mode
+
+Press **D** in Stack mode to overlay a pixel-difference composite of the current asset and another. Identical pixels appear black; differences glow in proportion to the delta — the brighter the pixel, the larger the difference.
+
+| Shortcut | Action |
+|----------|--------|
+| **D** | Toggle difference mode on/off |
+| **Shift+D** or **← →** | Cycle through diff pairs (GT–A, GT–B, A–B) |
+
+With 2 files loaded there is one pair (A–B). With 3 files there are three pairs — use **Shift+D** or the arrow keys to cycle through them. A toast shows the active pair label each time you switch.
+
+Difference mode uses the canvas `difference` composite operation for hardware-accelerated rendering — no manual per-pixel loops. It updates live during video playback and on frame step, and follows zoom and pan. The overlay is automatically removed when you switch to Grid mode or press **D** again.
+
+---
+
 ## Mixed Orientation Layout
 
 When loading assets with different orientations (e.g. landscape and portrait videos together), the grid layout uses an **equal-area algorithm** so each asset has roughly the same visual weight regardless of aspect ratio. The Offset grid layout is not available for mixed orientations — the app uses the equal-area inline grid instead.
@@ -218,6 +233,8 @@ All hotkeys are customizable — press **H** to open the shortcuts panel, then c
 | **W** | Toggle waveform / spectrogram |
 | **Shift+W** | Toggle linear / log frequency |
 | **Shift+C** | Cycle spectrogram color palette |
+| **D** | Toggle difference mode (Stack) |
+| **Shift+D** | Cycle diff pair |
 
 ### Panels
 | Key | Action |
