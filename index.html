@@ -5470,6 +5470,7 @@
                 updateVideoProgress(video);
                 // Refresh scopes after seek completes (frame is decoded)
                 if (videoScopesVisible) updateVideoScopes();
+                if (_diffMode) requestAnimationFrame(drawDiffComposite);
             });
         }
 
