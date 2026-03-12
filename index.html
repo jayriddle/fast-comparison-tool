@@ -4245,7 +4245,7 @@
         function _diffPairLabel(pair) {
             function shortLabel(slot) {
                 const full = slotLabel(slot);
-                if (slot === 'original') return 'Reference';
+                if (slot === 'original') return 'Source';
                 // "RESPONSE A" → "A", "VIDEO B" → "B", "AUDIO A" → "A", "IMAGE A" → "A"
                 return full.split(' ').pop();
             }
@@ -4314,6 +4314,23 @@
             }
         }
 
+        function _updateDiffInfoBar() {
+            // Show diff pair in the active layer's info bar, or restore normal label
+            const slot = assetOrder[currentAssetIndex];
+            const layer = getLayer(slot);
+            if (!layer) return;
+            const nameEl = layer.querySelector('.asset-info-bar .asset-name');
+            if (!nameEl) return;
+            if (_diffMode) {
+                const pairs = _getDiffPairs();
+                if (pairs.length > 0) {
+                    nameEl.textContent = 'DIFF: ' + _diffPairLabel(pairs[_diffPairIndex]);
+                }
+            } else {
+                nameEl.textContent = slotLabel(slot);
+            }
+        }
+
         function toggleDiffMode() {
             if (hasAudios) { showToast('Difference mode not available for audio'); return; }
             const pairs = _getDiffPairs();
@@ -4329,6 +4346,7 @@
                 if (_diffCanvas) _diffCanvas.style.display = 'none';
                 showToast('Difference off');
             }
+            _updateDiffInfoBar();
         }
 
         function cycleDiffPair() {
@@ -4337,6 +4355,7 @@
             if (pairs.length <= 1) return;
             _diffPairIndex = (_diffPairIndex + 1) % pairs.length;
             drawDiffComposite();
+            _updateDiffInfoBar();
             showToast('Difference: ' + _diffPairLabel(pairs[_diffPairIndex]));
         }
 
@@ -5737,8 +5756,11 @@
             if (!hasAudios && magnifierEnabled && _lastMouseEvent) updateMagnifier(_lastMouseEvent);
             // Refresh video scopes for the new asset
             if (!hasAudios && videoScopesVisible) updateVideoScopes();
-            // Refresh difference overlay
-            if (!hasAudios && _diffMode) requestAnimationFrame(drawDiffComposite);
+            // Refresh difference overlay and info bar label
+            if (!hasAudios && _diffMode) {
+                requestAnimationFrame(drawDiffComposite);
+                _updateDiffInfoBar();
+            }
         }
 
         // Click on an overlay layer (asset or info bar) to make it active
@@ -6530,10 +6552,10 @@
             }
             if (isVideo) {
                 if (!hasOriginal) return slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
-                return slot === 'original' ? 'REFERENCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+                return slot === 'original' ? 'SOURCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
             }
             if (!hasOriginal) return slot === 'editA' ? 'IMAGE A' : 'IMAGE B';
-            return slot === 'original' ? 'REFERENCE IMAGE' : slot === 'editA' ? 'RESPONSE A' : 'RESPONSE B';
+            return slot === 'original' ? 'SOURCE' : slot === 'editA' ? 'IMAGE EDIT A' : 'IMAGE EDIT B';
         }
 
         // Pick horizontal vs vertical layout based on which gives larger rendered images
@@ -8790,7 +8812,7 @@
             <h3>v3.65</h3>
             <ul>
                 <li>Difference mode — press <kbd>D</kbd> in Stack mode to see pixel differences between two assets; identical pixels are black, differences glow</li>
-                <li>Arrow keys cycle through pairs (Reference–A, Reference–B, A–B) when difference mode is active; <kbd>Shift+D</kbd> also cycles</li>
+                <li>Arrow keys cycle through pairs (Source–A, Source–B, A–B) when difference mode is active; <kbd>Shift+D</kbd> also cycles</li>
                 <li>Works with images and video — updates live during playback and on frame step</li>
             </ul>
             <h3>v3.6</h3>

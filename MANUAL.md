@@ -14,7 +14,7 @@ WarpDiff is a browser-based visual comparison tool for reviewing 2–3 versions 
 **File requirements:**
 - 2 or 3 files (images, videos, or audio files)
 - 2 files → assigned to **Edit A** and **Edit B**
-- 3 files → assigned to **Reference**, **A**, and **B** (labeled by asset type — e.g. REFERENCE IMAGE / RESPONSE A / RESPONSE B)
+- 3 files → assigned to **Source**, **A**, and **B** (labeled by asset type — e.g. SOURCE / IMAGE EDIT A / IMAGE EDIT B)
 - Files are automatically sorted oldest → newest by last-modified timestamp
 
 **Timestamp warning:** If two or more files have timestamps within 2 seconds of each other, a toast warns that the sort order may be unreliable — check that the right file landed in the right slot.
@@ -174,7 +174,7 @@ Press **D** in Stack mode to overlay a pixel-difference composite of the current
 | Shortcut | Action |
 |----------|--------|
 | **D** | Toggle difference mode on/off |
-| **Shift+D** or **← →** | Cycle through diff pairs (Reference–A, Reference–B, A–B) |
+| **Shift+D** or **← →** | Cycle through diff pairs (Source–A, Source–B, A–B) |
 
 With 2 files loaded there is one pair (A–B). With 3 files there are three pairs — use **Shift+D** or the arrow keys to cycle through them. A toast shows the active pair label each time you switch.
 
@@ -260,7 +260,7 @@ The following settings are saved to your browser and persist across sessions and
 ## Info Bar
 
 Each asset displays an info bar showing:
-- Slot name — labeled by asset type (e.g. REFERENCE IMAGE / RESPONSE A / RESPONSE B, REFERENCE VIDEO / VIDEO A / VIDEO B, GROUND-TRUTH AUDIO / AUDIO A / AUDIO B)
+- Slot name — labeled by asset type (e.g. SOURCE / IMAGE EDIT A / IMAGE EDIT B, SOURCE VIDEO / VIDEO A / VIDEO B, GROUND-TRUTH AUDIO / AUDIO A / AUDIO B)
 - Resolution (e.g. `1920×1080`) and aspect ratio (e.g. `16:9`) for images/videos
 - Zoom level (e.g. `1.5×`)
 - For audio files: sample rate, channels, bit depth/codec, file size, BPM

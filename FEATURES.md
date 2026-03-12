@@ -4,7 +4,7 @@ Visual & audio comparison for creative review. Compare images, videos, or audio 
 
 ## Load and compare instantly
 
-Load 2–3 images, videos, or audio files by dragging and dropping, pressing `L`, or clicking Load. Files auto-sort by save time into Reference, Response/Edit A, and Response/Edit B. A landing drop zone with hints appears when no files are loaded.
+Load 2–3 images, videos, or audio files by dragging and dropping, pressing `L`, or clicking Load. Files auto-sort by save time into Source, A, and B. A landing drop zone with hints appears when no files are loaded.
 
 ## View modes
 
@@ -31,7 +31,7 @@ All videos play in sync with shared transport controls. Scrub, frame-step with `
 
 ## Difference mode
 
-Press `D` in Stack mode to overlay a pixel-difference composite of two assets. Identical pixels appear black; differences glow in proportion to the delta. Arrow keys cycle through available pairs (Reference–A, Reference–B, A–B with 3 files). Works with images and video — updates live during playback and on frame step. Press `D` again to turn it off.
+Press `D` in Stack mode to overlay a pixel-difference composite of two assets. Identical pixels appear black; differences glow in proportion to the delta. Arrow keys cycle through available pairs (Source–A, Source–B, A–B with 3 files). Works with images and video — updates live during playback and on frame step. Press `D` again to turn it off.
 
 ## Video scopes
 
