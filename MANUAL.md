@@ -12,7 +12,7 @@ WarpDiff is a browser-based visual comparison tool for reviewing 2–3 versions 
 - Drag and drop files onto the window (or the landing drop zone)
 
 **File requirements:**
-- 2 or 3 files (images, videos, or audio files)
+- 1, 2, or 3 files (images, videos, or audio files)
 - 2 files → assigned to **Edit A** and **Edit B**
 - 3 files → assigned to **Source**, **A**, and **B** (labeled by asset type — e.g. SOURCE / IMAGE EDIT A / IMAGE EDIT B)
 - Files are automatically sorted oldest → newest by last-modified timestamp
@@ -288,7 +288,7 @@ Press **?** or click the **Help** button in the header to reopen the Getting Sta
 
 ## Limitations
 
-- **2 or 3 files only** — loading 1 or 4+ files is not supported
+- **1 to 3 files only** — loading 4+ files is not supported
 - **Images, videos, and audio only** — other file types are ignored
 - **Pan available in Stack mode only**
 - **Audio:** one track at a time; others are automatically muted

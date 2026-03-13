@@ -1,6 +1,6 @@
 # *Warp*Diff
 
-A browser-based comparison tool for reviewing 2–3 versions of images, videos, or audio files. No setup, no install — runs in your browser. Installable as a PWA for offline use.
+A browser-based tool for reviewing and comparing 1–3 images, videos, or audio files. No setup, no install — runs in your browser. Installable as a PWA for offline use.
 
 **[Open WarpDiff →](https://jayriddle.github.io/warpdiff/)**
 
@@ -27,7 +27,7 @@ A browser-based comparison tool for reviewing 2–3 versions of images, videos, 
 - `I`/`O` loop in/out points, Shift+drag on timeline
 
 **Audio file comparison**
-- Load 2–3 audio files (MP3, WAV, FLAC, etc.) for side-by-side waveform + spectrogram
+- Load 1–3 audio files (MP3, WAV, FLAC, etc.) for side-by-side waveform + spectrogram
 - Info bars show sample rate, channels, bit depth/codec, file size, BPM
 - Automatic BPM detection via spectral flux onset analysis
 
@@ -50,7 +50,7 @@ A browser-based comparison tool for reviewing 2–3 versions of images, videos, 
 ## Usage
 
 1. Open the [live app](https://jayriddle.github.io/warpdiff/) — or install it as a PWA
-2. Press **L** (or click **Load**, or drag and drop) and select 2–3 image, video, or audio files
+2. Press **L** (or click **Load**, or drag and drop) and select 1–3 image, video, or audio files
 3. Use **Stack / Grid** buttons to switch views
 4. Press **H** to see all keyboard shortcuts
 

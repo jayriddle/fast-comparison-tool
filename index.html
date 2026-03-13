@@ -2750,7 +2750,7 @@
 
                     btn.textContent = 'Pull Assets';
                     btn.disabled = false;
-                    handleMultipleFiles(files, { skipToast: true });
+                    handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
                     showPrompt(event.data.prompt, event.data.criteria);
                     showRatingPanel(event.data.questions);
                     return;
@@ -2789,7 +2789,7 @@
 
             btn.textContent = 'Pull Assets';
             btn.disabled = false;
-            handleMultipleFiles(files, { skipToast: true });
+            handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
             showPrompt(event.data.prompt, event.data.criteria);
             showRatingPanel(event.data.questions);
         });
@@ -3106,6 +3106,7 @@
             // bleeds into the new load. This mirrors resetAll() but without the dialog.
             clearAllMedia();
             _ihwaMode = !!(opts && opts.skipToast);
+            _taskType = (opts && opts.taskType) || null;
             showLoading('Reading files…');
 
             // Tell checkAllLoaded() how many files to wait for before activating the view.
@@ -4245,8 +4246,13 @@
         function _diffPairLabel(pair) {
             function shortLabel(slot) {
                 const full = slotLabel(slot);
-                if (slot === 'original') return 'Source';
-                // "RESPONSE A" → "A", "VIDEO B" → "B", "AUDIO A" → "A", "IMAGE A" → "A"
+                if (slot === 'original') {
+                    // "SOURCE" → "Source", "SOURCE VIDEO" → "Source", "REFERENCE IMAGE" → "Ref", "GROUND-TRUTH AUDIO" → "GT"
+                    if (full.startsWith('REFERENCE')) return 'Ref';
+                    if (full.startsWith('GROUND')) return 'GT';
+                    return 'Source';
+                }
+                // "RESPONSE A" → "A", "VIDEO EDIT B" → "B", "IMAGE EDIT A" → "A"
                 return full.split(' ').pop();
             }
             return shortLabel(pair[0]) + ' – ' + shortLabel(pair[1]);
@@ -6474,6 +6480,7 @@
             if (confirm('Reset all assets and start over?')) {
                 clearAllMedia();
                 _ihwaMode = false;
+                _taskType = null;
             }
         }
 
@@ -6540,21 +6547,41 @@
         let pendingViewActivation = false; // true when fps queue is still draining at the time checkAllLoaded() first completes
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
         let _ihwaMode = false; // true when assets loaded from IHWA
+        let _taskType = null;  // IHWA task type: 'image-editing', 'image-generation', 'video-editing', 'video-generation', 'audio', or null
 
         function slotLabel(slot) {
             const isAudio = document.body.classList.contains('audio-mode');
             const isVideo = !!(mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video');
             const hasOriginal = !!mediaData.original;
 
-            if (isAudio) {
-                if (!hasOriginal) return slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
+            // 2-asset: no original slot, use generic type labels
+            if (!hasOriginal) {
+                if (isAudio) return slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
+                if (isVideo) return slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+                return slot === 'editA' ? 'IMAGE A' : 'IMAGE B';
+            }
+
+            // 3-asset: use task type if available, otherwise infer from media type
+            const tt = _taskType;
+            if (tt === 'image-generation') {
+                return slot === 'original' ? 'REFERENCE IMAGE' : slot === 'editA' ? 'RESPONSE A' : 'RESPONSE B';
+            }
+            if (tt === 'image-editing') {
+                return slot === 'original' ? 'SOURCE' : slot === 'editA' ? 'IMAGE EDIT A' : 'IMAGE EDIT B';
+            }
+            if (tt === 'video-generation') {
+                return slot === 'original' ? 'REFERENCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+            }
+            if (tt === 'video-editing') {
+                return slot === 'original' ? 'SOURCE VIDEO' : slot === 'editA' ? 'VIDEO EDIT A' : 'VIDEO EDIT B';
+            }
+            if (tt === 'audio' || isAudio) {
                 return slot === 'original' ? 'GROUND-TRUTH AUDIO' : slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
             }
+            // Fallback: infer from loaded media type
             if (isVideo) {
-                if (!hasOriginal) return slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
                 return slot === 'original' ? 'SOURCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
             }
-            if (!hasOriginal) return slot === 'editA' ? 'IMAGE A' : 'IMAGE B';
             return slot === 'original' ? 'SOURCE' : slot === 'editA' ? 'IMAGE EDIT A' : 'IMAGE EDIT B';
         }
 
@@ -8755,7 +8782,7 @@
             <h3>Getting Started</h3>
             <ul>
                 <li>Save assets from the review tool: right-click ▸ Open in New Tab (auto-saves to Downloads on macOS) or right-click ▸ Save</li>
-                <li>Drop 2–3 image, video, or audio files onto this window, or press <kbd>L</kbd> to load from file browser</li>
+                <li>Drop 1–3 image, video, or audio files onto this window, or press <kbd>L</kbd> to load from file browser</li>
                 <li>Files auto-sort by save time (Original, Edit A, Edit B) — save files one at a time so timestamps reflect the correct order</li>
             </ul>
 

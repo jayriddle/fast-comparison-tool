@@ -4,7 +4,7 @@ Visual & audio comparison for creative review. Compare images, videos, or audio 
 
 ## Load and compare instantly
 
-Load 2–3 images, videos, or audio files by dragging and dropping, pressing `L`, or clicking Load. Files auto-sort by save time into Source, A, and B. A landing drop zone with hints appears when no files are loaded.
+Load 1–3 images, videos, or audio files by dragging and dropping, pressing `L`, or clicking Load. Files auto-sort by save time into Source, A, and B. A landing drop zone with hints appears when no files are loaded.
 
 ## View modes
 
@@ -49,7 +49,7 @@ Press `W` to toggle waveform and spectrogram views. Waveform uses dB color codin
 
 ## Audio file comparison
 
-Load 2–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, and BPM.
+Load 1–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, and BPM.
 
 Automatic BPM detection uses spectral flux onset analysis with autocorrelation, weighted toward musically common tempos. Spectrogram scale and palette controls (`Shift+W`, `Shift+C`) apply to all audio slots.
 
