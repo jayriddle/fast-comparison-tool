@@ -1086,10 +1086,6 @@
             color: #ffffff;
         }
 
-        .layout-controls {
-            display: none !important;
-        }
-
         .asset-layer img,
         .asset-layer video {
             max-width: 100%;
@@ -1592,26 +1588,6 @@
             transition: none;
         }
 
-        .pan-hint {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            padding: 7px 18px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #aaa;
-            z-index: 200;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.6s ease;
-        }
-
-        .pan-hint.visible {
-            opacity: 1;
-        }
-
         /* When magnifier is active, use crosshair cursor over media */
         body.magnifier-active .asset-container,
         body.magnifier-active .asset-container.panning,
@@ -1980,12 +1956,6 @@
         <div class="comparison-view" id="comparisonView">
             <div class="asset-container" id="assetContainer">
                 <!-- Layout controls for side-by-side mode -->
-                <div class="layout-controls" id="layoutControls">
-                    <button onclick="setViewMode('horizontal')" id="horizontalBtn" class="active">Horizontal</button>
-                    <button onclick="setViewMode('vertical')" id="verticalBtn">Vertical</button>
-                    <span style="color: #999; font-size: 11px; margin: 0 5px;">Drag to reorder</span>
-                </div>
-                
                 <div class="asset-layer" id="layerOriginal">
                     <div class="asset-info-bar">
                         <span class="asset-name">REFERENCE</span>
@@ -2041,9 +2011,6 @@
                     2.0×
                 </div>
 
-                <div class="pan-hint">
-                    Click and drag to pan
-                </div>
                 <div class="toast" id="toast"></div>
 
             </div>
@@ -6206,18 +6173,6 @@
             applyZoom();
         }
 
-        let panHintTimer = null;
-        function showPanHint() {
-            const hint = document.querySelector('.pan-hint');
-            if (!hint) return;
-            // Clear any running timer and reset
-            clearTimeout(panHintTimer);
-            hint.classList.add('visible');
-            panHintTimer = setTimeout(() => {
-                hint.classList.remove('visible');
-            }, 2500);
-        }
-
         function resetFitZoom() {
             if (isGridMode) {
                 splitStepZoom = 1.0;
@@ -8570,19 +8525,6 @@
         function toggleManualPanel() {
             document.getElementById('manualPanel').classList.toggle('open');
             document.getElementById('manualBackdrop').classList.toggle('open');
-        }
-
-        function toggleInstructions() {
-            const content = document.getElementById('instructionsContent');
-            const icon = document.getElementById('toggleIcon');
-            
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                icon.textContent = '▼';
-            } else {
-                content.style.display = 'none';
-                icon.textContent = '▶';
-            }
         }
 
         // Expose read-only test API for Playwright (avoids brittle eval of let-scoped vars)
