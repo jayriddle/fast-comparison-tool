@@ -199,10 +199,9 @@
 
         .audio-source-selector button.muted {
             background: #2a2a2a;
-            color: #666;
-            text-decoration: line-through;
+            color: #aaa;
             border: 2px solid #ff4444;
-            opacity: 0.6;
+            opacity: 0.8;
         }
 
         .audio-source-selector button.muted .audio-mute-icon {
@@ -223,8 +222,22 @@
         }
 
         .audio-mute-icon {
-            font-size: 12px;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+        .audio-mute-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .volume-control {
@@ -1384,13 +1397,28 @@
         }
 
         .volume-icon {
-            font-size: 14px;
             cursor: pointer;
             user-select: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+        }
+        .volume-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: none;
+            stroke: rgb(160, 160, 160);
+            stroke-width: 1.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            color: rgb(160, 160, 160);
         }
 
-        .volume-icon:hover {
-            opacity: 0.8;
+        .volume-icon:hover svg {
+            stroke: #fff;
+            color: #fff;
         }
 
         .identical-warning {
@@ -1869,20 +1897,20 @@
                 </div>
                 <span class="video-duration" id="videoDuration">0:00</span>
                 <div class="volume-control">
-                    <span class="volume-icon" onclick="toggleMute()" id="muteBtn" title="Click to mute/unmute">🔊</span>
+                    <span class="volume-icon" onclick="toggleMute()" id="muteBtn" title="Click to mute/unmute"><svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg></span>
                     <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" oninput="setVolume(this.value)">
                 </div>
                 <div class="audio-source-selector" id="audioSourceSelector">
                     <button onclick="selectAudioSource('original')" id="audioOriginal" class="active" title="Click to select audio source">
-                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('original')">🔊</span>
+                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('original')"><svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></span>
                         O
                     </button>
                     <button onclick="selectAudioSource('editA')" id="audioEditA" title="Click to select audio source">
-                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editA')">🔊</span>
+                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editA')"><svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></span>
                         A
                     </button>
                     <button onclick="selectAudioSource('editB')" id="audioEditB" title="Click to select audio source">
-                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editB')">🔊</span>
+                        <span class="audio-mute-icon" onclick="event.stopPropagation(); toggleAudioMute('editB')"><svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></span>
                         B
                     </button>
                 </div>
@@ -1919,6 +1947,11 @@
             }
         };
 
+        // SVG icon templates for volume controls
+        const _SVG_VOL_ON = '<svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>';
+        const _SVG_VOL_ON_SM = '<svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>';
+        const _SVG_VOL_MUTED = '<svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="currentColor" stroke="none"/><line x1="18" y1="9" x2="22" y2="15"/><line x1="22" y1="9" x2="18" y2="15"/></svg>';
+
         const mediaData = {
             original: null,
             editA: null,
@@ -1954,7 +1987,7 @@
             if (!btn) return;
             btn.classList.toggle('muted', isMuted);
             const icon = btn.querySelector('.audio-mute-icon');
-            if (icon) icon.textContent = isMuted ? '🔇' : '🔊';
+            if (icon) icon.innerHTML = isMuted ? _SVG_VOL_MUTED : _SVG_VOL_ON_SM;
         }
 
         function getLoadedSlotCount() {
@@ -4604,12 +4637,13 @@
                 if (!video || isNaN(video.duration)) return;
 
                 const seekDur = hasAudios ? (_audioMaxDuration || video.duration) : video.duration;
-                const t = Math.min(pct * seekDur, video.duration);
+                // Clamp to just before end so play() won't wrap to 0
+                const t = Math.min(pct * seekDur, video.duration - 0.001);
                 video.currentTime = t;
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
-                        if (v !== video && !isNaN(v.duration)) v.currentTime = Math.min(pct * seekDur, v.duration);
+                        if (v !== video && !isNaN(v.duration)) v.currentTime = Math.min(pct * seekDur, v.duration - 0.001);
                     }
                 }
 
@@ -4642,12 +4676,13 @@
                 if (!media || isNaN(media.duration)) return;
 
                 const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : media.duration;
-                const t = Math.min(pct * seekDur, media.duration);
+                // Clamp to just before end so play() won't wrap to 0
+                const t = Math.min(pct * seekDur, media.duration - 0.001);
                 media.currentTime = t;
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
-                        if (v !== media && !isNaN(v.duration)) v.currentTime = Math.min(pct * seekDur, v.duration);
+                        if (v !== media && !isNaN(v.duration)) v.currentTime = Math.min(pct * seekDur, v.duration - 0.001);
                     }
                 }
                 if (_elProgressBar) updateProgressBarForLoop(t, seekDur);
@@ -4798,6 +4833,9 @@
                         scrubToPosition(e);
                     }
 
+                    // Don't resume playback if scrubbed to the very end — play() would wrap to 0
+                    const _scrubAtEnd = _scrubVideo && _scrubVideo.duration - _scrubVideo.currentTime < 0.05;
+
                     _scrubVideo = null;
                     _scrubAllVideos = null;
                     _scrubContainerRect = null;
@@ -4806,7 +4844,7 @@
                     _lastPrimaryAudioTime = 0;
 
                     stopScrubSnippet();
-                    if (wasPlaying) {
+                    if (wasPlaying && !_scrubAtEnd) {
                         // Defer play by one frame so the browser finalizes the seek
                         // before resuming — prevents stale-position race on quick taps
                         requestAnimationFrame(() => playAllMedia());
@@ -5139,7 +5177,7 @@
             playbackRateIndex = 3;
             clearLoopMarkers(true);
             const muteBtn = document.getElementById('muteBtn');
-            if (muteBtn) muteBtn.textContent = '🔊';
+            if (muteBtn) muteBtn.innerHTML = _SVG_VOL_ON;
 
             // Reset progress bar and timecode display
             getProgressEls();
@@ -6666,7 +6704,7 @@
                 selectAudioSource(currentAudioSource);
             }
 
-            btn.textContent = isMuted ? '🔇' : '🔊';
+            btn.innerHTML = isMuted ? _SVG_VOL_MUTED : _SVG_VOL_ON;
         }
 
         // ── Hotkey system: action registry + reassignable keymap ──
