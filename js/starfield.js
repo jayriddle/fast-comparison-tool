@@ -8,6 +8,30 @@
 
     // Shared drawing code (runs in worker or main thread)
     const DRAW_CODE = `
+        // Polyfill roundRect for Safari < 16.4
+        if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                r = Math.min(r, w / 2, h / 2);
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+            };
+        }
+        // OffscreenCanvasRenderingContext2D for worker path
+        if (typeof OffscreenCanvasRenderingContext2D !== 'undefined' && !OffscreenCanvasRenderingContext2D.prototype.roundRect) {
+            OffscreenCanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                r = Math.min(r, w / 2, h / 2);
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+            };
+        }
         const STAR_COUNT = 300;
         const RADIUS = 16;
         const SPEED_MIN = 0.0005;

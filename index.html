@@ -3767,182 +3767,190 @@
                 _blobUrls = _blobUrls.filter(u => u !== mediaData[slot].src);
             }
 
-            // Audio files: read as ArrayBuffer, create hidden <audio> for playback,
-            // create canvas for waveform+spectrogram rendering.
-            if (isAudio) {
-                const reader = new FileReader();
-                reader.onerror = function() {
-                    showLoadToast(`Failed to read ${file.name}`, true, 5000);
-                    checkAllLoaded();
-                };
-                reader.onload = function(e) {
-                    const arrayBuffer = e.target.result;
-                    const blob = new Blob([arrayBuffer], { type: file.type });
-                    const blobUrl = URL.createObjectURL(blob);
-                    _blobUrls.push(blobUrl);
+            if (isAudio) { loadAudioFile(slot, file); return; }
+            if (isVideo) { loadVideoFile(slot, file); return; }
+            loadImageFile(slot, file);
 
-                    mediaData[slot] = {
-                        type: 'audio',
-                        src: blobUrl,
-                        name: file.name,
-                        size: file.size,
-                        lastModified: file.lastModified,
-                        w: 1920,
-                        h: 480
-                    };
+        }
 
-                    const layer = getLayer(slot);
-                    const oldContainer = layer.querySelector('.media-container');
-                    if (oldContainer) oldContainer.remove();
+        // ── Info bar helpers ───────────────────────────────────────────
 
-                    const mediaContainer = document.createElement('div');
-                    mediaContainer.className = 'media-container';
+        const AUDIO_INFO_BAR_HTML = `
+            <span class="asset-name"></span>
+            <span class="asset-channels"></span>
+            <span class="asset-sample-rate"></span>
+            <span class="asset-bit-depth"></span>
+            <span class="asset-bpm"></span>
+            <span class="asset-duration"></span>
+            <span class="asset-file-size"></span>
+            <span class="asset-filename"></span>
+        `;
 
-                    // Hidden audio element for playback
-                    const audio = document.createElement('audio');
-                    audio.src = blobUrl;
-                    audio.controls = false;
-                    audio.loop = true;
-                    audio.volume = _prefs.load('volume', 100) / 100;
-                    audio.style.display = 'none';
-                    mediaContainer.appendChild(audio);
+        const VIDEO_IMAGE_INFO_BAR_HTML = `
+            <span class="asset-name"></span>
+            <span class="asset-zoom"></span>
+            <span class="asset-resolution">-</span>
+            <span class="asset-aspect">-</span>
+            <span class="asset-fps"></span>
+            <span class="asset-bpm"></span>
+            <span class="asset-duration"></span>
+            <span class="asset-filename"></span>
+        `;
 
-                    // Canvas for waveform + spectrogram
-                    const canvas = document.createElement('canvas');
-                    canvas.className = 'audio-viz-slot-canvas';
-                    canvas.dataset.slot = slot;
-
-                    audio.addEventListener('loadedmetadata', function() {
-                        updateDurationDisplay(slot, audio.duration);
-                        setupAudioHandlers(audio, slot);
-                        checkAllLoaded();
-                    });
-
-                    hasAudios = true;
-
-                    let infoBar = layer.querySelector('.asset-info-bar');
-
-                    const sl = slotLabel(slot);
-                    if (!infoBar) {
-                        infoBar = document.createElement('div');
-                        infoBar.className = 'asset-info-bar';
-                    }
-                    infoBar.innerHTML = `
-                        <span class="asset-name">${sl}</span>
-                        <span class="asset-channels"></span>
-                        <span class="asset-sample-rate"></span>
-                        <span class="asset-bit-depth"></span>
-                        <span class="asset-bpm"></span>
-                        <span class="asset-duration"></span>
-                        <span class="asset-file-size"></span>
-                        <span class="asset-filename"></span>
-                    `;
-                    if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
-
-                    const videoWrapper = document.createElement('div');
-                    videoWrapper.className = 'video-wrapper audio-slot-group';
-                    videoWrapper.style.position = 'relative';
-                    videoWrapper.appendChild(infoBar);
-
-                    // Canvas area wrapper — isolates canvas sizing from info bar
-                    const canvasWrap = document.createElement('div');
-                    canvasWrap.className = 'audio-canvas-wrap';
-                    canvasWrap.appendChild(canvas);
-
-                    // Add playback cursor overlay
-                    const cursor = document.createElement('div');
-                    cursor.className = 'audio-slot-cursor';
-                    cursor.dataset.slot = slot;
-                    cursor.style.left = '30px'; // matches label margin
-                    canvasWrap.appendChild(cursor);
-
-                    videoWrapper.appendChild(canvasWrap);
-                    mediaContainer.appendChild(videoWrapper);
-                    layer.appendChild(mediaContainer);
-                    layer.style.opacity = '0';
-
-                    // Decode audio and compute viz data
-                    audioFileBuffers[slot] = arrayBuffer;
-                    updateLoadingStatus('Decoding audio…');
-                    decodeAndComputeAudioSlotViz(slot, arrayBuffer);
-                };
-                reader.readAsArrayBuffer(file);
-                return;
+        function ensureInfoBar(layer, slot, template) {
+            let infoBar = layer.querySelector('.asset-info-bar');
+            if (!infoBar) {
+                infoBar = document.createElement('div');
+                infoBar.className = 'asset-info-bar';
             }
+            infoBar.innerHTML = template;
+            infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
+            if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
+            return infoBar;
+        }
 
-            // Videos: create blob URL directly from File (fast — no full read needed).
-            // Store the File object for lazy audio decode when user presses W.
-            if (isVideo) {
-                const blobUrl = URL.createObjectURL(file);
+        // Prepare a layer for new content: remove old media container, create a fresh one.
+        function prepareLayer(slot) {
+            const layer = getLayer(slot);
+            const oldContainer = layer.querySelector('.media-container');
+            if (oldContainer) oldContainer.remove();
+            const mediaContainer = document.createElement('div');
+            mediaContainer.className = 'media-container';
+            return { layer, mediaContainer };
+        }
+
+        // ── loadAudioFile ────────────────────────────────────────────────
+
+        function loadAudioFile(slot, file) {
+            const reader = new FileReader();
+            reader.onerror = function() {
+                showLoadToast(`Failed to read ${file.name}`, true, 5000);
+                checkAllLoaded();
+            };
+            reader.onload = function(e) {
+                const arrayBuffer = e.target.result;
+                const blob = new Blob([arrayBuffer], { type: file.type });
+                const blobUrl = URL.createObjectURL(blob);
                 _blobUrls.push(blobUrl);
 
                 mediaData[slot] = {
-                    type: 'video',
+                    type: 'audio',
                     src: blobUrl,
                     name: file.name,
                     size: file.size,
-                    lastModified: file.lastModified
+                    lastModified: file.lastModified,
+                    w: 1920,
+                    h: 480
                 };
 
-                const layer = getLayer(slot);
-                const oldContainer = layer.querySelector('.media-container');
-                if (oldContainer) oldContainer.remove();
+                const { layer, mediaContainer } = prepareLayer(slot);
 
-                const mediaContainer = document.createElement('div');
-                mediaContainer.className = 'media-container';
+                // Hidden audio element for playback
+                const audio = document.createElement('audio');
+                audio.src = blobUrl;
+                audio.controls = false;
+                audio.loop = true;
+                audio.volume = _prefs.load('volume', 100) / 100;
+                audio.style.display = 'none';
+                mediaContainer.appendChild(audio);
 
-                const video = document.createElement('video');
-                video.src = blobUrl;
-                video.controls = false;
-                video.volume = _prefs.load('volume', 100) / 100;
+                // Canvas for waveform + spectrogram
+                const canvas = document.createElement('canvas');
+                canvas.className = 'audio-viz-slot-canvas';
+                canvas.dataset.slot = slot;
 
-                video.addEventListener('loadedmetadata', function() {
-                    if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
-                    updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
-                    updateDurationDisplay(slot, video.duration);
-                    setupVideoHandlers(video, slot);
+                audio.addEventListener('loadedmetadata', function() {
+                    updateDurationDisplay(slot, audio.duration);
+                    setupAudioHandlers(audio, slot);
                     checkAllLoaded();
-                    positionLabelsToMediaDebounced();
                 });
 
-                mediaContainer.appendChild(video);
-                hasVideos = true;
+                hasAudios = true;
 
-                // Find or create info bar
-                let infoBar = layer.querySelector('.asset-info-bar');
-
-                if (!infoBar) {
-                    infoBar = document.createElement('div');
-                    infoBar.className = 'asset-info-bar';
-                    infoBar.innerHTML = `
-                        <span class="asset-name"></span>
-                        <span class="asset-zoom"></span>
-                        <span class="asset-resolution">-</span>
-                        <span class="asset-aspect">-</span>
-                        <span class="asset-fps"></span>
-                        <span class="asset-bpm"></span>
-                        <span class="asset-duration"></span>
-                        <span class="asset-filename"></span>
-                    `;
-                }
-                infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
-                if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
+                const infoBar = ensureInfoBar(layer, slot, AUDIO_INFO_BAR_HTML);
 
                 const videoWrapper = document.createElement('div');
-                videoWrapper.className = 'video-wrapper';
-                const mediaEl = mediaContainer.querySelector('video');
-                if (mediaEl) videoWrapper.appendChild(mediaEl);
+                videoWrapper.className = 'video-wrapper audio-slot-group';
+                videoWrapper.style.position = 'relative';
                 videoWrapper.appendChild(infoBar);
-                mediaContainer.appendChild(videoWrapper);
 
+                // Canvas area wrapper — isolates canvas sizing from info bar
+                const canvasWrap = document.createElement('div');
+                canvasWrap.className = 'audio-canvas-wrap';
+                canvasWrap.appendChild(canvas);
+
+                // Add playback cursor overlay
+                const cursor = document.createElement('div');
+                cursor.className = 'audio-slot-cursor';
+                cursor.dataset.slot = slot;
+                cursor.style.left = '30px'; // matches label margin
+                canvasWrap.appendChild(cursor);
+
+                videoWrapper.appendChild(canvasWrap);
+                mediaContainer.appendChild(videoWrapper);
                 layer.appendChild(mediaContainer);
                 layer.style.opacity = '0';
 
-                // Store File for lazy audio decode (read on demand, not upfront)
-                audioFileBuffers[slot] = file;
-                return;
-            }
+                // Decode audio and compute viz data
+                audioFileBuffers[slot] = arrayBuffer;
+                updateLoadingStatus('Decoding audio…');
+                decodeAndComputeAudioSlotViz(slot, arrayBuffer);
+            };
+            reader.readAsArrayBuffer(file);
+        }
 
+        // ── loadVideoFile ────────────────────────────────────────────────
+
+        function loadVideoFile(slot, file) {
+            const blobUrl = URL.createObjectURL(file);
+            _blobUrls.push(blobUrl);
+
+            mediaData[slot] = {
+                type: 'video',
+                src: blobUrl,
+                name: file.name,
+                size: file.size,
+                lastModified: file.lastModified
+            };
+
+            const { layer, mediaContainer } = prepareLayer(slot);
+
+            const video = document.createElement('video');
+            video.src = blobUrl;
+            video.controls = false;
+            video.volume = _prefs.load('volume', 100) / 100;
+
+            video.addEventListener('loadedmetadata', function() {
+                if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
+                updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
+                updateDurationDisplay(slot, video.duration);
+                setupVideoHandlers(video, slot);
+                checkAllLoaded();
+                positionLabelsToMediaDebounced();
+            });
+
+            mediaContainer.appendChild(video);
+            hasVideos = true;
+
+            const infoBar = ensureInfoBar(layer, slot, VIDEO_IMAGE_INFO_BAR_HTML);
+
+            const videoWrapper = document.createElement('div');
+            videoWrapper.className = 'video-wrapper';
+            const mediaEl = mediaContainer.querySelector('video');
+            if (mediaEl) videoWrapper.appendChild(mediaEl);
+            videoWrapper.appendChild(infoBar);
+            mediaContainer.appendChild(videoWrapper);
+
+            layer.appendChild(mediaContainer);
+            layer.style.opacity = '0';
+
+            // Store File for lazy audio decode (read on demand, not upfront)
+            audioFileBuffers[slot] = file;
+        }
+
+        // ── loadImageFile ────────────────────────────────────────────────
+
+        function loadImageFile(slot, file) {
             const reader = new FileReader();
             reader.onerror = function() {
                 showLoadToast(`Failed to read ${file.name}`, true, 5000);
@@ -3959,23 +3967,11 @@
                     lastModified: file.lastModified
                 };
 
-                // Load into overlay layer
-                const layer = getLayer(slot);
-
-                // Remove old media container but preserve info bars and zoom indicators at layer level
-                const oldContainer = layer.querySelector('.media-container');
-                if (oldContainer) {
-                    oldContainer.remove();
-                }
-
-                // Create media container to hold the image
-                const mediaContainer = document.createElement('div');
-                mediaContainer.className = 'media-container';
+                const { layer, mediaContainer } = prepareLayer(slot);
 
                 const img = document.createElement('img');
                 img.src = dataUrl;
                 img.addEventListener('load', async function() {
-                    // Wait for image to be fully decoded before getting dimensions
                     try {
                         await img.decode();
                     } catch (e) {
@@ -3985,68 +3981,29 @@
                     if (mediaData[slot]) { mediaData[slot].w = img.naturalWidth; mediaData[slot].h = img.naturalHeight; }
                     updateResolutionDisplay(slot, img.naturalWidth, img.naturalHeight);
 
-                    // Dimensions are now available — safe to activate the view.
-                    // checkAllLoaded() is called here (not in reader.onload) so that
+                    // checkAllLoaded() called here (not in reader.onload) so
                     // positionLabelsToMedia() always has valid naturalWidth/naturalHeight.
                     checkAllLoaded();
-
-                    // Debounced so all slots are measured together once rapid successive loads settle.
                     positionLabelsToMediaDebounced();
                 });
                 mediaContainer.appendChild(img);
 
-                // Find or create info bar, then add to media container
-                let infoBar = layer.querySelector('.asset-info-bar');
+                const infoBar = ensureInfoBar(layer, slot, VIDEO_IMAGE_INFO_BAR_HTML);
 
-                if (!infoBar) {
-                    infoBar = document.createElement('div');
-                    infoBar.className = 'asset-info-bar';
-                    infoBar.innerHTML = `
-                        <span class="asset-name"></span>
-                        <span class="asset-zoom"></span>
-                        <span class="asset-resolution">-</span>
-                        <span class="asset-aspect">-</span>
-                        <span class="asset-fps"></span>
-                        <span class="asset-bpm"></span>
-                        <span class="asset-duration"></span>
-                        <span class="asset-filename"></span>
-                    `;
-                }
-                infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
-                if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
-
-                // Build the asset structure:
-                //   media-container (position:relative, fills layer)
-                //     └── video-wrapper   ← JS-sized to exact rendered video bounds
-                //           ├── video/img
-                //           └── asset-info-bar        ← CSS-positioned flush above (bottom:100%)
-
+                // Build asset structure:
+                //   media-container → video-wrapper → img + info-bar
                 const videoWrapper = document.createElement('div');
                 videoWrapper.className = 'video-wrapper';
-
-                // Move the media element into the wrapper
                 const mediaEl = mediaContainer.querySelector('img, video, canvas.audio-viz-slot-canvas');
                 if (mediaEl) videoWrapper.appendChild(mediaEl);
-
-                // Info bar lives inside video-wrapper — CSS positions it flush above via bottom:100%
                 videoWrapper.appendChild(infoBar);
                 mediaContainer.appendChild(videoWrapper);
 
                 layer.appendChild(mediaContainer);
-
-                // Hide layer until checkAllLoaded() triggers the staggered fade-in.
-                // This prevents videos (and images) from flashing before layout is ready.
                 layer.style.opacity = '0';
-
-                // NOTE: checkAllLoaded() is NOT called here. It is called from the
-                // img.load / video.loadedmetadata callbacks instead, after naturalWidth /
-                // videoWidth are available. Calling it here (reader.onload) meant
-                // positionLabelsToMedia() ran before dimensions were known, so every
-                // slot read naturalWidth=0 and the wrappers stayed invisible.
             };
 
             reader.readAsDataURL(file);
-
         }
 
         function updateResolutionDisplay(slot, width, height) {
