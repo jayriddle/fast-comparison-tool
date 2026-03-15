@@ -4445,7 +4445,7 @@
                 const fmtTc = (t, showMin) => {
                     const m = Math.floor(t / 60);
                     const s = Math.floor(t % 60);
-                    const f = Math.floor((t % 1) * fps + 0.01) % Math.floor(fps + 0.01);
+                    const f = Math.floor((t % 1) * fps + 0.01) % Math.round(fps);
                     return showMin ? `${m}:${s.toString().padStart(2, '0')}:${f.toString().padStart(2, '0')}`
                                    : `${s}:${f.toString().padStart(2, '0')}`;
                 };
