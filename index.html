@@ -4845,21 +4845,21 @@
                     const activeLayer = getLayer(activeSlot);
                     primary = activeLayer ? activeLayer.querySelector('audio') : getAllPlayableMedia()[0];
                 } else {
-                    // Video mode: use cached primary video ref; fall back to live query if stale
-                    primary = primaryVideoRef;
-                    if (!primary || primary.isConnected === false) {
-                        if (!isGridMode) {
+                    if (isGridMode) {
+                        // In grid mode, always resolve from active slot (no caching —
+                        // currentAudioSource can change without invalidating the ref)
+                        const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                        const activeLayer = getLayer(activeSlot);
+                        primary = activeLayer ? activeLayer.querySelector('video') : document.querySelector('.asset-layer video');
+                        primaryVideoRef = primary;
+                    } else {
+                        // Stack mode: use cached primary video ref; fall back to live query if stale
+                        primary = primaryVideoRef;
+                        if (!primary || primary.isConnected === false) {
                             const activeLayer = document.querySelector('.asset-layer.active');
                             primary = activeLayer ? activeLayer.querySelector('video') : null;
-                        } else {
-                            // In grid mode, use the longest video for progress tracking
-                            let longest = null, maxDur = 0;
-                            getAllPlayableMedia().forEach(m => {
-                                if (m.duration && m.duration > maxDur) { maxDur = m.duration; longest = m; }
-                            });
-                            primary = longest || document.querySelector('.asset-layer video');
+                            primaryVideoRef = primary;
                         }
-                        primaryVideoRef = primary;
                     }
                 }
 
@@ -4992,7 +4992,15 @@
             });
             
             video.addEventListener('seeked', function() {
-                updateVideoProgress(video);
+                if (isDragging) return; // scrub handler manages its own progress updates
+                // Only the active video updates progress — prevents duration cycling
+                // when scrub seeks all videos and their seeked events fire asynchronously
+                const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                const activeLayer = getLayer(activeSlot);
+                const activeVideo = activeLayer ? activeLayer.querySelector('video') : null;
+                if (video === activeVideo || (!isGridMode && video === primaryVideoRef)) {
+                    updateVideoProgress(video);
+                }
                 // Refresh scopes after seek completes (frame is decoded)
                 if (videoScopesVisible) updateVideoScopes();
                 if (_diffMode) requestAnimationFrame(drawDiffComposite);
@@ -5072,8 +5080,8 @@
         // Single source of truth for timecode + duration display. Called directly during
         // scrubbing (with the seek target as currentTime) so the display tracks the cursor
         // instantly without waiting for the seek to land; also called by updateVideoProgress.
-        function updateVideoProgressFromTime(video, currentTime, overrideDuration) {
-            const duration = overrideDuration || video.duration;
+        function updateVideoProgressFromTime(video, currentTime) {
+            const duration = video.duration;
             if (isNaN(duration) || duration === 0) return;
             getProgressEls();
             const fps = videoFrameRates[video.src] || 30;
@@ -5114,16 +5122,8 @@
             }
         }
 
-        function _getMaxVideoDuration() {
-            let max = 0;
-            getAllPlayableMedia().forEach(m => {
-                if (m.duration && !isNaN(m.duration) && m.duration > max) max = m.duration;
-            });
-            return max;
-        }
-
         function updateVideoProgress(video) {
-            const duration = isGridMode ? _getMaxVideoDuration() : video.duration;
+            const duration = video.duration;
             getProgressEls(); // ensure cache is warm (no-op after first call)
 
             // Guard against NaN when video metadata isn't ready yet
@@ -5135,7 +5135,7 @@
             }
 
             updateProgressBarForLoop(video.currentTime, duration);
-            updateVideoProgressFromTime(video, video.currentTime, isGridMode ? duration : undefined);
+            updateVideoProgressFromTime(video, video.currentTime);
             updateSpectrogramCursor(video);
             // Update ARIA for screen readers
             const pc = document.getElementById('videoProgressContainer');
@@ -5344,9 +5344,12 @@
                     }
                 }
 
-                // Update timecode from seek target
+                // Update timecode and waveform cursor from seek target
                 if (hasAudios) updateAudioProgress(video);
-                else updateVideoProgressFromTime(video, t);
+                else {
+                    updateVideoProgressFromTime(video, t);
+                    updateSpectrogramCursor(video);
+                }
             }
 
             function progressBarXToTime(e) {
@@ -5464,8 +5467,10 @@
                 }
 
                 const tag = hasAudios ? 'audio' : 'video';
-                const activeLayer = document.querySelector('.asset-layer.active');
-                _scrubVideo = activeLayer ? activeLayer.querySelector(tag) : null;
+                // Use the active/selected slot's media for scrub reference
+                const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                const scrubLayer = isGridMode ? getLayer(activeSlot) : document.querySelector('.asset-layer.active');
+                _scrubVideo = scrubLayer ? scrubLayer.querySelector(tag) : null;
                 if (!_scrubVideo) {
                     const els = getAllPlayableMedia();
                     if (els.length > 0) _scrubVideo = els[0];
