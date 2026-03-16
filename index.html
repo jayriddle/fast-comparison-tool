@@ -2928,7 +2928,7 @@
             const panel = document.getElementById('spectrogramPanel');
             if (!panel || !panel.classList.contains('active')) return;
             if (!video || !video.duration) return;
-            const pct = video.currentTime / video.duration;
+            const pct = video.currentTime / _getEffectiveDuration(video);
             // Move both cursors (waveform + spectrogram)
             ['spectrogramCursor', 'waveformCursor'].forEach(id => {
                 const cursor = document.getElementById(id);
@@ -3126,7 +3126,9 @@
                 _opusSyncDuration[slot] = _videoAudioBuffers[slot].duration;
                 const layer = getLayer(slot);
                 const video = layer && layer.querySelector('video');
-                if (video) video.muted = true;
+                // Suppress native audio via volume instead of muted — Chrome may
+                // skip frame rendering on seek for muted videos
+                if (video) video.volume = 0;
                 // If video is already playing, start sync audio immediately
                 if (video && !video.paused) _startOpusSyncAudio(slot, video.currentTime);
             }
@@ -5283,9 +5285,15 @@
                 if (layer) {
                     const mediaEl = layer.querySelector('video') || layer.querySelector('audio');
                     if (mediaEl) {
-                        // Opus sync slots always muted natively — audio comes from Web Audio
-                        const shouldMute = _opusSyncSlots[slot] || (slot !== source) || audioMuteStates[slot];
-                        mediaEl.muted = shouldMute;
+                        const shouldMute = (slot !== source) || audioMuteStates[slot];
+                        if (_opusSyncSlots[slot]) {
+                            // Opus sync: native audio suppressed via volume=0, not muted
+                            // (Chrome skips frame rendering on seek for muted videos)
+                            mediaEl.volume = 0;
+                            mediaEl.muted = false;
+                        } else {
+                            mediaEl.muted = shouldMute;
+                        }
                         updateAudioButton(slot, shouldMute);
                     }
 
@@ -5694,7 +5702,6 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                if (_opusSyncActive && _scrubAllVideos) _scrubAllVideos.forEach(v => { v.muted = false; });
 
                 if (e.shiftKey) {
                     _regionSelectStart = canvasXToTime(e, canvas);
@@ -5735,7 +5742,6 @@
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
                 // Unmute during scrub — Chrome won't render frames on paused+muted video.
                 // Re-muted on mouseup. Native audio won't play since video is paused.
-                if (_opusSyncActive && _scrubAllVideos) _scrubAllVideos.forEach(v => { v.muted = false; });
 
                 if (e.shiftKey) {
                     _regionSelectStart = progressBarXToTime(e);
@@ -5807,14 +5813,6 @@
                     // Reset so the RAF loop doesn't misinterpret the seek as a backward jump
                     _lastPrimaryAudioTime = 0;
 
-                    // Re-mute Opus sync videos after scrub
-                    if (_opusSyncActive) {
-                        document.querySelectorAll('.asset-layer video').forEach(v => {
-                            const slot = v.closest('.asset-layer')?.id.replace('layer', '');
-                            const s = slot === 'Original' ? 'original' : slot === 'EditA' ? 'editA' : 'editB';
-                            if (_opusSyncSlots[s]) v.muted = true;
-                        });
-                    }
                     stopScrubSnippet();
                     if (wasPlaying && !_scrubAtEnd) {
                         // Defer play by one frame so the browser finalizes the seek
