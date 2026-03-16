@@ -3026,8 +3026,10 @@
             const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
             let sampleRate = 48000, channels = 2;
             let codecPrivate = null;
+            let preSkip = 0;
             let audioTrackId = -1;
             let timescale = 1;
+            let mediaStartTime = -1; // from edit list, in timescale units
             const sampleTable = { sizes: [], offsets: [], durations: [] };
             const chunks = [];
 
@@ -3080,6 +3082,8 @@
                         parseStts(boxStart, boxEnd);
                     } else if (type === 'tkhd') {
                         parseTkhd(boxStart, boxEnd);
+                    } else if (type === 'elst') {
+                        parseElst(boxStart, boxEnd);
                     }
 
                     off = boxEnd;
@@ -3088,13 +3092,39 @@
 
             let _currentTrackIsAudio = false;
             let _stscEntries = [];
+            let _lastElstMediaTime = -1; // elst from current trak, resolved after hdlr
 
             function parseTkhd(start, end) {
                 if (end - start < 8) return;
+                _lastElstMediaTime = -1; // reset for each new trak
+                _currentTrackIsAudio = false;
                 const version = data[start];
                 audioTrackId = version === 1
                     ? view.getUint32(start + 20)
                     : view.getUint32(start + 12);
+            }
+
+            function parseElst(start, end) {
+                // Edit list — tells us where in the media timeline playback starts.
+                // We only care about the first non-empty edit (media_time >= 0).
+                // Stored temporarily; assigned to mediaStartTime when hdlr confirms audio.
+                if (end - start < 8) return;
+                const version = data[start];
+                const entryCount = view.getUint32(start + 4);
+                let off = start + 8;
+                for (let i = 0; i < entryCount; i++) {
+                    if (version === 1) {
+                        if (off + 20 > end) break;
+                        const mt = Number(view.getBigInt64(off + 8));
+                        if (mt >= 0) { _lastElstMediaTime = mt; return; }
+                        off += 20;
+                    } else {
+                        if (off + 12 > end) break;
+                        const mt = view.getInt32(off + 4);
+                        if (mt >= 0) { _lastElstMediaTime = mt; return; }
+                        off += 12;
+                    }
+                }
             }
 
             function parseMdhd(start, end) {
@@ -3112,6 +3142,9 @@
                 if (end - start < 12) return;
                 const handlerType = readStr(start + 8, 4);
                 _currentTrackIsAudio = (handlerType === 'soun');
+                if (_currentTrackIsAudio && _lastElstMediaTime >= 0) {
+                    mediaStartTime = _lastElstMediaTime;
+                }
             }
 
             function parseStsd(start, end) {
@@ -3152,6 +3185,9 @@
                             codecPrivate = data.slice(bOff + 8, bOff + bSize);
                             if (codecPrivate.length >= 2) {
                                 channels = codecPrivate[1]; // outputChannelCount — authoritative
+                            }
+                            if (codecPrivate.length >= 4) {
+                                preSkip = (codecPrivate[2] << 8) | codecPrivate[3]; // big-endian in dOps
                             }
                         }
                         bOff += bSize;
@@ -3263,15 +3299,23 @@
                 }
             }
 
+            // Edit list media_time supersedes preSkip (it includes encoder delay).
+            // Convert to samples at the audio sample rate.
+            const skipSamples = mediaStartTime >= 0
+                ? Math.round(mediaStartTime * sampleRate / timescale)
+                : preSkip;
+
             console.log('[mp4-parse] ' + chunks.length + ' audio samples, timescale=' + timescale +
-                ', rate=' + sampleRate + ', ch=' + channels);
+                ', rate=' + sampleRate + ', ch=' + channels +
+                ', elst_media_time=' + mediaStartTime + ', skipSamples=' + skipSamples);
 
             return {
                 chunks: chunks,
                 sampleRate: sampleRate,
                 channels: channels,
                 codec: 'opus',
-                description: codecPrivate
+                description: codecPrivate,
+                preSkip: skipSamples
             };
         }
 
@@ -3410,12 +3454,18 @@
             }
 
             if (chunks.length === 0) return null;
+            // OpusHead pre-skip is at bytes 10-11, little-endian
+            let preSkip = 0;
+            if (codecPrivate && codecPrivate.length >= 12) {
+                preSkip = codecPrivate[10] | (codecPrivate[11] << 8);
+            }
             return {
                 chunks: chunks,
                 sampleRate: sampleRate,
                 channels: channels,
                 codec: 'opus',
-                description: codecPrivate ? codecPrivate.buffer.slice(codecPrivate.byteOffset, codecPrivate.byteOffset + codecPrivate.byteLength) : null
+                description: codecPrivate ? codecPrivate.buffer.slice(codecPrivate.byteOffset, codecPrivate.byteOffset + codecPrivate.byteLength) : null,
+                preSkip: preSkip
             };
         }
 
@@ -3480,16 +3530,23 @@
 
                 decodedChunks.sort((a, b) => a.timestamp - b.timestamp);
                 const numChannels = decodedChunks[0].samples.length || 1;
-                const totalFrames = decodedChunks.reduce((sum, c) => sum + c.samples[0].length, 0);
-                const channelBuffers = [];
-                for (let c = 0; c < numChannels; c++) channelBuffers.push(new Float32Array(totalFrames));
+                const rawFrames = decodedChunks.reduce((sum, c) => sum + c.samples[0].length, 0);
+                const rawBuffers = [];
+                for (let c = 0; c < numChannels; c++) rawBuffers.push(new Float32Array(rawFrames));
                 let writeOffset = 0;
                 for (const chunk of decodedChunks) {
                     for (let c = 0; c < numChannels; c++) {
-                        channelBuffers[c].set(chunk.samples[c] || chunk.samples[0], writeOffset);
+                        rawBuffers[c].set(chunk.samples[c] || chunk.samples[0], writeOffset);
                     }
                     writeOffset += chunk.samples[0].length;
                 }
+
+                // Trim Opus pre-skip (encoder priming samples) from the start
+                const skip = extracted.preSkip || 0;
+                const channelBuffers = skip > 0
+                    ? rawBuffers.map(buf => buf.subarray(Math.min(skip, buf.length)))
+                    : rawBuffers;
+                const totalFrames = channelBuffers[0].length;
 
                 const duration = totalFrames / extracted.sampleRate;
                 const fakeBuffer = {
