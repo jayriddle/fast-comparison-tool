@@ -2096,9 +2096,12 @@
             if (_elProgressBar) {
                 _elProgressBar.classList.remove('loop-active');
                 _elProgressBar.style.left = '0';
-                const media = getAllPlayableMedia()[0];
-                if (media && media.duration) {
-                    _elProgressBar.style.width = (media.currentTime / media.duration * 100) + '%';
+                const _cls = currentAudioSource || assetOrder[currentAssetIndex];
+                const _cll = getLayer(_cls);
+                const _clm = _cll ? (_cll.querySelector('video') || _cll.querySelector('audio')) : getAllPlayableMedia()[0];
+                if (_clm && _clm.duration) {
+                    const _cld = _getEffectiveDuration(_clm);
+                    _elProgressBar.style.width = (_clm.currentTime / _cld * 100) + '%';
                 }
             }
             redrawAudioSlotCanvases();
@@ -2113,7 +2116,9 @@
                 return m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2);
             } else {
                 // Video: use frame-based timecode
-                const media = getAllPlayableMedia()[0];
+                const _fls = currentAudioSource || assetOrder[currentAssetIndex];
+                const _fll = getLayer(_fls);
+                const media = _fll ? _fll.querySelector('video') : getAllPlayableMedia()[0];
                 const fps = (media && videoFrameRates[media.src]) || 30;
                 const frame = Math.floor(t * fps + 0.01);
                 const totalSec = Math.floor(frame / fps);
@@ -2150,7 +2155,10 @@
                 container.appendChild(region);
             }
 
-            const duration = getAllPlayableMedia()[0]?.duration || 1;
+            const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+            const activeLayer = getLayer(activeSlot);
+            const activeMedia = activeLayer ? (activeLayer.querySelector('video') || activeLayer.querySelector('audio')) : getAllPlayableMedia()[0];
+            const duration = activeMedia ? _getEffectiveDuration(activeMedia) : 1;
             if (_loopInPoint !== null) {
                 inMarker.style.display = 'block';
                 inMarker.style.left = (_loopInPoint / duration * 100) + '%';
@@ -2438,6 +2446,7 @@
         let waveformData = {};         // { slot: Float32Array } — downsampled amplitude
         let spectrogramData = {};      // { slot: { data: Uint8Array[], sampleRate, duration } }
         let audioVizVisible = false;   // W key toggle
+        let _preVizZoomLevel = null;   // saved zoom when waveform panel forces fit
         let audioVizExpanded = false;  // 2x height mode
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
         let videoScopesVisible = false; // V key toggle
@@ -2647,7 +2656,8 @@
             clearAllMedia();
             _ihwaMode = !!(opts && opts.skipToast);
             _taskType = (opts && opts.taskType) || null;
-            showLoading('Reading files…');
+            const assetType = audioCount > 0 ? 'audio file' : mediaFiles.some(f => f.type.startsWith('video/')) ? 'video' : 'image';
+            showLoading('Loading ' + mediaFiles.length + ' ' + assetType + (mediaFiles.length > 1 ? 's' : '') + '…');
 
             // Tell checkAllLoaded() how many files to wait for before activating the view.
             // Without this, it fires at loadedCount=2 during a 3-file load and calls
@@ -2675,33 +2685,19 @@
                 loadFile('original', sortedFiles[0]);
                 loadFile('editA', sortedFiles[1]);
                 loadFile('editB', sortedFiles[2]);
-                if (!opts?.skipToast) {
-                    if (hasTimestampCollision) {
-                        showLoadToast('Timestamps too close to sort reliably — check slot order', true, 6000);
-                    } else {
-                        const n = f => f.name.length > 22 ? f.name.slice(0, 20) + '…' : f.name;
-                        showLoadToast(`Original: ${n(sortedFiles[0])}  ·  A: ${n(sortedFiles[1])}  ·  B: ${n(sortedFiles[2])}`);
-                    }
+                if (!opts?.skipToast && hasTimestampCollision) {
+                    showLoadToast('Timestamps too close to sort reliably — check slot order', true, 6000);
                 }
             } else if (sortedFiles.length === 2) {
                 // 2 files: oldest -> editA, newest -> editB (no original)
                 loadFile('editA', sortedFiles[0]);
                 loadFile('editB', sortedFiles[1]);
-                if (!opts?.skipToast) {
-                    if (hasTimestampCollision) {
-                        showLoadToast('Timestamps too close to sort reliably — check slot order', true, 6000);
-                    } else {
-                        const n = f => f.name.length > 28 ? f.name.slice(0, 26) + '…' : f.name;
-                        showLoadToast(`A: ${n(sortedFiles[0])}  ·  B: ${n(sortedFiles[1])}`);
-                    }
+                if (!opts?.skipToast && hasTimestampCollision) {
+                    showLoadToast('Timestamps too close to sort reliably — check slot order', true, 6000);
                 }
             } else {
                 // 1 file: single asset review
                 loadFile('editA', sortedFiles[0]);
-                if (!opts?.skipToast) {
-                    const n = f => f.name.length > 40 ? f.name.slice(0, 38) + '…' : f.name;
-                    showLoadToast(n(sortedFiles[0]));
-                }
             }
         }
 
@@ -2833,8 +2829,10 @@
             }
             // Dim regions outside loop markers
             if (_loopInPoint !== null && _loopOutPoint !== null) {
-                const media = getAllPlayableMedia()[0];
-                const dur = media?.duration || 1;
+                const _as = currentAudioSource || assetOrder[currentAssetIndex];
+                const _al = getLayer(_as);
+                const media = _al ? (_al.querySelector('video') || _al.querySelector('audio')) : getAllPlayableMedia()[0];
+                const dur = media ? _getEffectiveDuration(media) : 1;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 const inX = (_loopInPoint / dur) * w;
                 const outX = (_loopOutPoint / dur) * w;
@@ -2914,8 +2912,10 @@
             }
             // Dim regions outside loop markers
             if (_loopInPoint !== null && _loopOutPoint !== null) {
-                const media = getAllPlayableMedia()[0];
-                const dur = media?.duration || 1;
+                const _as = currentAudioSource || assetOrder[currentAssetIndex];
+                const _al = getLayer(_as);
+                const media = _al ? (_al.querySelector('video') || _al.querySelector('audio')) : getAllPlayableMedia()[0];
+                const dur = media ? _getEffectiveDuration(media) : 1;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 const inX = (_loopInPoint / dur) * canvas.width;
                 const outX = (_loopOutPoint / dur) * canvas.width;
@@ -3876,6 +3876,17 @@
                 requestAnimationFrame(() => updateAudioVisForSlot(slot));
                 // Redraw after CSS transition completes so canvases fill final size
                 setTimeout(() => updateAudioVisForSlot(slot), 350);
+            }
+            // If zoomed beyond fit, clamp to fit so the panel doesn't overlap the video.
+            // Restore previous zoom when panel closes.
+            if (!isGridMode) {
+                if (audioVizVisible && zoomLevel > fitZoom) {
+                    _preVizZoomLevel = zoomLevel;
+                    zoomLevel = fitZoom;
+                } else if (!audioVizVisible && _preVizZoomLevel) {
+                    zoomLevel = _preVizZoomLevel;
+                    _preVizZoomLevel = null;
+                }
             }
             // Continuously re-layout during the CSS transition so media resizes smoothly
             animateRelayout(350);
@@ -5220,7 +5231,7 @@
                 const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
                 const activeLayer = getLayer(activeSlot);
                 const activeVideo = activeLayer ? activeLayer.querySelector('video') : null;
-                if (video === activeVideo || (!isGridMode && video === primaryVideoRef)) {
+                if (video === activeVideo) {
                     updateVideoProgress(video);
                 }
                 // Restart Opus sync audio on seek/loop to keep it aligned
