@@ -2726,10 +2726,10 @@
             _scrubLastTime = now;
 
             const ctx = getAudioContext();
-            const slot = assetOrder[currentAssetIndex];
+            const slot = currentAudioSource || assetOrder[currentAssetIndex];
             const vizData = _audioSlotVizData[slot];
-            if (!vizData || !vizData.audioBuffer) return;
-            const buf = vizData.audioBuffer;
+            const buf = (vizData && vizData.audioBuffer) || _videoAudioBuffers[slot];
+            if (!buf) return;
             const offset = Math.max(0, Math.min(time, buf.duration - _SCRUB_SNIPPET_LEN));
 
             // Fade out previous snippet smoothly
@@ -2950,10 +2950,30 @@
                 ? await source.arrayBuffer()
                 : source;
 
-            // Try decodeAudioData first — works for all codecs in Chrome, and for
-            // non-Opus codecs in Safari. Race against a 1s timeout to catch Safari's
-            // multi-second hang on Opus. Chrome succeeds quickly; Safari times out
-            // and falls through to the WebCodecs demux+decode path.
+            // Detect Opus from file bytes — needed to activate Chrome sync correction.
+            // Scan first and last 64KB for 'Opus' (MP4) or 'A_OPUS' (WebM).
+            const bytes = new Uint8Array(arrayBuffer);
+            let isOpus = false;
+            const scanRegions = [
+                [0, Math.min(bytes.length, 65536)],
+                [Math.max(0, bytes.length - 65536), bytes.length]
+            ];
+            for (const [s, e] of scanRegions) {
+                for (let i = s; i < e - 3; i++) {
+                    if (bytes[i] === 0x4F && bytes[i+1] === 0x70 && bytes[i+2] === 0x75 && bytes[i+3] === 0x73) { isOpus = true; break; }
+                }
+                if (isOpus) break;
+            }
+            if (_isChrome && isOpus) _opusSyncPending[slot] = true;
+
+            // For Opus on Chrome, always use WebCodecs — decodeAudioData succeeds but
+            // produces wrong timing. For Safari, decodeAudioData hangs on Opus so the
+            // timeout catches it. For non-Opus, decodeAudioData works correctly.
+            if (_isChrome && isOpus && typeof AudioDecoder !== 'undefined') {
+                _decodeAudioWebCodecs(slot, arrayBuffer);
+                return;
+            }
+
             try {
                 const ctx = getAudioContext();
                 const decodePromise = ctx.decodeAudioData(arrayBuffer.slice(0));
@@ -2967,6 +2987,7 @@
             } catch (e) {
                 if (typeof AudioDecoder !== 'undefined') {
                     console.warn('Audio decode failed/timeout for', slot, '— trying WebCodecs fallback');
+                    _opusSyncPending[slot] = true;
                     _decodeAudioWebCodecs(slot, arrayBuffer);
                 } else {
                     console.warn('Audio decode failed for', slot, e);
@@ -2974,10 +2995,142 @@
             }
         }
 
+        let _videoAudioBuffers = {}; // { slot: AudioBuffer } — for video scrub audio
+
+        // ── Chrome Opus A/V sync correction ──
+        // Chrome misapplies Opus pre-skip / MP4 edit list, causing audio to lag
+        // video. For affected slots, we mute the <video> native audio and play
+        // the decoded AudioBuffer via Web Audio API with correct timing.
+        const _isChrome = /Chrome\//.test(navigator.userAgent) && !/Edge|Edg/.test(navigator.userAgent);
+        let _opusSyncPending = {};     // { slot: true } — slots that went through WebCodecs (Opus)
+        let _opusSyncSlots = {};       // { slot: true } — slots needing Web Audio replacement
+        let _opusSyncDuration = {};    // { slot: number } — corrected duration from decoded buffer
+        let _opusSyncSources = {};     // { slot: AudioBufferSourceNode }
+        let _opusSyncGains = {};       // { slot: GainNode }
+        let _opusSyncStartCtx = {};    // { slot: number } — ctx.currentTime at source.start()
+        let _opusSyncStartVideo = {};  // { slot: number } — video.currentTime used as offset
+        let _opusSyncActive = false;
+
+        const _OPUS_FADE = 0.015; // 15ms fade to avoid clicks on start/stop
+
+        function _startOpusSyncAudio(slot, fromTime) {
+            _stopOpusSyncAudio(slot);
+            const buf = _videoAudioBuffers[slot];
+            if (!buf) return;
+            const ctx = getAudioContext();
+            if (ctx.state === 'suspended') ctx.resume();
+            const source = ctx.createBufferSource();
+            const gain = ctx.createGain();
+            const isCurrent = slot === (currentAudioSource || assetOrder[currentAssetIndex]);
+            const vol = isCurrent && !audioMuteStates[slot]
+                ? (_prefs.load('volume', 100) / 100) : 0;
+            // Fade in to avoid click
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + _OPUS_FADE);
+            source.buffer = buf;
+            source.connect(gain);
+            gain.connect(ctx.destination);
+            const offset = Math.max(0, Math.min(fromTime, buf.duration - 0.001));
+            source.start(0, offset);
+            _opusSyncSources[slot] = source;
+            _opusSyncGains[slot] = gain;
+            _opusSyncStartCtx[slot] = ctx.currentTime;
+            _opusSyncStartVideo[slot] = offset;
+            source.onended = () => {
+                if (_opusSyncSources[slot] === source) {
+                    _opusSyncSources[slot] = null;
+                    _opusSyncGains[slot] = null;
+                }
+            };
+        }
+
+        function _stopOpusSyncAudio(slot) {
+            const source = _opusSyncSources[slot];
+            const gain = _opusSyncGains[slot];
+            if (source) {
+                if (gain) {
+                    // Fade out then stop to avoid click
+                    const ctx = getAudioContext();
+                    gain.gain.cancelScheduledValues(ctx.currentTime);
+                    gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + _OPUS_FADE);
+                    const s = source;
+                    setTimeout(() => { try { s.stop(); } catch (_) {} }, _OPUS_FADE * 1000 + 5);
+                } else {
+                    try { source.stop(); } catch (_) {}
+                }
+                _opusSyncSources[slot] = null;
+                _opusSyncGains[slot] = null;
+            }
+        }
+
+        function _stopAllOpusSyncAudio() {
+            for (const slot of assetOrder) _stopOpusSyncAudio(slot);
+        }
+
+        function _syncOpusAudioToVideo() {
+            if (!_opusSyncActive) return;
+            for (const slot of assetOrder) {
+                if (!_opusSyncSlots[slot] || !_opusSyncSources[slot]) continue;
+                const layer = getLayer(slot);
+                const video = layer && layer.querySelector('video');
+                if (!video || video.paused) continue;
+                const ctx = getAudioContext();
+                const elapsed = ctx.currentTime - _opusSyncStartCtx[slot];
+                const expectedVideoTime = _opusSyncStartVideo[slot] + elapsed;
+                // Only restart if drift is significant — 150ms avoids frequent restarts
+                if (Math.abs(video.currentTime - expectedVideoTime) > 0.15) {
+                    _startOpusSyncAudio(slot, video.currentTime);
+                }
+            }
+        }
+
+        function _updateOpusSyncGains() {
+            if (!_opusSyncActive) return;
+            const vol = _prefs.load('volume', 100) / 100;
+            for (const slot of assetOrder) {
+                const g = _opusSyncGains[slot];
+                if (!g) continue;
+                const isCurrent = slot === (currentAudioSource || assetOrder[currentAssetIndex]);
+                g.gain.value = (isCurrent && !audioMuteStates[slot]) ? vol : 0;
+            }
+        }
+
         function _finalizeAudioViz(slot, audioBuffer) {
             waveformData[slot] = computeWaveformData(audioBuffer, 600);
             spectrogramData[slot] = computeSpectrogramData(audioBuffer);
             delete audioFileBuffers[slot];
+
+            // Store a real AudioBuffer for scrub audio playback.
+            // decodeAudioData returns a real AudioBuffer; the WebCodecs path
+            // returns a fake object — convert it via createBuffer + copyToChannel.
+            try {
+                if (audioBuffer instanceof AudioBuffer) {
+                    _videoAudioBuffers[slot] = audioBuffer;
+                } else {
+                    const ctx = getAudioContext();
+                    const nCh = audioBuffer.numberOfChannels || 1;
+                    const real = ctx.createBuffer(nCh, audioBuffer.length, audioBuffer.sampleRate);
+                    for (let c = 0; c < nCh; c++) real.copyToChannel(audioBuffer.getChannelData(c), c);
+                    _videoAudioBuffers[slot] = real;
+                }
+            } catch (_) {} // non-critical — scrub audio just won't work
+
+            // Activate Chrome Opus sync only for slots that used WebCodecs
+            // (meaning decodeAudioData failed/timed out — i.e. Opus in Safari,
+            // or the fake buffer path). For Chrome, _opusSyncPending marks slots
+            // that should use Web Audio replacement.
+            if (_isChrome && _opusSyncPending[slot] && _videoAudioBuffers[slot] && hasVideos) {
+                _opusSyncSlots[slot] = true;
+                _opusSyncActive = true;
+                _opusSyncDuration[slot] = _videoAudioBuffers[slot].duration;
+                const layer = getLayer(slot);
+                const video = layer && layer.querySelector('video');
+                if (video) video.muted = true;
+                // If video is already playing, start sync audio immediately
+                if (video && !video.paused) _startOpusSyncAudio(slot, video.currentTime);
+            }
+
             // BPM detection for video audio tracks
             if (audioBuffer.duration >= 3) {
                 const bpm = detectBPM(audioBuffer);
@@ -3059,6 +3212,8 @@
             let audioTrackId = -1;
             let timescale = 1;
             let mediaStartTime = -1; // from edit list, in timescale units
+            let segmentDuration = -1; // from edit list, in movie timescale units
+            let movieTimescale = 1000; // from mvhd, used to interpret segmentDuration
             const sampleTable = { sizes: [], offsets: [], durations: [] };
             const chunks = [];
 
@@ -3093,6 +3248,8 @@
                         type === 'minf' || type === 'stbl' || type === 'udta' ||
                         type === 'edts') {
                         walkBoxes(boxStart, boxEnd, fullPath);
+                    } else if (type === 'mvhd') {
+                        parseMvhd(boxStart, boxEnd);
                     } else if (type === 'mdhd') {
                         parseMdhd(boxStart, boxEnd);
                     } else if (type === 'hdlr') {
@@ -3122,10 +3279,12 @@
             let _currentTrackIsAudio = false;
             let _stscEntries = [];
             let _lastElstMediaTime = -1; // elst from current trak, resolved after hdlr
+            let _lastElstSegDuration = -1;
 
             function parseTkhd(start, end) {
                 if (end - start < 8) return;
                 _lastElstMediaTime = -1; // reset for each new trak
+                _lastElstSegDuration = -1;
                 _currentTrackIsAudio = false;
                 const version = data[start];
                 audioTrackId = version === 1
@@ -3134,9 +3293,9 @@
             }
 
             function parseElst(start, end) {
-                // Edit list — tells us where in the media timeline playback starts.
-                // We only care about the first non-empty edit (media_time >= 0).
-                // Stored temporarily; assigned to mediaStartTime when hdlr confirms audio.
+                // Edit list — tells us where in the media timeline playback starts
+                // and how long the segment lasts.
+                // Stored temporarily; assigned when hdlr confirms audio.
                 if (end - start < 8) return;
                 const version = data[start];
                 const entryCount = view.getUint32(start + 4);
@@ -3144,15 +3303,28 @@
                 for (let i = 0; i < entryCount; i++) {
                     if (version === 1) {
                         if (off + 20 > end) break;
+                        const sd = Number(view.getBigUint64(off));
                         const mt = Number(view.getBigInt64(off + 8));
-                        if (mt >= 0) { _lastElstMediaTime = mt; return; }
+                        if (mt >= 0) { _lastElstMediaTime = mt; _lastElstSegDuration = sd; return; }
                         off += 20;
                     } else {
                         if (off + 12 > end) break;
+                        const sd = view.getUint32(off);
                         const mt = view.getInt32(off + 4);
-                        if (mt >= 0) { _lastElstMediaTime = mt; return; }
+                        if (mt >= 0) { _lastElstMediaTime = mt; _lastElstSegDuration = sd; return; }
                         off += 12;
                     }
+                }
+            }
+
+            function parseMvhd(start, end) {
+                if (end - start < 4) return;
+                const version = data[start];
+                // version 0: timescale at offset 12; version 1: at offset 20
+                if (version === 1 && end - start >= 24) {
+                    movieTimescale = view.getUint32(start + 20);
+                } else if (end - start >= 16) {
+                    movieTimescale = view.getUint32(start + 12);
                 }
             }
 
@@ -3173,6 +3345,7 @@
                 _currentTrackIsAudio = (handlerType === 'soun');
                 if (_currentTrackIsAudio && _lastElstMediaTime >= 0) {
                     mediaStartTime = _lastElstMediaTime;
+                    segmentDuration = _lastElstSegDuration;
                 }
             }
 
@@ -3338,9 +3511,17 @@
                 ? Math.round(mediaStartTime * sampleRate / timescale)
                 : preSkip;
 
+            // segmentDuration (in movie timescale) tells us how long to play.
+            // Convert to samples to trim trailing audio past the video end.
+            const maxSamples = (segmentDuration > 0 && movieTimescale > 0)
+                ? Math.round(segmentDuration / movieTimescale * sampleRate)
+                : 0; // 0 = no limit
+
             console.log('[mp4-parse] ' + chunks.length + ' audio samples, timescale=' + timescale +
                 ', rate=' + sampleRate + ', ch=' + channels +
-                ', elst_media_time=' + mediaStartTime + ', skipSamples=' + skipSamples);
+                ', elst_media_time=' + mediaStartTime + ', skipSamples=' + skipSamples +
+                ', segDur=' + segmentDuration + ', movieTs=' + movieTimescale +
+                ', maxSamples=' + maxSamples);
 
             return {
                 chunks: chunks,
@@ -3348,7 +3529,8 @@
                 channels: channels,
                 codec: audioCodec,
                 description: codecPrivate,
-                preSkip: skipSamples
+                preSkip: skipSamples,
+                maxSamples: maxSamples
             };
         }
 
@@ -3581,9 +3763,14 @@
 
                 // Trim Opus pre-skip (encoder priming samples) from the start
                 const skip = extracted.preSkip || 0;
-                const channelBuffers = skip > 0
+                let channelBuffers = skip > 0
                     ? rawBuffers.map(buf => buf.subarray(Math.min(skip, buf.length)))
                     : rawBuffers;
+                // Trim trailing audio to match edit list segment duration
+                const maxLen = extracted.maxSamples || 0;
+                if (maxLen > 0 && channelBuffers[0].length > maxLen) {
+                    channelBuffers = channelBuffers.map(buf => buf.subarray(0, maxLen));
+                }
                 const totalFrames = channelBuffers[0].length;
 
                 const duration = totalFrames / extracted.sampleRate;
@@ -3614,7 +3801,11 @@
                         wo += chunk.samples[0].length;
                     }
                     const skip = extracted.preSkip || 0;
-                    const channelBuffers = skip > 0 ? rawBuffers.map(buf => buf.subarray(Math.min(skip, buf.length))) : rawBuffers;
+                    let channelBuffers = skip > 0 ? rawBuffers.map(buf => buf.subarray(Math.min(skip, buf.length))) : rawBuffers;
+                    const maxLen = extracted.maxSamples || 0;
+                    if (maxLen > 0 && channelBuffers[0].length > maxLen) {
+                        channelBuffers = channelBuffers.map(buf => buf.subarray(0, maxLen));
+                    }
                     const totalFrames = channelBuffers[0].length;
                     const duration = totalFrames / extracted.sampleRate;
                     console.log('[webcodecs] ' + slot + ': partial decode ' + duration.toFixed(1) + 's (' + decodedChunks.length + '/' + extracted.chunks.length + ' chunks)');
@@ -3958,6 +4149,15 @@
         function playAllMedia() {
             _bulkSyncActive = true;
             getAllPlayableMedia().forEach(m => { m.loop = true; m.play().catch(() => {}); });
+            // Start Web Audio sync for Chrome Opus slots
+            if (_opusSyncActive) {
+                for (const slot of assetOrder) {
+                    if (!_opusSyncSlots[slot]) continue;
+                    const layer = getLayer(slot);
+                    const video = layer && layer.querySelector('video');
+                    if (video) _startOpusSyncAudio(slot, video.currentTime);
+                }
+            }
             startProgressUpdateLoop();
             _updatePlayPauseBtn(true);
             setTimeout(() => { _bulkSyncActive = false; }, 50);
@@ -3965,6 +4165,7 @@
         function pauseAllMedia() {
             _bulkSyncActive = true;
             getAllPlayableMedia().forEach(m => m.pause());
+            _stopAllOpusSyncAudio();
             _updatePlayPauseBtn(false);
             _bulkSyncActive = false;
         }
@@ -4880,6 +5081,12 @@
                         const t = primary.currentTime;
                         if (t >= _loopOutPoint || t < _loopInPoint - 0.05) {
                             getAllPlayableMedia().forEach(m => { m.currentTime = _loopInPoint; });
+                            // Restart sync audio at loop point
+                            if (_opusSyncActive) {
+                                for (const s of assetOrder) {
+                                    if (_opusSyncSlots[s]) _startOpusSyncAudio(s, _loopInPoint);
+                                }
+                            }
                         } else if (hasAudios) {
                             // Keep non-primary audio tracks in sync within the loop
                             const all = getAllPlayableMedia();
@@ -4890,9 +5097,22 @@
                             }
                         }
                     }
+                    // Force loop at effective duration for Opus sync slots
+                    // (native video.duration is longer than trimmed audio)
+                    if (_opusSyncActive && _loopInPoint === null) {
+                        const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                        const effDur = _opusSyncDuration[slot];
+                        if (effDur && primary.currentTime >= effDur - 0.05) {
+                            getAllPlayableMedia().forEach(m => { m.currentTime = 0; });
+                            for (const s of assetOrder) {
+                                if (_opusSyncSlots[s]) _startOpusSyncAudio(s, 0);
+                            }
+                        }
+                    }
                     if (!hasAudios && magnifierEnabled && _lastMouseEvent) updateMagnifier(_lastMouseEvent);
                     if (!hasAudios && videoScopesVisible) updateVideoScopes();
                     if (!hasAudios && _diffMode) drawDiffComposite();
+                    _syncOpusAudioToVideo();
                     globalAnimationId = requestAnimationFrame(updateLoop);
                 } else {
                     // Final update so progress bar reaches 100% when video ends
@@ -5001,6 +5221,10 @@
                 if (video === activeVideo || (!isGridMode && video === primaryVideoRef)) {
                     updateVideoProgress(video);
                 }
+                // Restart Opus sync audio on seek/loop to keep it aligned
+                if (_opusSyncSlots[slot] && !video.paused) {
+                    _startOpusSyncAudio(slot, video.currentTime);
+                }
                 // Refresh scopes after seek completes (frame is decoded)
                 if (videoScopesVisible) updateVideoScopes();
                 if (_diffMode) requestAnimationFrame(drawDiffComposite);
@@ -5023,6 +5247,7 @@
             applyAudioMuteImmediate(source);
             
             updateAudioButton(source, audioMuteStates[source]);
+            _updateOpusSyncGains();
 
             // If this was the selected audio source, switch to an unmuted source
             if (source === currentAudioSource && audioMuteStates[source]) {
@@ -5058,7 +5283,8 @@
                 if (layer) {
                     const mediaEl = layer.querySelector('video') || layer.querySelector('audio');
                     if (mediaEl) {
-                        const shouldMute = (slot !== source) || audioMuteStates[slot];
+                        // Opus sync slots always muted natively — audio comes from Web Audio
+                        const shouldMute = _opusSyncSlots[slot] || (slot !== source) || audioMuteStates[slot];
                         mediaEl.muted = shouldMute;
                         updateAudioButton(slot, shouldMute);
                     }
@@ -5067,6 +5293,13 @@
                     layer.classList.toggle('active-audio', slot === source && !audioMuteStates[slot]);
                 }
             });
+            _updateOpusSyncGains();
+            // If switching to a sync slot while playing, ensure its source is running
+            if (_opusSyncSlots[source] && !_opusSyncSources[source]) {
+                const layer = getLayer(source);
+                const video = layer && layer.querySelector('video');
+                if (video && !video.paused) _startOpusSyncAudio(source, video.currentTime);
+            }
         }
 
         function setVolume(value) {
@@ -5075,13 +5308,14 @@
                 v.volume = volume;
             });
             _prefs.save('volume', Number(value));
+            _updateOpusSyncGains();
         }
 
         // Single source of truth for timecode + duration display. Called directly during
         // scrubbing (with the seek target as currentTime) so the display tracks the cursor
         // instantly without waiting for the seek to land; also called by updateVideoProgress.
-        function updateVideoProgressFromTime(video, currentTime) {
-            const duration = video.duration;
+        function updateVideoProgressFromTime(video, currentTime, overrideDuration) {
+            const duration = overrideDuration || _getEffectiveDuration(video);
             if (isNaN(duration) || duration === 0) return;
             getProgressEls();
             const fps = videoFrameRates[video.src] || 30;
@@ -5122,8 +5356,18 @@
             }
         }
 
+        function _getEffectiveDuration(video) {
+            // For Opus sync slots, use the trimmed audio buffer duration
+            // instead of video.duration (which includes trailing audio)
+            if (_opusSyncActive) {
+                const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                if (_opusSyncDuration[slot]) return _opusSyncDuration[slot];
+            }
+            return video.duration;
+        }
+
         function updateVideoProgress(video) {
-            const duration = video.duration;
+            const duration = _getEffectiveDuration(video);
             getProgressEls(); // ensure cache is warm (no-op after first call)
 
             // Guard against NaN when video metadata isn't ready yet
@@ -5135,7 +5379,7 @@
             }
 
             updateProgressBarForLoop(video.currentTime, duration);
-            updateVideoProgressFromTime(video, video.currentTime);
+            updateVideoProgressFromTime(video, video.currentTime, duration);
             updateSpectrogramCursor(video);
             // Update ARIA for screen readers
             const pc = document.getElementById('videoProgressContainer');
@@ -5320,19 +5564,17 @@
 
                 // Update bar immediately so it tracks the cursor
                 getProgressEls();
-                if (_elProgressBar) {
-                    const seekDurEst = hasAudios ? (_audioMaxDuration || 1) : (_scrubVideo?.duration || 1);
-                    updateProgressBarForLoop(pct * seekDurEst, seekDurEst);
-                }
-
                 const video = _scrubVideo;
                 if (!video || isNaN(video.duration)) return;
 
-                const seekDur = hasAudios ? (_audioMaxDuration || video.duration) : video.duration;
+                const seekDur = hasAudios ? (_audioMaxDuration || video.duration) : _getEffectiveDuration(video);
+                if (_elProgressBar) {
+                    updateProgressBarForLoop(pct * seekDur, seekDur);
+                }
                 // Clamp to half a frame before end so loop can't wrap to 0
                 const fps = videoFrameRates[video.src] || 30;
                 const endGuard = 0.5 / fps; // half a frame
-                const t = Math.min(pct * seekDur, video.duration - endGuard);
+                const t = Math.min(pct * seekDur, seekDur - endGuard);
                 video.currentTime = t;
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
@@ -5345,11 +5587,13 @@
                 }
 
                 // Update timecode and waveform cursor from seek target
-                if (hasAudios) updateAudioProgress(video);
-                else {
+                if (hasAudios) {
+                    updateAudioProgress(video);
+                } else {
                     updateVideoProgressFromTime(video, t);
                     updateSpectrogramCursor(video);
                 }
+                playScrubSnippet(t);
             }
 
             function progressBarXToTime(e) {
@@ -5358,8 +5602,8 @@
                 const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                 const media = _scrubVideo;
                 if (!media || isNaN(media.duration)) return null;
-                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : media.duration;
-                return Math.min(pct * seekDur, media.duration);
+                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : _getEffectiveDuration(media);
+                return Math.min(pct * seekDur, seekDur);
             }
 
             // Scrub from audio/video viz canvas clicks — translate canvas X to progress pct
@@ -5375,11 +5619,11 @@
                 const media = _scrubVideo;
                 if (!media || isNaN(media.duration)) return;
 
-                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : media.duration;
+                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : _getEffectiveDuration(media);
                 // Clamp to half a frame before end so loop can't wrap to 0
                 const fps = videoFrameRates[media.src] || 30;
                 const endGuard = 0.5 / fps;
-                const t = Math.min(pct * seekDur, media.duration - endGuard);
+                const t = Math.min(pct * seekDur, seekDur - endGuard);
                 media.currentTime = t;
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
@@ -5393,10 +5637,11 @@
                 if (_elProgressBar) updateProgressBarForLoop(t, seekDur);
                 if (hasAudios) {
                     updateAudioProgress(media);
-                    playScrubSnippet(t);
                 } else {
                     updateVideoProgressFromTime(media, t);
+                    updateSpectrogramCursor(media);
                 }
+                playScrubSnippet(t);
             }
 
             let _scrubCanvas = null; // canvas being scrubbed (null = progress bar scrub)
@@ -5409,10 +5654,10 @@
                 const drawableW = rect.width - labelMarginCss;
                 const x = e.clientX - rect.left - labelMarginCss;
                 const pct = Math.max(0, Math.min(1, x / drawableW));
-                const media = getAllPlayableMedia()[0];
+                const media = _scrubVideo || getAllPlayableMedia()[0];
                 if (!media || isNaN(media.duration)) return null;
-                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : media.duration;
-                return Math.min(pct * seekDur, media.duration);
+                const seekDur = hasAudios ? (_audioMaxDuration || media.duration) : _getEffectiveDuration(media);
+                return Math.min(pct * seekDur, seekDur);
             }
 
             document.addEventListener('mousedown', function(e) {
@@ -5437,7 +5682,9 @@
                 }
 
                 const tag = hasAudios ? 'audio' : 'video';
-                _scrubVideo = getAllPlayableMedia()[0] || null;
+                const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                const scrubLayer = getLayer(activeSlot);
+                _scrubVideo = scrubLayer ? scrubLayer.querySelector(tag) : (getAllPlayableMedia()[0] || null);
                 _scrubAllVideos = Array.from(document.querySelectorAll('.asset-layer ' + tag));
 
                 if (_scrubVideo) {
@@ -5447,6 +5694,7 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
+                if (_opusSyncActive && _scrubAllVideos) _scrubAllVideos.forEach(v => { v.muted = false; });
 
                 if (e.shiftKey) {
                     _regionSelectStart = canvasXToTime(e, canvas);
@@ -5485,6 +5733,9 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
+                // Unmute during scrub — Chrome won't render frames on paused+muted video.
+                // Re-muted on mouseup. Native audio won't play since video is paused.
+                if (_opusSyncActive && _scrubAllVideos) _scrubAllVideos.forEach(v => { v.muted = false; });
 
                 if (e.shiftKey) {
                     _regionSelectStart = progressBarXToTime(e);
@@ -5556,6 +5807,14 @@
                     // Reset so the RAF loop doesn't misinterpret the seek as a backward jump
                     _lastPrimaryAudioTime = 0;
 
+                    // Re-mute Opus sync videos after scrub
+                    if (_opusSyncActive) {
+                        document.querySelectorAll('.asset-layer video').forEach(v => {
+                            const slot = v.closest('.asset-layer')?.id.replace('layer', '');
+                            const s = slot === 'Original' ? 'original' : slot === 'EditA' ? 'editA' : 'editB';
+                            if (_opusSyncSlots[s]) v.muted = true;
+                        });
+                    }
                     stopScrubSnippet();
                     if (wasPlaying && !_scrubAtEnd) {
                         // Defer play by one frame so the browser finalizes the seek
@@ -5906,6 +6165,16 @@
             audioNodes = {};
             waveformData = {};
             spectrogramData = {};
+            _stopAllOpusSyncAudio();
+            _opusSyncPending = {};
+            _opusSyncSlots = {};
+            _opusSyncDuration = {};
+            _opusSyncSources = {};
+            _opusSyncGains = {};
+            _opusSyncStartCtx = {};
+            _opusSyncStartVideo = {};
+            _opusSyncActive = false;
+            _videoAudioBuffers = {};
             audioFileBuffers = {};
             _audioSlotVizData = {};
             _audioMaxDuration = 0;
@@ -7379,7 +7648,12 @@
 
                 // Audio viz decode is lazy — triggered when the user opens the
                 // waveform panel (W key) via _ensureAudioVizDecoded().
-                // This avoids blocking video playback on load.
+                // Exception: Chrome auto-decodes Opus audio on load so the
+                // Web Audio sync correction is ready from first play.
+                if (_isChrome && hasVideos) {
+                    const fadeDelay = loadedLayers.length * 60 + 400;
+                    setTimeout(() => _ensureAudioVizDecoded(), fadeDelay);
+                }
 
                 // Audio mode: redraw all slot canvases after layout is committed.
                 // Double-rAF ensures positionLabelsToMedia has fully sized the wrappers.
