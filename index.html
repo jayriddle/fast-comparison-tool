@@ -2952,26 +2952,560 @@
                     : source;
                 const ctx = getAudioContext();
                 const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-                waveformData[slot] = computeWaveformData(audioBuffer, 600);
-                spectrogramData[slot] = computeSpectrogramData(audioBuffer);
-                delete audioFileBuffers[slot];
-                // BPM detection for video audio tracks
-                if (audioBuffer.duration >= 3) {
-                    const bpm = detectBPM(audioBuffer);
-                    if (bpm) {
-                        const layer = getLayer(slot);
-                        const bpmEl = layer && layer.querySelector('.asset-bpm');
-                        if (bpmEl) bpmEl.textContent = bpm + ' BPM';
+                _finalizeAudioViz(slot, audioBuffer);
+            } catch (e) {
+                console.warn('Audio decode failed for', slot, '— trying WebCodecs fallback', e);
+                const arrayBuffer = source instanceof File
+                    ? await source.arrayBuffer()
+                    : source;
+                _decodeAudioWebCodecs(slot, arrayBuffer);
+            }
+        }
+
+        function _finalizeAudioViz(slot, audioBuffer) {
+            waveformData[slot] = computeWaveformData(audioBuffer, 600);
+            spectrogramData[slot] = computeSpectrogramData(audioBuffer);
+            delete audioFileBuffers[slot];
+            // BPM detection for video audio tracks
+            if (audioBuffer.duration >= 3) {
+                const bpm = detectBPM(audioBuffer);
+                if (bpm) {
+                    const layer = getLayer(slot);
+                    const bpmEl = layer && layer.querySelector('.asset-bpm');
+                    if (bpmEl) bpmEl.textContent = bpm + ' BPM';
+                }
+            }
+            // Draw if this is the currently active/visible slot
+            const activeSlot = assetOrder[currentAssetIndex];
+            if (slot === activeSlot || slot === currentAudioSource) {
+                updateAudioVisForSlot(slot);
+            }
+        }
+
+        // Fallback for browsers where decodeAudioData fails (e.g. Safari + Opus).
+        // Parses MP4 or WebM container to extract Opus audio packets, then
+        // decodes them via WebCodecs AudioDecoder to get PCM for waveform viz.
+        function _decodeAudioWebCodecs(slot, arrayBuffer) {
+            if (typeof AudioDecoder === 'undefined') {
+                console.warn('WebCodecs AudioDecoder not available for', slot);
+                return;
+            }
+
+            const bytes = new Uint8Array(arrayBuffer);
+
+            // Detect container format from first bytes
+            const isMP4 = bytes.length > 7 &&
+                bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70; // 'ftyp'
+            const isWebM = bytes.length > 3 &&
+                bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3; // EBML
+
+            let extracted = null;
+            if (isMP4) {
+                extracted = _demuxMP4Audio(bytes);
+            } else if (isWebM) {
+                extracted = _demuxWebMAudio(bytes);
+            } else {
+                console.warn('Unknown container format for', slot);
+                return;
+            }
+
+            if (!extracted || extracted.chunks.length === 0) {
+                console.warn('No audio packets extracted for', slot);
+                return;
+            }
+
+            console.log('[webcodecs] ' + slot + ': found ' + extracted.chunks.length + ' packets, ' +
+                'rate=' + extracted.sampleRate + ', ch=' + extracted.channels +
+                ', codec=' + extracted.codec + ', container=' + (isMP4 ? 'mp4' : 'webm'));
+
+            _decodeWithAudioDecoder(slot, extracted);
+        }
+
+        // --- MP4 demuxer ---
+        function _demuxMP4Audio(data) {
+            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            let sampleRate = 48000, channels = 2;
+            let codecPrivate = null;
+            let audioTrackId = -1;
+            let timescale = 1;
+            const sampleTable = { sizes: [], offsets: [], durations: [] };
+            const chunks = [];
+
+            function readStr(off, len) {
+                let s = '';
+                for (let i = 0; i < len; i++) s += String.fromCharCode(data[off + i]);
+                return s;
+            }
+
+            // Walk MP4 boxes. containerEnd bounds the current container.
+            function walkBoxes(start, end, path) {
+                let off = start;
+                while (off + 8 <= end) {
+                    let size = view.getUint32(off);
+                    const type = readStr(off + 4, 4);
+                    let headerLen = 8;
+                    if (size === 1 && off + 16 <= end) {
+                        // 64-bit extended size
+                        size = Number(view.getBigUint64(off + 8));
+                        headerLen = 16;
+                    } else if (size === 0) {
+                        size = end - off; // box extends to end
+                    }
+                    if (size < headerLen || off + size > end) break;
+
+                    const boxStart = off + headerLen;
+                    const boxEnd = off + size;
+                    const fullPath = path + '/' + type;
+
+                    // Container boxes — recurse
+                    if (type === 'moov' || type === 'trak' || type === 'mdia' ||
+                        type === 'minf' || type === 'stbl' || type === 'udta' ||
+                        type === 'edts') {
+                        walkBoxes(boxStart, boxEnd, fullPath);
+                    } else if (type === 'mdhd') {
+                        parseMdhd(boxStart, boxEnd);
+                    } else if (type === 'hdlr') {
+                        parseHdlr(boxStart, boxEnd);
+                    } else if (type === 'stsd') {
+                        parseStsd(boxStart, boxEnd);
+                    } else if (type === 'stsz') {
+                        parseStsz(boxStart, boxEnd);
+                    } else if (type === 'stco') {
+                        parseStco(boxStart, boxEnd);
+                    } else if (type === 'co64') {
+                        parseCo64(boxStart, boxEnd);
+                    } else if (type === 'stsc') {
+                        parseStsc(boxStart, boxEnd);
+                    } else if (type === 'stts') {
+                        parseStts(boxStart, boxEnd);
+                    } else if (type === 'tkhd') {
+                        parseTkhd(boxStart, boxEnd);
+                    }
+
+                    off = boxEnd;
+                }
+            }
+
+            let _currentTrackIsAudio = false;
+            let _stscEntries = [];
+
+            function parseTkhd(start, end) {
+                if (end - start < 8) return;
+                const version = data[start];
+                audioTrackId = version === 1
+                    ? view.getUint32(start + 20)
+                    : view.getUint32(start + 12);
+            }
+
+            function parseMdhd(start, end) {
+                if (end - start < 4) return;
+                const version = data[start];
+                if (version === 1 && end - start >= 28) {
+                    timescale = view.getUint32(start + 20);
+                } else if (end - start >= 16) {
+                    timescale = view.getUint32(start + 12);
+                }
+            }
+
+            function parseHdlr(start, end) {
+                // version(4) + predefined(4) + handler_type(4)
+                if (end - start < 12) return;
+                const handlerType = readStr(start + 8, 4);
+                _currentTrackIsAudio = (handlerType === 'soun');
+            }
+
+            function parseStsd(start, end) {
+                if (!_currentTrackIsAudio) return;
+                // version(1) + flags(3) + entry_count(4)
+                if (end - start < 8) return;
+                const entryStart = start + 8;
+                if (entryStart + 8 > end) return;
+                let entrySize = view.getUint32(entryStart);
+                const entryType = readStr(entryStart + 4, 4);
+
+                // AudioSampleEntry layout after 8-byte box header:
+                //   6 reserved + 2 data_ref_index = 8 bytes
+                //   8 reserved
+                //   2 channel_count (offset +16 from entry data start)
+                //   2 sample_size
+                //   2 compression_id + 2 packet_size
+                //   4 sample_rate (16.16 fixed point)
+                // Total: 28 bytes, sub-boxes start after
+                const entryDataStart = entryStart + 8; // past box header
+                const audioStart = entryDataStart + 28; // sub-boxes start here
+                if (entryDataStart + 28 <= end) {
+                    channels = view.getUint16(entryDataStart + 16);
+                    sampleRate = view.getUint16(entryDataStart + 24); // upper 16 bits of fixed-point
+                }
+
+                // Look for 'dOps' (Opus) or 'Opus' sub-boxes inside the sample entry
+                if (audioStart < entryStart + entrySize) {
+                    let bOff = audioStart;
+                    const bEnd = entryStart + entrySize;
+                    while (bOff + 8 <= bEnd) {
+                        const bSize = view.getUint32(bOff);
+                        const bType = readStr(bOff + 4, 4);
+                        if (bSize < 8 || bOff + bSize > bEnd) break;
+                        if (bType === 'dOps') {
+                            // dOps box: version(1) + outputChannelCount(1) + preSkip(2) +
+                            //           inputSampleRate(4) + outputGain(2) + mappingFamily(1) ...
+                            codecPrivate = data.slice(bOff + 8, bOff + bSize);
+                            if (codecPrivate.length >= 2) {
+                                channels = codecPrivate[1]; // outputChannelCount — authoritative
+                            }
+                        }
+                        bOff += bSize;
                     }
                 }
-                // Draw if this is the currently active/visible slot
-                const activeSlot = assetOrder[currentAssetIndex];
-                if (slot === activeSlot || slot === currentAudioSource) {
-                    updateAudioVisForSlot(slot);
-                }
-            } catch (e) {
-                console.warn('Audio decode failed for', slot, e);
             }
+
+            function parseStsz(start, end) {
+                if (!_currentTrackIsAudio || end - start < 12) return;
+                const defaultSize = view.getUint32(start + 4);
+                const count = view.getUint32(start + 8);
+                if (defaultSize > 0) {
+                    for (let i = 0; i < count; i++) sampleTable.sizes.push(defaultSize);
+                } else {
+                    for (let i = 0; i < count && start + 12 + i * 4 + 4 <= end; i++) {
+                        sampleTable.sizes.push(view.getUint32(start + 12 + i * 4));
+                    }
+                }
+            }
+
+            function parseStco(start, end) {
+                if (!_currentTrackIsAudio || end - start < 8) return;
+                const count = view.getUint32(start + 4);
+                for (let i = 0; i < count && start + 8 + i * 4 + 4 <= end; i++) {
+                    sampleTable.offsets.push(view.getUint32(start + 8 + i * 4));
+                }
+            }
+
+            function parseCo64(start, end) {
+                if (!_currentTrackIsAudio || end - start < 8) return;
+                const count = view.getUint32(start + 4);
+                for (let i = 0; i < count && start + 8 + i * 8 + 8 <= end; i++) {
+                    sampleTable.offsets.push(Number(view.getBigUint64(start + 8 + i * 8)));
+                }
+            }
+
+            function parseStsc(start, end) {
+                if (!_currentTrackIsAudio || end - start < 8) return;
+                const count = view.getUint32(start + 4);
+                _stscEntries = [];
+                for (let i = 0; i < count && start + 8 + i * 12 + 12 <= end; i++) {
+                    _stscEntries.push({
+                        firstChunk: view.getUint32(start + 8 + i * 12),
+                        samplesPerChunk: view.getUint32(start + 8 + i * 12 + 4),
+                        descIdx: view.getUint32(start + 8 + i * 12 + 8)
+                    });
+                }
+            }
+
+            function parseStts(start, end) {
+                if (!_currentTrackIsAudio || end - start < 8) return;
+                const count = view.getUint32(start + 4);
+                for (let i = 0; i < count && start + 8 + i * 8 + 8 <= end; i++) {
+                    const sampleCount = view.getUint32(start + 8 + i * 8);
+                    const sampleDelta = view.getUint32(start + 8 + i * 8 + 4);
+                    sampleTable.durations.push({ count: sampleCount, delta: sampleDelta });
+                }
+            }
+
+            // Parse
+            walkBoxes(0, data.length, '');
+
+            if (sampleTable.sizes.length === 0 || sampleTable.offsets.length === 0) {
+                console.warn('[mp4-parse] no audio samples found');
+                return null;
+            }
+
+            // Build sample-to-offset mapping using stsc (sample-to-chunk) + stco (chunk offsets)
+            // stsc tells us how many samples are in each chunk
+            const numSamples = sampleTable.sizes.length;
+            const sampleOffsets = new Array(numSamples);
+            let sampleIdx = 0;
+
+            for (let chunkIdx = 0; chunkIdx < sampleTable.offsets.length && sampleIdx < numSamples; chunkIdx++) {
+                // Find how many samples in this chunk from stsc
+                let samplesInChunk = 1;
+                const chunkNum = chunkIdx + 1; // 1-based
+                for (let s = _stscEntries.length - 1; s >= 0; s--) {
+                    if (chunkNum >= _stscEntries[s].firstChunk) {
+                        samplesInChunk = _stscEntries[s].samplesPerChunk;
+                        break;
+                    }
+                }
+
+                let offset = sampleTable.offsets[chunkIdx];
+                for (let s = 0; s < samplesInChunk && sampleIdx < numSamples; s++) {
+                    sampleOffsets[sampleIdx] = offset;
+                    offset += sampleTable.sizes[sampleIdx];
+                    sampleIdx++;
+                }
+            }
+
+            // Build timestamps from stts (time-to-sample)
+            let ts = 0;
+            let tsIdx = 0;
+            for (const entry of sampleTable.durations) {
+                for (let i = 0; i < entry.count && tsIdx < numSamples; i++) {
+                    const timestampUs = Math.round(ts * 1000000 / timescale);
+                    const sampleSize = sampleTable.sizes[tsIdx];
+                    const sampleOff = sampleOffsets[tsIdx];
+                    if (sampleOff !== undefined && sampleOff + sampleSize <= data.length) {
+                        chunks.push({
+                            timestamp: timestampUs,
+                            data: data.slice(sampleOff, sampleOff + sampleSize)
+                        });
+                    }
+                    ts += entry.delta;
+                    tsIdx++;
+                }
+            }
+
+            console.log('[mp4-parse] ' + chunks.length + ' audio samples, timescale=' + timescale +
+                ', rate=' + sampleRate + ', ch=' + channels);
+
+            return {
+                chunks: chunks,
+                sampleRate: sampleRate,
+                channels: channels,
+                codec: 'opus',
+                description: codecPrivate
+            };
+        }
+
+        // --- WebM demuxer ---
+        function _demuxWebMAudio(data) {
+            let audioTrackNum = -1;
+            let codecPrivate = null;
+            let sampleRate = 48000;
+            let channels = 2;
+            let timestampScale = 1000000;
+            const chunks = [];
+
+            function readVint(d, offset) {
+                if (offset >= d.length) return null;
+                let first = d[offset], len = 1, mask = 0x80;
+                while (len <= 8 && !(first & mask)) { len++; mask >>= 1; }
+                if (len > 8) return null;
+                let value = first & (mask - 1);
+                for (let i = 1; i < len; i++) {
+                    if (offset + i >= d.length) return null;
+                    value = value * 256 + d[offset + i];
+                }
+                return { value: value, length: len };
+            }
+
+            function readElementId(d, offset) {
+                if (offset >= d.length) return null;
+                let first = d[offset], len;
+                if (first & 0x80) len = 1;
+                else if (first & 0x40) len = 2;
+                else if (first & 0x20) len = 3;
+                else if (first & 0x10) len = 4;
+                else return null;
+                let id = 0;
+                for (let i = 0; i < len; i++) {
+                    if (offset + i >= d.length) return null;
+                    id = id * 256 + d[offset + i];
+                }
+                return { id: id, length: len };
+            }
+
+            function readEl(d, offset) {
+                const idI = readElementId(d, offset);
+                if (!idI) return null;
+                const szI = readVint(d, offset + idI.length);
+                if (!szI) return null;
+                const hLen = idI.length + szI.length;
+                return { id: idI.id, headerLen: hLen, dataSize: szI.value, dataOffset: offset + hLen };
+            }
+
+            function readUint(d, off, sz) {
+                let v = 0; for (let i = 0; i < sz; i++) v = v * 256 + d[off + i]; return v;
+            }
+            function readFloat(d, off, sz) {
+                const dv = new DataView(d.buffer, d.byteOffset + off, sz);
+                return sz === 4 ? dv.getFloat32(0) : dv.getFloat64(0);
+            }
+            function readString(d, off, sz) {
+                let s = ''; for (let i = 0; i < sz; i++) s += String.fromCharCode(d[off + i]); return s;
+            }
+
+            const ID = {
+                Segment: 0x18538067, Tracks: 0x1654AE6B, TrackEntry: 0xAE,
+                TrackNumber: 0xD7, TrackType: 0x83, CodecID: 0x86, CodecPrivate: 0x63A2,
+                Audio: 0xE1, SampleRate: 0xB5, Channels: 0x9F,
+                Cluster: 0x1F43B675, Timecode: 0xE7, SimpleBlock: 0xA3,
+                Info: 0x1549A966, TimestampScale: 0x2AD7B1
+            };
+
+            function parseSegment(d, start, end) {
+                let off = start;
+                while (off < end) {
+                    const el = readEl(d, off);
+                    if (!el) break;
+                    const dEnd = Math.min(el.dataOffset + el.dataSize, end);
+                    if (el.id === ID.Info) {
+                        let o = el.dataOffset;
+                        while (o < dEnd) { const e2 = readEl(d, o); if (!e2) break; if (e2.id === ID.TimestampScale) timestampScale = readUint(d, e2.dataOffset, e2.dataSize); o = e2.dataOffset + e2.dataSize; }
+                    } else if (el.id === ID.Tracks) {
+                        let o = el.dataOffset;
+                        while (o < dEnd) { const e2 = readEl(d, o); if (!e2) break; if (e2.id === ID.TrackEntry) parseTrackEntry(d, e2.dataOffset, e2.dataOffset + e2.dataSize); o = e2.dataOffset + e2.dataSize; }
+                    } else if (el.id === ID.Cluster && audioTrackNum >= 0) {
+                        parseCluster(d, el.dataOffset, dEnd);
+                    }
+                    off = dEnd;
+                }
+            }
+
+            function parseTrackEntry(d, start, end) {
+                let num = -1, type = -1, codec = '', priv = null, sr = 48000, ch = 2;
+                let off = start;
+                while (off < end) {
+                    const el = readEl(d, off); if (!el) break;
+                    const dEnd = el.dataOffset + el.dataSize;
+                    if (el.id === ID.TrackNumber) num = readUint(d, el.dataOffset, el.dataSize);
+                    else if (el.id === ID.TrackType) type = readUint(d, el.dataOffset, el.dataSize);
+                    else if (el.id === ID.CodecID) codec = readString(d, el.dataOffset, el.dataSize);
+                    else if (el.id === ID.CodecPrivate) priv = d.slice(el.dataOffset, dEnd);
+                    else if (el.id === ID.Audio) {
+                        let ao = el.dataOffset;
+                        while (ao < dEnd) { const ae = readEl(d, ao); if (!ae) break; if (ae.id === ID.SampleRate) sr = readFloat(d, ae.dataOffset, ae.dataSize); else if (ae.id === ID.Channels) ch = readUint(d, ae.dataOffset, ae.dataSize); ao = ae.dataOffset + ae.dataSize; }
+                    }
+                    off = dEnd;
+                }
+                if (type === 2 && (codec === 'A_OPUS' || codec === 'A_VORBIS')) {
+                    audioTrackNum = num; codecPrivate = priv; sampleRate = sr; channels = ch;
+                }
+            }
+
+            function parseCluster(d, start, end) {
+                let clusterTs = 0; let off = start;
+                while (off < end) {
+                    const el = readEl(d, off); if (!el) break;
+                    const dEnd = Math.min(el.dataOffset + el.dataSize, end);
+                    if (el.id === ID.Timecode) clusterTs = readUint(d, el.dataOffset, el.dataSize);
+                    else if (el.id === ID.SimpleBlock) {
+                        const tv = readVint(d, el.dataOffset); if (!tv || tv.value !== audioTrackNum) { off = dEnd; continue; }
+                        const tsOff = el.dataOffset + tv.length;
+                        const rel = (d[tsOff] << 8 | d[tsOff + 1]); const relSigned = rel >= 0x8000 ? rel - 0x10000 : rel;
+                        const frameStart = tsOff + 3;
+                        if (frameStart < el.dataOffset + el.dataSize) {
+                            const tsMs = (clusterTs + relSigned) * timestampScale / 1000000;
+                            chunks.push({ timestamp: Math.round(tsMs * 1000), data: d.slice(frameStart, el.dataOffset + el.dataSize) });
+                        }
+                    }
+                    off = dEnd;
+                }
+            }
+
+            // Walk top-level
+            let off = 0;
+            while (off < data.length) {
+                const el = readEl(data, off); if (!el) break;
+                if (el.id === ID.Segment) { parseSegment(data, el.dataOffset, Math.min(el.dataOffset + el.dataSize, data.length)); break; }
+                off = el.dataOffset + el.dataSize;
+            }
+
+            if (chunks.length === 0) return null;
+            return {
+                chunks: chunks,
+                sampleRate: sampleRate,
+                channels: channels,
+                codec: 'opus',
+                description: codecPrivate ? codecPrivate.buffer.slice(codecPrivate.byteOffset, codecPrivate.byteOffset + codecPrivate.byteLength) : null
+            };
+        }
+
+        // --- AudioDecoder (shared by both demuxers) ---
+        function _decodeWithAudioDecoder(slot, extracted) {
+            const decodedChunks = [];
+            let decodeError = false;
+
+            const decoder = new AudioDecoder({
+                output: function(audioData) {
+                    const chData = [];
+                    for (let c = 0; c < audioData.numberOfChannels; c++) {
+                        const buf = new Float32Array(audioData.numberOfFrames);
+                        audioData.copyTo(buf, { planeIndex: c, format: 'f32-planar' });
+                        chData.push(buf);
+                    }
+                    decodedChunks.push({ timestamp: audioData.timestamp, samples: chData });
+                    audioData.close();
+                },
+                error: function(err) {
+                    console.warn('AudioDecoder error for', slot, err);
+                    decodeError = true;
+                }
+            });
+
+            const config = {
+                codec: 'opus',
+                sampleRate: extracted.sampleRate,
+                numberOfChannels: extracted.channels
+            };
+            if (extracted.description) {
+                config.description = extracted.description instanceof ArrayBuffer
+                    ? extracted.description
+                    : extracted.description.buffer
+                        ? extracted.description.buffer.slice(extracted.description.byteOffset, extracted.description.byteOffset + extracted.description.byteLength)
+                        : extracted.description;
+            }
+
+            try {
+                decoder.configure(config);
+            } catch (err) {
+                console.warn('AudioDecoder configure failed for', slot, err);
+                return;
+            }
+
+            for (let i = 0; i < extracted.chunks.length; i++) {
+                if (decodeError) break;
+                const chunk = extracted.chunks[i];
+                decoder.decode(new EncodedAudioChunk({
+                    type: 'key',  // Opus frames are all independent
+                    timestamp: chunk.timestamp,
+                    data: chunk.data
+                }));
+            }
+
+            decoder.flush().then(() => {
+                decoder.close();
+                if (decodeError || decodedChunks.length === 0) {
+                    console.warn('WebCodecs decode produced no output for', slot);
+                    return;
+                }
+
+                decodedChunks.sort((a, b) => a.timestamp - b.timestamp);
+                const numChannels = decodedChunks[0].samples.length || 1;
+                const totalFrames = decodedChunks.reduce((sum, c) => sum + c.samples[0].length, 0);
+                const channelBuffers = [];
+                for (let c = 0; c < numChannels; c++) channelBuffers.push(new Float32Array(totalFrames));
+                let writeOffset = 0;
+                for (const chunk of decodedChunks) {
+                    for (let c = 0; c < numChannels; c++) {
+                        channelBuffers[c].set(chunk.samples[c] || chunk.samples[0], writeOffset);
+                    }
+                    writeOffset += chunk.samples[0].length;
+                }
+
+                const duration = totalFrames / extracted.sampleRate;
+                const fakeBuffer = {
+                    numberOfChannels: numChannels,
+                    sampleRate: extracted.sampleRate,
+                    duration: duration,
+                    length: totalFrames,
+                    getChannelData: function(ch) { return channelBuffers[Math.min(ch, numChannels - 1)]; }
+                };
+                console.log('[webcodecs] ' + slot + ': decoded ' + duration.toFixed(1) + 's, ' +
+                    totalFrames + ' frames, ' + numChannels + 'ch at ' + extracted.sampleRate + 'Hz');
+                _finalizeAudioViz(slot, fakeBuffer);
+            }).catch(err => {
+                console.warn('AudioDecoder flush failed for', slot, err);
+                decoder.close();
+            });
         }
 
         // Run re-layout continuously for durationMs using rAF.
