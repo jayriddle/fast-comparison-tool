@@ -173,8 +173,30 @@
             border-top: 6px solid #f0a030;
             margin-left: -5px;
             z-index: 3;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: ew-resize;
             display: none;
+        }
+        /* Larger invisible hit area for easier grabbing */
+        .loop-marker::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            width: 20px;
+            height: 20px;
+        }
+        .loop-marker-label {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            color: #f0a030;
+            white-space: nowrap;
+            pointer-events: none;
+            margin-bottom: 6px;
+            font-variant-numeric: tabular-nums;
         }
 
         .loop-region {
@@ -1590,6 +1612,24 @@
             color: #000;
         }
 
+        .analysis-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 3px 5px;
+            border-radius: 4px;
+            color: #777;
+            transition: color 0.15s, background 0.15s;
+            display: flex;
+            align-items: center;
+        }
+        .analysis-btn:hover { background: #555; color: #fff; }
+        .analysis-btn.active { color: #5bc0de; }
+        .analysis-btn.active:hover { background: #3a4a50; }
+        .analysis-btn svg { width: 16px; height: 16px; }
+        .analysis-btn:focus { outline: none; }
+        .analysis-btn:focus-visible { outline: 2px solid #f0a030; outline-offset: 2px; }
+
         /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
         .asset-btn {
             background: rgba(160, 160, 160, 0.4);
@@ -1778,6 +1818,20 @@
             <div id="modeStrip" style="display:none;"></div>
             <!-- Asset strip: overlay mode only — shows asset names, active one highlighted -->
             <div id="assetStrip" style="display:none;"></div>
+            <!-- Analysis toggles — far right -->
+            <div id="analysisStrip" style="display:none; align-items:center; gap:2px;">
+                <button class="analysis-btn" id="waveformToggleBtn" onclick="toggleAudioViz(); this.blur();" title="Audio waveform / spectrogram (W)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2 12h2l2-4 2 8 2-6 2 4 2-2 2 3 2-5 2 4h2"/>
+                    </svg>
+                </button>
+                <button class="analysis-btn" id="scopesToggleBtn" onclick="toggleVideoScopes(); this.blur();" title="Video scopes (V)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M3 16l4-4 3 3 4-6 4 4 3-3"/>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <div class="landing-cta" id="landingCta">
@@ -1802,7 +1856,6 @@
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
@@ -1814,7 +1867,6 @@
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
@@ -1826,7 +1878,6 @@
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
-                        <span class="asset-bpm"></span>
                         <span class="asset-duration"></span>
                         <span class="asset-filename"></span>
                     </div>
@@ -2110,16 +2161,21 @@
 
         function formatLoopTime(t) {
             if (hasAudios) {
-                // Audio: S.cc / M:SS.cc
+                const m = Math.floor(t / 60);
+                const s = t - m * 60;
+                return m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2);
+            }
+            const _fls = currentAudioSource || assetOrder[currentAssetIndex];
+            const _fll = getLayer(_fls);
+            const media = _fll ? _fll.querySelector('video') : getAllPlayableMedia()[0];
+            const fps = (media && videoFrameRates[media.src]) || 30;
+            if (timecodeMode === 'frames') {
+                return 'F' + (Math.floor(t * fps + 0.01) + 1);
+            } else if (timecodeMode === 'seconds') {
                 const m = Math.floor(t / 60);
                 const s = t - m * 60;
                 return m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2);
             } else {
-                // Video: use frame-based timecode
-                const _fls = currentAudioSource || assetOrder[currentAssetIndex];
-                const _fll = getLayer(_fls);
-                const media = _fll ? _fll.querySelector('video') : getAllPlayableMedia()[0];
-                const fps = (media && videoFrameRates[media.src]) || 30;
                 const frame = Math.floor(t * fps + 0.01);
                 const totalSec = Math.floor(frame / fps);
                 const f = frame - totalSec * fps;
@@ -2140,12 +2196,14 @@
                 inMarker = document.createElement('div');
                 inMarker.id = 'loopInMarker';
                 inMarker.className = 'loop-marker';
+                inMarker.innerHTML = '<span class="loop-marker-label" id="loopInLabel"></span>';
                 container.appendChild(inMarker);
             }
             if (!outMarker) {
                 outMarker = document.createElement('div');
                 outMarker.id = 'loopOutMarker';
                 outMarker.className = 'loop-marker';
+                outMarker.innerHTML = '<span class="loop-marker-label" id="loopOutLabel"></span>';
                 container.appendChild(outMarker);
             }
             if (!region) {
@@ -2159,15 +2217,19 @@
             const activeLayer = getLayer(activeSlot);
             const activeMedia = activeLayer ? (activeLayer.querySelector('video') || activeLayer.querySelector('audio')) : getAllPlayableMedia()[0];
             const duration = activeMedia ? _getEffectiveDuration(activeMedia) : 1;
+            const inLabel = document.getElementById('loopInLabel');
+            const outLabel = document.getElementById('loopOutLabel');
             if (_loopInPoint !== null) {
                 inMarker.style.display = 'block';
                 inMarker.style.left = (_loopInPoint / duration * 100) + '%';
+                if (inLabel) inLabel.textContent = formatLoopTime(_loopInPoint);
             } else {
                 inMarker.style.display = 'none';
             }
             if (_loopOutPoint !== null) {
                 outMarker.style.display = 'block';
                 outMarker.style.left = (_loopOutPoint / duration * 100) + '%';
+                if (outLabel) outLabel.textContent = formatLoopTime(_loopOutPoint);
             } else {
                 outMarker.style.display = 'none';
             }
@@ -2424,6 +2486,7 @@
         let playbackRateIndex = 3; // default 1×
         let _loopInPoint = null;   // in-point time (seconds) for sub-region looping
         let _loopOutPoint = null;  // out-point time (seconds) for sub-region looping
+        let _loopPointsPerSlot = {}; // { slot: { inPoint, outPoint } } — saved per asset
         let _lastEscTime = 0;     // timestamp of last Esc press for double-tap detection
         let isDragging = false;   // true during progress bar or canvas scrub
         let isPanning = false;
@@ -3092,7 +3155,7 @@
                 const g = _opusSyncGains[slot];
                 if (!g) continue;
                 const isCurrent = slot === (currentAudioSource || assetOrder[currentAssetIndex]);
-                g.gain.value = (isCurrent && !audioMuteStates[slot]) ? vol : 0;
+                g.gain.value = (!isMuted && isCurrent && !audioMuteStates[slot]) ? vol : 0;
             }
         }
 
@@ -3126,22 +3189,11 @@
                 _opusSyncDuration[slot] = _videoAudioBuffers[slot].duration;
                 const layer = getLayer(slot);
                 const video = layer && layer.querySelector('video');
-                // Suppress native audio via volume instead of muted — Chrome may
-                // skip frame rendering on seek for muted videos
-                if (video) video.volume = 0;
+                if (video) video.muted = true;
                 // If video is already playing, start sync audio immediately
                 if (video && !video.paused) _startOpusSyncAudio(slot, video.currentTime);
             }
 
-            // BPM detection for video audio tracks
-            if (audioBuffer.duration >= 3) {
-                const bpm = detectBPM(audioBuffer);
-                if (bpm) {
-                    const layer = getLayer(slot);
-                    const bpmEl = layer && layer.querySelector('.asset-bpm');
-                    if (bpmEl) bpmEl.textContent = bpm + ' BPM';
-                }
-            }
             // Draw if this is the currently active/visible slot
             const activeSlot = assetOrder[currentAssetIndex];
             if (slot === activeSlot || slot === currentAudioSource) {
@@ -3888,6 +3940,9 @@
                     _preVizZoomLevel = null;
                 }
             }
+            // Update header button active state
+            const wBtn = document.getElementById('waveformToggleBtn');
+            if (wBtn) wBtn.classList.toggle('active', audioVizVisible);
             // Continuously re-layout during the CSS transition so media resizes smoothly
             animateRelayout(350);
         }
@@ -4101,6 +4156,8 @@
                 if (controls) controls.classList.remove('active');
             }
             showToast('Video Scopes ' + (videoScopesVisible ? 'ON' : 'OFF'));
+            const sBtn = document.getElementById('scopesToggleBtn');
+            if (sBtn) sBtn.classList.toggle('active', videoScopesVisible);
             animateRelayout(350);
         }
 
@@ -4289,102 +4346,6 @@
             el.textContent = base.slice(0, head) + '…' + base.slice(-tail) + ext;
         }
 
-        // BPM detection via onset-strength autocorrelation.
-        // Runs asynchronously to avoid blocking the UI during decode.
-        function detectBPM(audioBuffer) {
-            const sr = audioBuffer.sampleRate;
-            const ch0 = audioBuffer.getChannelData(0);
-
-            // 1. Downsample to ~11 kHz mono for speed
-            const dsFactor = Math.max(1, Math.round(sr / 11025));
-            const dsRate = sr / dsFactor;
-            const dsLen = Math.floor(ch0.length / dsFactor);
-            const ds = new Float32Array(dsLen);
-            if (audioBuffer.numberOfChannels >= 2) {
-                const ch1 = audioBuffer.getChannelData(1);
-                for (let i = 0; i < dsLen; i++) {
-                    const j = i * dsFactor;
-                    ds[i] = (ch0[j] + ch1[j]) * 0.5;
-                }
-            } else {
-                for (let i = 0; i < dsLen; i++) ds[i] = ch0[i * dsFactor];
-            }
-
-            // 2. Compute energy in short windows (~23 ms hop, ~46 ms window)
-            const hopSize = Math.round(dsRate * 0.023);
-            const winSize = hopSize * 2;
-            const numFrames = Math.floor((dsLen - winSize) / hopSize);
-            if (numFrames < 16) return null;
-
-            // Band-filtered energy: low band (bass/kick) and full-band
-            const onsetLow = new Float32Array(numFrames);
-            const onsetFull = new Float32Array(numFrames);
-
-            // Simple single-pole low-pass at ~200 Hz for bass detection
-            const rc = 1 / (2 * Math.PI * 200);
-            const dt = 1 / dsRate;
-            const lpAlpha = dt / (rc + dt);
-
-            for (let f = 0; f < numFrames; f++) {
-                const start = f * hopSize;
-                let eFull = 0;
-                let eLow = 0;
-                let lpState = 0;
-                for (let i = 0; i < winSize; i++) {
-                    const s = ds[start + i];
-                    eFull += s * s;
-                    lpState += lpAlpha * (s - lpState);
-                    eLow += lpState * lpState;
-                }
-                onsetFull[f] = eFull;
-                onsetLow[f] = eLow;
-            }
-
-            // 3. Spectral flux (half-wave rectified difference)
-            const onset = new Float32Array(numFrames);
-            for (let f = 1; f < numFrames; f++) {
-                // Weighted combination: bass-heavy for kick detection
-                const dLow = onsetLow[f] - onsetLow[f - 1];
-                const dFull = onsetFull[f] - onsetFull[f - 1];
-                onset[f] = Math.max(0, dLow * 3 + dFull);
-            }
-
-            // 4. Autocorrelation over BPM range 50–220
-            const minLag = Math.round((60 / 220) / (hopSize / dsRate));
-            const maxLag = Math.round((60 / 50) / (hopSize / dsRate));
-            const acLen = Math.min(maxLag + 1, numFrames);
-
-            let bestLag = minLag;
-            let bestVal = -Infinity;
-            for (let lag = minLag; lag <= Math.min(maxLag, numFrames - 1); lag++) {
-                let sum = 0;
-                const n = Math.min(numFrames - lag, acLen);
-                for (let i = 0; i < n; i++) sum += onset[i] * onset[i + lag];
-                // Weight toward musically common tempos (80-160 BPM)
-                const bpm = 60 / (lag * hopSize / dsRate);
-                const weight = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0;
-                sum *= weight;
-                if (sum > bestVal) { bestVal = sum; bestLag = lag; }
-            }
-
-            const rawBPM = 60 / (bestLag * hopSize / dsRate);
-
-            // 5. Refine: check half-time and double-time
-            const candidates = [rawBPM];
-            if (rawBPM * 2 <= 220) candidates.push(rawBPM * 2);
-            if (rawBPM / 2 >= 50) candidates.push(rawBPM / 2);
-
-            // Pick candidate closest to 80-140 range (most common)
-            let best = rawBPM;
-            let bestDist = Infinity;
-            for (const c of candidates) {
-                const center = 110;
-                const d = Math.abs(c - center);
-                if (d < bestDist) { bestDist = d; best = c; }
-            }
-
-            return Math.round(best);
-        }
 
         function updateAudioInfoBar(slot, audioBuffer, arrayBuffer) {
             const layer = getLayer(slot);
@@ -4415,14 +4376,6 @@
                 szEl.textContent = formatFileSize(md.size);
             }
 
-            // BPM detection (async to avoid blocking UI)
-            const bpmEl = infoBar.querySelector('.asset-bpm');
-            if (bpmEl && audioBuffer.duration >= 3) {
-                setTimeout(() => {
-                    const bpm = detectBPM(audioBuffer);
-                    if (bpm) bpmEl.textContent = bpm + ' BPM';
-                }, 50);
-            }
 
             if (md && md.name) setFilename(infoBar, md.name);
         }
@@ -4717,7 +4670,6 @@
             <span class="asset-channels"></span>
             <span class="asset-sample-rate"></span>
             <span class="asset-bit-depth"></span>
-            <span class="asset-bpm"></span>
             <span class="asset-duration"></span>
             <span class="asset-file-size"></span>
             <span class="asset-filename"></span>
@@ -4729,7 +4681,6 @@
             <span class="asset-resolution">-</span>
             <span class="asset-aspect">-</span>
             <span class="asset-fps"></span>
-            <span class="asset-bpm"></span>
             <span class="asset-duration"></span>
             <span class="asset-filename"></span>
         `;
@@ -5277,6 +5228,11 @@
             if (!layer) return;
             const mediaEl = layer.querySelector('video') || layer.querySelector('audio');
             if (!mediaEl) return;
+            if (_opusSyncSlots[source]) {
+                mediaEl.muted = true;
+                _updateOpusSyncGains();
+                return;
+            }
             mediaEl.muted = audioMuteStates[source];
         }
 
@@ -5296,16 +5252,10 @@
                 if (layer) {
                     const mediaEl = layer.querySelector('video') || layer.querySelector('audio');
                     if (mediaEl) {
-                        const shouldMute = (slot !== source) || audioMuteStates[slot];
-                        if (_opusSyncSlots[slot]) {
-                            // Opus sync: native audio suppressed via volume=0, not muted
-                            // (Chrome skips frame rendering on seek for muted videos)
-                            mediaEl.volume = 0;
-                            mediaEl.muted = false;
-                        } else {
-                            mediaEl.muted = shouldMute;
-                        }
-                        updateAudioButton(slot, shouldMute);
+                        // Opus sync slots always muted — audio comes from Web Audio
+                        const shouldMute = isMuted || _opusSyncSlots[slot] || (slot !== source) || audioMuteStates[slot];
+                        mediaEl.muted = shouldMute;
+                        updateAudioButton(slot, _opusSyncSlots[slot] ? false : shouldMute);
                     }
 
                     // Add active-audio class to layer with unmuted audio in split views
@@ -5415,6 +5365,8 @@
                     updateVideoProgress(video);
                 }
             }
+            // Update loop marker labels to match new mode
+            if (_loopInPoint !== null) updateLoopMarkerUI();
         }
 
         function toggleQuickStart() {
@@ -5509,7 +5461,41 @@
                 }
                 return;
             }
-            
+
+            // Save current slot's loop points, restore new slot's
+            const prevSlot = assetOrder[currentAssetIndex];
+            if (prevSlot !== assetKey) {
+                if (_loopInPoint !== null && _loopOutPoint !== null) {
+                    _loopPointsPerSlot[prevSlot] = { inPoint: _loopInPoint, outPoint: _loopOutPoint };
+                } else {
+                    delete _loopPointsPerSlot[prevSlot];
+                }
+                const saved = _loopPointsPerSlot[assetKey];
+                if (saved) {
+                    _loopInPoint = saved.inPoint;
+                    _loopOutPoint = saved.outPoint;
+                    setNativeLoop(false);
+                } else {
+                    _loopInPoint = null;
+                    _loopOutPoint = null;
+                    setNativeLoop(true);
+                }
+                updateLoopMarkerUI();
+                // Force progress bar to reflect new loop bounds
+                const newLayer = getLayer(assetKey);
+                const newMedia = newLayer ? (newLayer.querySelector('video') || newLayer.querySelector('audio')) : null;
+                if (newMedia) {
+                    getProgressEls();
+                    const dur = _getEffectiveDuration(newMedia);
+                    updateProgressBarForLoop(newMedia.currentTime, dur);
+                }
+                if (audioVizVisible) {
+                    drawWaveform(assetKey);
+                    drawSpectrogram(assetKey);
+                }
+                redrawAudioSlotCanvases();
+            }
+
             currentAssetIndex = index;
 
             // Always switch audio to the selected video
@@ -5573,6 +5559,14 @@
             let _scrubAllVideos = null;
             let _scrubContainerRect = null;
 
+            // Force Chrome to render a frame on a muted+paused video by briefly
+            // playing then immediately pausing. Without this, Chrome skips frame
+            // decoding for muted paused videos on seek.
+            function _frameKick(video) {
+                if (!_isChrome || !video.muted || !video.paused) return;
+                video.play().then(() => video.pause()).catch(() => {});
+            }
+
             // Seek all videos to the position under the cursor and update the UI.
             // Direct synchronous currentTime assignment — no rAF needed; browsers
             // coalesce rapid seeks internally, and this eliminates races with the
@@ -5595,12 +5589,14 @@
                 const endGuard = 0.5 / fps; // half a frame
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
                 video.currentTime = t;
+                _frameKick(video);
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
                         if (v !== video && !isNaN(v.duration)) {
                             const vfps = videoFrameRates[v.src] || 30;
                             v.currentTime = Math.min(pct * seekDur, v.duration - 0.5 / vfps);
+                            _frameKick(v);
                         }
                     }
                 }
@@ -5644,12 +5640,14 @@
                 const endGuard = 0.5 / fps;
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
                 media.currentTime = t;
+                _frameKick(media);
                 if (_scrubAllVideos) {
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
                         if (v !== media && !isNaN(v.duration)) {
                             const vfps = videoFrameRates[v.src] || 30;
                             v.currentTime = Math.min(pct * seekDur, v.duration - 0.5 / vfps);
+                            _frameKick(v);
                         }
                     }
                 }
@@ -5722,8 +5720,20 @@
                 canvasScrubToPosition(e, canvas);
             }, true);
 
+            let _draggingLoopMarker = null; // 'in' or 'out' during loop marker drag
+
             progressContainer.addEventListener('mousedown', function(e) {
                 e.preventDefault(); // prevent default drag/selection behavior from trackpad taps
+
+                // Check if clicking on a loop marker — start marker drag instead of scrub
+                const marker = e.target.closest('.loop-marker');
+                if (marker && (_loopInPoint !== null && _loopOutPoint !== null)) {
+                    _draggingLoopMarker = marker.id === 'loopInMarker' ? 'in' : 'out';
+                    _scrubContainerRect = progressContainer.getBoundingClientRect();
+                    isDragging = true;
+                    return;
+                }
+
                 isDragging = true;
 
                 // Cancel any pending progress-loop frame so it can't override the bar during drag
@@ -5764,6 +5774,34 @@
 
             document.addEventListener('mousemove', function(e) {
                 if (!isDragging) return;
+                // Loop marker drag
+                if (_draggingLoopMarker) {
+                    const rect = _scrubContainerRect;
+                    if (!rect) return;
+                    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                    const activeLayer = getLayer(activeSlot);
+                    const media = activeLayer ? (activeLayer.querySelector('video') || activeLayer.querySelector('audio')) : null;
+                    const dur = media ? _getEffectiveDuration(media) : 1;
+                    const t = pct * dur;
+                    if (_draggingLoopMarker === 'in') {
+                        _loopInPoint = Math.min(t, _loopOutPoint - 0.01);
+                    } else {
+                        _loopOutPoint = Math.max(t, _loopInPoint + 0.01);
+                    }
+                    updateLoopMarkerUI();
+                    // Update progress bar to reflect new loop bounds
+                    getProgressEls();
+                    if (_elProgressBar && media) {
+                        updateProgressBarForLoop(media.currentTime, dur);
+                    }
+                    if (audioVizVisible) {
+                        drawWaveform(activeSlot);
+                        drawSpectrogram(activeSlot);
+                    }
+                    redrawAudioSlotCanvases();
+                    return;
+                }
                 if (_regionSelectStart !== null) {
                     // Shift+drag: update loop markers + scrub to current position
                     const t = _scrubCanvas ? canvasXToTime(e, _scrubCanvas) : progressBarXToTime(e);
@@ -5788,6 +5826,12 @@
             document.addEventListener('mouseup', function(e) {
                 if (isDragging) {
                     isDragging = false;
+                    if (_draggingLoopMarker) {
+                        _draggingLoopMarker = null;
+                        setNativeLoop(false);
+                        showToast('Loop: ' + formatLoopTime(_loopInPoint) + ' \u2192 ' + formatLoopTime(_loopOutPoint));
+                        return;
+                    }
                     if (_regionSelectStart !== null) {
                         // Finalize shift+drag region selection
                         const t = _scrubCanvas ? canvasXToTime(e, _scrubCanvas) : progressBarXToTime(e);
@@ -6170,7 +6214,8 @@
             timecodeMode = 'time';
             videoFrameRates = {};
 
-            // Clean up audio visualization state
+            // Clean up loop and audio visualization state
+            _loopPointsPerSlot = {};
             audioNodes = {};
             waveformData = {};
             spectrogramData = {};
@@ -6226,6 +6271,7 @@
             document.getElementById('resetBtn').style.display = 'none';
             // Hide mode and asset strips — they'll be rebuilt when assets load
             document.getElementById('modeStrip').style.display = 'none';
+            document.getElementById('analysisStrip').style.display = 'none';
             document.getElementById('assetStrip').style.display = 'none';
             const vcReset = document.getElementById('videoControls');
             vcReset.classList.remove('active');
@@ -6254,8 +6300,6 @@
                     if (fn) fn.textContent = '';
                     const fps = infoBar.querySelector('.asset-fps');
                     if (fps) fps.textContent = '';
-                    const bpm = infoBar.querySelector('.asset-bpm');
-                    if (bpm) bpm.textContent = '';
                 }
 
                 // Reset zoom indicator in info bar
@@ -7234,6 +7278,7 @@
 
             strip.style.display = 'flex';
             strip.innerHTML = '';
+            document.getElementById('analysisStrip').style.display = 'flex';
 
             const isGridWith3 = normalised !== 'overlay' && loadedCount === 3;
 
@@ -7685,6 +7730,7 @@
             }
 
             btn.innerHTML = isMuted ? _SVG_VOL_MUTED : _SVG_VOL_ON;
+            _updateOpusSyncGains();
         }
 
         // ── Hotkey system: action registry + reassignable keymap ──
@@ -8382,7 +8428,6 @@
             <h3>v3.6</h3>
             <ul>
                 <li>Single-file mode — load 1 file for solo review, 2 for A/B, 3 for A/B/GT</li>
-                <li>BPM detection for audio files (experimental)</li>
                 <li>Expanded waveform/spectrogram panel for video playback</li>
                 <li>Audio loop fix — correct track used as primary, drift correction for multi-track loops</li>
                 <li>Smoother playback</li>
