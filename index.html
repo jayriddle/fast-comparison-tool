@@ -1245,15 +1245,6 @@
             padding-bottom: 4px;
         }
 
-        .spectrogram-panel.active.expanded {
-            max-height: 600px;
-        }
-        .spectrogram-panel.expanded .waveform-row {
-            height: 240px;
-        }
-        .spectrogram-panel.expanded .spectrogram-row {
-            height: 360px;
-        }
 
         .audio-viz-row {
             display: flex;
@@ -2529,11 +2520,11 @@
         let audioNodes = {};           // { slot: { source } } — per-video audio nodes
         let waveformData = {};         // { slot: Float32Array } — downsampled amplitude
         let spectrogramData = {};      // { slot: { data: Uint8Array[], sampleRate, duration } }
-        let audioVizVisible = false;   // W key toggle
+        let audioVizVisible = _prefs.load('audioVizVisible', false);   // W key toggle
         let _preVizZoomLevel = null;   // saved zoom when waveform panel forces fit
-        let audioVizExpanded = false;  // 2x height mode
+        let audioVizExpanded = false;  // removed — kept as false for compat
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
-        let videoScopesVisible = false; // V key toggle
+        let videoScopesVisible = _prefs.load('videoScopesVisible', false); // V key toggle
         // _scopeOffscreen moved to js/scopes.js
 
         // ── Difference mode (D key) ──
@@ -3923,26 +3914,17 @@
             const panel = document.getElementById('spectrogramPanel');
             const controls = document.getElementById('videoControls');
 
-            if (!audioVizVisible) {
-                // off → normal
-                audioVizVisible = true;
-                audioVizExpanded = false;
-                if (panel) { panel.classList.add('active'); panel.classList.remove('expanded'); }
+            audioVizVisible = !audioVizVisible;
+            if (audioVizVisible) {
+                if (panel) panel.classList.add('active');
                 if (controls) controls.classList.add('audio-viz-active');
                 showToast('Audio: waveform + spectrogram');
                 _ensureAudioVizDecoded();
-            } else if (!audioVizExpanded) {
-                // normal → expanded (2×)
-                audioVizExpanded = true;
-                if (panel) panel.classList.add('expanded');
-                showToast('Audio: expanded');
             } else {
-                // expanded → off
-                audioVizVisible = false;
-                audioVizExpanded = false;
-                if (panel) { panel.classList.remove('active', 'expanded'); }
+                if (panel) panel.classList.remove('active');
                 if (controls) controls.classList.remove('audio-viz-active');
             }
+            _prefs.save('audioVizVisible', audioVizVisible);
 
             if (audioVizVisible) {
                 const slot = currentAudioSource || assetOrder[currentAssetIndex];
@@ -4017,13 +3999,16 @@
             // For videos, skip if not ready
             if (media.tagName === 'VIDEO' && media.readyState < 2) return;
 
-            const imageData = sampleVideoFrame(media);
-            const histCanvas = document.getElementById('histogramCanvas');
-            const wfmCanvas = document.getElementById('waveformMonitorCanvas');
-            const vecCanvas = document.getElementById('vectorscopeCanvas');
-            if (histCanvas) drawHistogram(imageData, histCanvas, _histogramMode);
-            if (wfmCanvas) drawWaveformMonitor(imageData, wfmCanvas, _waveformMode);
-            if (vecCanvas) drawVectorscope(imageData, vecCanvas);
+            try {
+                const imageData = sampleVideoFrame(media);
+                if (!imageData || !imageData.width || !imageData.height) return;
+                const histCanvas = document.getElementById('histogramCanvas');
+                const wfmCanvas = document.getElementById('waveformMonitorCanvas');
+                const vecCanvas = document.getElementById('vectorscopeCanvas');
+                if (histCanvas && histCanvas.clientWidth > 0) drawHistogram(imageData, histCanvas, _histogramMode);
+                if (wfmCanvas && wfmCanvas.clientWidth > 0) drawWaveformMonitor(imageData, wfmCanvas, _waveformMode);
+                if (vecCanvas && vecCanvas.clientWidth > 0) drawVectorscope(imageData, vecCanvas);
+            } catch (_) {}
         }
 
         // ── Difference composite mode ──
@@ -4165,6 +4150,7 @@
 
         function toggleVideoScopes() {
             videoScopesVisible = !videoScopesVisible;
+            _prefs.save('videoScopesVisible', videoScopesVisible);
             const panel = document.getElementById('scopesPanel');
             if (panel) panel.classList.toggle('active', videoScopesVisible);
             // Ensure video controls bar is visible (images don't show it by default)
@@ -6255,8 +6241,7 @@
             _audioSlotVizData = {};
             _audioMaxDuration = 0;
             _audioVizDecodeStarted = false;
-            audioVizVisible = false;
-            audioVizExpanded = false;
+            // audioVizVisible persists across loads (saved in localStorage)
             magnifierEnabled = false;
             // Keep persisted prefs (magnifierLinked, magnifierZoom, magnifierSize,
             // spectrogramLogScale, palette) — don't reset to defaults
@@ -6270,9 +6255,7 @@
             document.body.classList.remove('magnifier-active');
             const specPanel = document.getElementById('spectrogramPanel');
             if (specPanel) { specPanel.classList.remove('active'); specPanel.classList.remove('expanded'); }
-            videoScopesVisible = false;
-            const scopesPanel = document.getElementById('scopesPanel');
-            if (scopesPanel) scopesPanel.classList.remove('active');
+            // videoScopesVisible persists across loads (saved in localStorage)
             const scaleBtn = document.getElementById('spectrogramScaleToggle');
             if (scaleBtn) scaleBtn.textContent = 'LIN';
             const palBtn = document.getElementById('spectrogramPaletteToggle');
@@ -7292,6 +7275,10 @@
         function updateModeStrip(activeMode) {
             const strip = document.getElementById('modeStrip');
             const loadedCount = getLoadedSlotCount();
+            // Always show analysis icons; hide mode strip for single file
+            document.getElementById('headerRight').style.display = 'flex';
+            document.getElementById('analysisStrip').style.display = 'flex';
+            document.getElementById('iconSep1').style.display = '';
             if (loadedCount <= 1) { strip.style.display = 'none'; return; }
 
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
@@ -7727,11 +7714,36 @@
                     vcEl.classList.add('images-only');
                 }
 
-                // Audio viz decode is lazy — triggered when the user opens the
-                // waveform panel (W key) via _ensureAudioVizDecoded().
-                // Exception: Chrome auto-decodes Opus audio on load so the
-                // Web Audio sync correction is ready from first play.
-                if (_isChrome && hasVideos) {
+                // Restore persisted analysis panels (deferred to avoid blocking view activation)
+                setTimeout(() => {
+                    try {
+                        let needsRelayout = false;
+                        if (videoScopesVisible) {
+                            const sp = document.getElementById('scopesPanel');
+                            if (sp) sp.classList.add('active');
+                            const sb = document.getElementById('scopesToggleBtn');
+                            if (sb) sb.classList.add('active');
+                            const vc = document.getElementById('videoControls');
+                            if (vc) vc.classList.add('active');
+                            requestAnimationFrame(() => updateVideoScopes());
+                            needsRelayout = true;
+                        }
+                        if (audioVizVisible && hasVideos) {
+                            const ap = document.getElementById('spectrogramPanel');
+                            if (ap) ap.classList.add('active');
+                            const vc = document.getElementById('videoControls');
+                            if (vc) vc.classList.add('audio-viz-active');
+                            const wb = document.getElementById('waveformToggleBtn');
+                            if (wb) wb.classList.add('active');
+                            _ensureAudioVizDecoded();
+                            needsRelayout = true;
+                        }
+                        if (needsRelayout) animateRelayout(350);
+                    } catch (_) {}
+                }, 100);
+
+                // Chrome auto-decodes Opus audio on load for A/V sync correction
+                if (_isChrome && hasVideos && !audioVizVisible) {
                     const fadeDelay = loadedLayers.length * 60 + 400;
                     setTimeout(() => _ensureAudioVizDecoded(), fadeDelay);
                 }
