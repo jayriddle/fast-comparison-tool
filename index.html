@@ -516,21 +516,21 @@
             height: 180px;
             border: none;
             border-radius: 16px;
-            overflow: hidden;
+            overflow: visible;
         }
         @property --grad-angle {
             syntax: '<angle>';
             initial-value: 0deg;
             inherits: false;
         }
-        .landing-dropzone.starfield-off {
+        .landing-dropzone {
             overflow: visible;
         }
-        .landing-dropzone.starfield-off::before {
+        .landing-dropzone::before {
             content: '';
             position: absolute;
-            inset: 0;
-            border-radius: 16px;
+            inset: -2px;
+            border-radius: 18px;
             padding: 2px;
             background: conic-gradient(from var(--grad-angle, 0deg),
                 rgba(255,255,255,0.03), rgba(255,255,255,0.15),
@@ -542,6 +542,7 @@
             mask-composite: exclude;
             animation: border-spin 12s linear infinite;
             pointer-events: none;
+            z-index: 2;
         }
         @keyframes border-spin {
             to { --grad-angle: 360deg; }
@@ -554,6 +555,7 @@
             inset: 0;
             width: 100%;
             height: 100%;
+            border-radius: 14px; /* slightly inside the 16px parent radius */
             pointer-events: none;
         }
         .landing-logo {
@@ -591,9 +593,9 @@
         .landing-cta.loading .landing-status { display: block; }
 
         .landing-title {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 500;
-            color: #ccc;
+            color: #aaa;
         }
         .landing-hints {
             font-size: 12px;
