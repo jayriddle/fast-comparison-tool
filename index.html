@@ -1804,7 +1804,7 @@
                         <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
                     </svg>
                 </button>
-                <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull assets from IHWA" style="display:none;">
+                <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull Assets" style="display:none;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/>
                     </svg>
@@ -2644,8 +2644,8 @@
         // ── IHWA Pull ─────────────────────────────────────────────────────
         function pullFromIHWA() {
             const btn = document.getElementById('ihwaPullBtn');
-            btn.textContent = 'Pulling…';
             btn.disabled = true;
+            btn.style.opacity = '0.4';
             window.postMessage({ type: 'WARPDIFF_PULL' }, '*');
         }
 
@@ -2655,8 +2655,8 @@
             const btn = document.getElementById('ihwaPullBtn');
 
             if (event.data.error) {
-                btn.textContent = 'Pull Assets';
                 btn.disabled = false;
+                btn.style.opacity = '';
                 showLoadToast(event.data.error, true, 5000);
                 return;
             }
@@ -2677,8 +2677,8 @@
                     const files = await Promise.all(filePromises);
                     console.log(`[IHWA] Direct fetch: ${files.length} files in ${Math.round(performance.now() - t0)}ms`);
 
-                    btn.textContent = 'Pull Assets';
                     btn.disabled = false;
+                    btn.style.opacity = '';
                     handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
                     return;
                 } catch (e) {
@@ -2691,9 +2691,9 @@
 
             // Fallback path: base64-encoded files from background
             if (!event.data.files || event.data.files.length === 0) {
-                btn.textContent = 'Pull Assets';
                 btn.disabled = false;
-                showLoadToast('No media files received from IHWA', true, 5000);
+                btn.style.opacity = '';
+                showLoadToast('No media files received', true, 5000);
                 return;
             }
 
@@ -2714,8 +2714,8 @@
             const files = await Promise.all(filePromises);
             console.log(`[IHWA] Base64 fallback: ${files.length} files in ${Math.round(performance.now() - t0)}ms`);
 
-            btn.textContent = 'Pull Assets';
             btn.disabled = false;
+            btn.style.opacity = '';
             handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
         });
 
