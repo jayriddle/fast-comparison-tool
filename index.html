@@ -5082,15 +5082,16 @@
                             }
                         }
                     }
-                    // Force loop at effective duration for Opus sync slots
+                    // Force loop at effective duration for ALL Opus sync slots
                     // (native video.duration is longer than trimmed audio)
                     if (_opusSyncActive && _loopInPoint === null) {
-                        const slot = currentAudioSource || assetOrder[currentAssetIndex];
-                        const effDur = _opusSyncDuration[slot];
-                        if (effDur && primary.currentTime >= effDur - 0.05) {
-                            getAllPlayableMedia().forEach(m => { m.currentTime = 0; });
-                            for (const s of assetOrder) {
-                                if (_opusSyncSlots[s]) _startOpusSyncAudio(s, 0);
+                        for (const s of assetOrder) {
+                            if (!_opusSyncDuration[s]) continue;
+                            const layer = getLayer(s);
+                            const v = layer && layer.querySelector('video');
+                            if (v && !v.paused && v.currentTime >= _opusSyncDuration[s] - 0.05) {
+                                v.currentTime = 0;
+                                _startOpusSyncAudio(s, 0);
                             }
                         }
                     }
