@@ -1791,20 +1791,27 @@
         <div class="header">
             <div style="position: relative; display: flex; align-items: center; gap: 6px;">
                 <img src="WarpDiff_Logo_v1.png" alt="" style="width: 22px; height: 22px;"><span style="font-size: 16px; font-weight: 600;"><i>Warp</i>Diff</span><span id="appVersion" style="font-size: 11px; color: #888; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
-                <button class="position-toggle" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" data-help="Load 1–3 files (or press L)" style="margin-left: 16px;">
-                    Load
-                    <div class="help-tooltip">Select 1–3 files to review or compare (auto-sorts by save time). Shortcut: L</div>
+                <button class="analysis-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" title="Load files (L)" style="margin-left: 12px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
                 </button>
                 <input type="file" id="multiFileInput" accept="image/*,video/*,audio/*" multiple onchange="handleMultiFileLoad(event)" style="display: none;">
-                <button class="position-toggle" onclick="resetAll()" style="display: none;" id="resetBtn" data-help="Clear all assets and start over">
-                    Reset
-                    <div class="help-tooltip">Clear all assets and start over</div>
+                <button class="analysis-btn" onclick="resetAll()" style="display: none;" id="resetBtn" title="Reset">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+                    </svg>
                 </button>
-                <button class="position-toggle" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" data-help="Pull assets from an open IHWA tab" style="display:none;">
-                    Pull Assets
-                    <div class="help-tooltip">Pull assets from an open IHWA tab into WarpDiff</div>
+                <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull assets from IHWA" style="display:none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/>
+                    </svg>
                 </button>
-                <button class="quick-start-btn" onclick="toggleQuickStart()">Help</button>
+                <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </button>
 
             </div>
             <div id="headerRight" style="display:none; align-items:center; gap:2px;">
@@ -2004,7 +2011,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.7.2';
+        const APP_VERSION = '3.7.4';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -8206,7 +8213,7 @@
             <p><strong>Three ways to load files:</strong></p>
             <ul>
                 <li>Press <kbd>L</kbd></li>
-                <li>Click the <strong>Load</strong> button in the header</li>
+                <li>Click the load icon (file+) in the header</li>
                 <li>Drag and drop files onto the window</li>
             </ul>
             <p><strong>File requirements:</strong></p>
@@ -8218,7 +8225,7 @@
             </ul>
             <p><strong>Timestamp warning:</strong> If two or more files have timestamps within 2 seconds of each other, a toast warns that the sort order may be unreliable.</p>
             <p><strong>Duplicate detection:</strong> If two slots contain the same file (matched by name, size, and timestamp), a warning banner appears.</p>
-            <p><strong>Reset:</strong> Click the <strong>Reset</strong> button (visible after loading) to clear all files and start over.</p>
+            <p><strong>Reset:</strong> Click the reset icon (circular arrow, visible after loading) to clear all files and start over.</p>
 
             <h2>View Modes</h2>
             <p><strong>Stack</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
@@ -8228,7 +8235,8 @@
             <h2>Switching Modes</h2>
             <table>
                 <tr><th>Action</th><th>Result</th></tr>
-                <tr><td>Click <strong>STACK / GRID</strong> in header</td><td>Switch to that mode</td></tr>
+                <tr><td>Click stack icon (three bars) in header</td><td>Switch to Stack mode</td></tr>
+                <tr><td>Click grid icon (four squares) in header</td><td>Switch to Grid mode</td></tr>
                 <tr><td>Press <kbd>S</kbd></td><td>Toggle Stack ↔ Grid</td></tr>
                 <tr><td>Press <kbd>G</kbd></td><td>Toggle Grid ↔ Stack</td></tr>
             </table>
@@ -8290,7 +8298,7 @@
                 <tr><td><kbd>Shift</kbd> + click and drag</td><td>Select a region to set loop in/out points</td></tr>
                 <tr><td>Click on a different slot's canvas</td><td>Switch active audio to that slot</td></tr>
             </table>
-            <p><strong>Loop markers:</strong> Use <kbd>I</kbd> and <kbd>P</kbd> to set in and out points at the current playback position, or <kbd>Shift</kbd>-drag on a waveform to select a region visually. When both markers are set, playback loops between them. The progress bar turns orange and spans only the looped section. Non-looped regions are dimmed at 50% on waveforms and spectrograms.</p>
+            <p><strong>Loop markers:</strong> Use <kbd>I</kbd> and <kbd>P</kbd> to set in and out points at the current playback position, or <kbd>Shift</kbd>-drag on a waveform to select a region visually. When both markers are set, playback loops between them. The progress bar turns orange and spans only the looped section. Non-looped regions are dimmed at 50% on waveforms and spectrograms. Drag the orange triangle markers on the progress bar to adjust loop boundaries. Loop points are saved per asset — switching videos preserves each one's loop selection.</p>
             <table>
                 <tr><th>Shortcut</th><th>Action</th></tr>
                 <tr><td><kbd>I</kbd></td><td>Set loop in-point at current time</td></tr>
@@ -8373,15 +8381,20 @@
             <h3>Getting Started</h3>
             <ul>
                 <li>Save assets from the review tool: right-click ▸ Open in New Tab (auto-saves to Downloads on macOS) or right-click ▸ Save</li>
-                <li>Drop 1–3 image, video, or audio files onto this window, or press <kbd>L</kbd> to load from file browser</li>
+                <li>Drop 1–3 image, video, or audio files onto this window, or click the load icon (file+) in the header</li>
                 <li>Files auto-sort by save time (Original, Edit A, Edit B) — save files one at a time so timestamps reflect the correct order</li>
             </ul>
 
-            <h3>View Modes</h3>
-            <ul>
-                <li><strong>Stack</strong> <kbd>S</kbd> — flip between assets with <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></li>
-                <li><strong>Grid</strong> <kbd>G</kbd> — all assets visible at once; <kbd>3</kbd> toggles inline / offset layout</li>
-            </ul>
+            <h3>Header Icons</h3>
+            <table style="font-size:12px; margin: 4px 0 8px;">
+                <tr><td>File+ icon</td><td>Load files (or press <kbd>L</kbd>)</td></tr>
+                <tr><td>Circular arrow</td><td>Reset</td></tr>
+                <tr><td>? circle</td><td>This help screen</td></tr>
+                <tr><td>Three bars</td><td>Stack mode <kbd>S</kbd> — flip between assets</td></tr>
+                <tr><td>Four squares</td><td>Grid mode <kbd>G</kbd> — all assets side by side</td></tr>
+                <tr><td>Waveform box</td><td>Audio waveform + spectrogram <kbd>W</kbd></td></tr>
+                <tr><td>Vectorscope circle</td><td>Video scopes <kbd>V</kbd></td></tr>
+            </table>
 
             <h3>Zoom Loupe</h3>
             <ul>
@@ -8427,6 +8440,14 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.7.4</h3>
+            <ul>
+                <li>Icon-based header — Load, Reset, Help, Stack, Grid, Waveform, and Scopes are now icons with tooltips</li>
+                <li>Draggable loop markers — drag the orange in/out triangles on the progress bar to adjust loop range</li>
+                <li>Loop points saved per asset — switching videos preserves each one's loop selection</li>
+                <li>Passive frame rate detection — no more loading delay, fps detected during playback</li>
+                <li>Bug fixes</li>
+            </ul>
             <h3>v3.7.2</h3>
             <ul>
                 <li>Audio waveforms and spectrograms now work in Safari for Opus video</li>
@@ -8440,38 +8461,10 @@
                 <li>Play/pause button on the progress bar</li>
                 <li>Loop fix — custom loop points no longer conflict with native looping</li>
             </ul>
-            <h3>v3.65</h3>
+            <h3>v3.6.5</h3>
             <ul>
-                <li>Difference mode — press <kbd>D</kbd> in Stack mode to see pixel differences between two assets; identical pixels are black, differences glow</li>
-                <li>Arrow keys cycle through pairs (Source–A, Source–B, A–B) when difference mode is active</li>
+                <li>Difference mode — press <kbd>D</kbd> in Stack mode to see pixel differences between two assets</li>
                 <li>Works with images and video — updates live during playback and on frame step</li>
-            </ul>
-            <h3>v3.6</h3>
-            <ul>
-                <li>Single-file mode — load 1 file for solo review, 2 for A/B, 3 for A/B/GT</li>
-                <li>Expanded waveform/spectrogram panel for video playback</li>
-                <li>Audio loop fix — correct track used as primary, drift correction for multi-track loops</li>
-                <li>Smoother playback</li>
-            </ul>
-            <h3>v3.5</h3>
-            <ul>
-                <li>Zoom level shown as percentage pill in the info bar — always visible</li>
-                <li>Grid sub-layout picker (Inline / Offset) in header strip</li>
-                <li>Click-to-cycle scope modes — waveform (luma/parade/overlay), histogram (RGB/RGB+luma/CDF)</li>
-                <li>Customizable hotkeys — press <kbd>H</kbd> then click any key to rebind</li>
-                <li>Faster video loading and smoother fade-in</li>
-            </ul>
-            <h3>v3.4</h3>
-            <ul>
-                <li>Installable PWA — add to dock for fast offline access</li>
-                <li>Responsive grid layout — auto-picks horizontal or vertical for largest images</li>
-            </ul>
-            <h3>v3.3</h3>
-            <ul>
-                <li>Loop markers — <kbd>I</kbd> sets in point, <kbd>P</kbd> sets out point, or <kbd>Shift</kbd>+drag on the timeline</li>
-                <li>Click anywhere on an audio waveform to scrub to that position</li>
-                <li>Smoother waveform rendering with anti-aliased edges and gradient shading</li>
-                <li>Regions outside the loop range are dimmed on the analysis waveform</li>
             </ul>
         </div>
     </div>
