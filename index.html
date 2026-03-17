@@ -222,7 +222,7 @@
         .audio-source-selector button.muted {
             background: #2a2a2a;
             color: #aaa;
-            border: 2px solid #ff4444;
+            border: 2px solid rgba(255, 68, 68, 0.5);
             opacity: 0.8;
         }
 
@@ -7583,12 +7583,12 @@
                 // (updateViewModeButtons will set correct visibility based on asset count)
 
                 // Show/hide audio source buttons based on what's loaded
-                // In audio-only mode, relabel "O" → "GT" (Ground Truth)
-                if (hasAudios && mediaData.original) {
+                // Relabel "O" to match header: "GT" in audio mode, "S" (Source) for video
+                if (mediaData.original) {
                     const btn = document.getElementById('audioOriginal');
-                    // Replace text node only (preserve the mute icon span)
                     const textNodes = [...btn.childNodes].filter(n => n.nodeType === Node.TEXT_NODE);
-                    textNodes.forEach(n => { n.textContent = n.textContent.replace('O', 'GT'); });
+                    const label = hasAudios ? 'GT' : 'S';
+                    textNodes.forEach(n => { n.textContent = n.textContent.replace(/\s*[A-Z]+\s*/, ' ' + label + ' '); });
                 }
                 document.getElementById('audioOriginal').style.display = mediaData.original ? 'inline-block' : 'none';
                 document.getElementById('audioEditA').style.display = mediaData.editA ? 'inline-block' : 'none';
@@ -8389,13 +8389,13 @@
 
             <h3>Header Icons</h3>
             <table style="font-size:12px; margin: 4px 0 8px;">
-                <tr><td>File+ icon</td><td>Load files (or press <kbd>L</kbd>)</td></tr>
-                <tr><td>Circular arrow</td><td>Reset</td></tr>
-                <tr><td>? circle</td><td>This help screen</td></tr>
-                <tr><td>Three bars</td><td>Stack mode <kbd>S</kbd> — flip between assets</td></tr>
-                <tr><td>Four squares</td><td>Grid mode <kbd>G</kbd> — all assets side by side</td></tr>
-                <tr><td>Waveform box</td><td>Audio waveform + spectrogram <kbd>W</kbd></td></tr>
-                <tr><td>Vectorscope circle</td><td>Video scopes <kbd>V</kbd></td></tr>
+                <tr><td style="width:28px;text-align:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:middle;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></td><td>Load files <kbd>L</kbd></td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:middle;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg></td><td>Reset</td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:middle;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></td><td>Help <kbd>?</kbd></td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width:16px;height:16px;vertical-align:middle;"><rect x="3" y="5" width="18" height="3" rx="1"/><rect x="3" y="11" width="18" height="3" rx="1"/><rect x="3" y="17" width="18" height="3" rx="1"/></svg></td><td>Stack mode <kbd>S</kbd></td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width:16px;height:16px;vertical-align:middle;"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></td><td>Grid mode <kbd>G</kbd></td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:middle;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M5 12 l1.5-3 1.5 5 1.5-7 1.5 8 1.5-4 1.5 6 1.5-5 1.5 3 1.5-4 1.5 2"/><path d="M5 12 l1.5 3 1.5-5 1.5 7 1.5-8 1.5 4 1.5-6 1.5 5 1.5-3 1.5 4 1.5-2"/></svg></td><td>Audio waveform + spectrogram <kbd>W</kbd></td></tr>
+                <tr><td style="text-align:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:middle;"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 12 l3-5 2 3 -1 4"/></svg></td><td>Video scopes <kbd>V</kbd></td></tr>
             </table>
 
             <h3>Zoom Loupe</h3>
