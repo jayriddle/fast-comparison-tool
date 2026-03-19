@@ -896,6 +896,15 @@
             color: #ffffff;
         }
 
+        .phase-warning {
+            font-size: 10px;
+            color: #f0a030;
+            background: rgba(240, 160, 48, 0.15);
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-left: auto;
+        }
+
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
             padding: 1px 6px;
@@ -1962,7 +1971,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.7.5';
+        const APP_VERSION = '3.7.6';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2501,6 +2510,7 @@
         let _loopPointsPerSlot = {}; // { slot: { inPoint, outPoint } } — saved per asset
         let _lastEscTime = 0;     // timestamp of last Esc press for double-tap detection
         let isDragging = false;   // true during progress bar or canvas scrub
+        let _frameKicking = false; // true while _frameKick's async play/pause cycle is in flight
         let isPanning = false;
         let expectedFileCount = 0; // set by handleMultipleFiles; checkAllLoaded waits for this many
         let panStartX = 0;
@@ -3211,6 +3221,103 @@
             if (slot === activeSlot || slot === currentAudioSource) {
                 updateAudioVisForSlot(slot);
             }
+
+            // Run phase/polarity analysis
+            _checkAudioPhase(slot);
+        }
+
+        // ── Audio phase/polarity analysis ──
+        // Detects L/R polarity inversion within a track and polarity/delay
+        // differences between tracks. Uses downsampled waveform data (fast).
+        let _phaseWarnings = {}; // { slot: [warning strings] }
+
+        function _correlate(a, b, maxLag) {
+            // Normalized cross-correlation between two Float32Arrays
+            // Returns { peak, lag } — peak is -1..1, lag is offset in buckets
+            const n = Math.min(a.length, b.length);
+            let sumA2 = 0, sumB2 = 0;
+            for (let i = 0; i < n; i++) { sumA2 += a[i] * a[i]; sumB2 += b[i] * b[i]; }
+            const norm = Math.sqrt(sumA2 * sumB2);
+            if (norm < 1e-10) return { peak: 0, lag: 0 };
+            let bestVal = -Infinity, bestLag = 0;
+            for (let lag = -maxLag; lag <= maxLag; lag++) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    const j = i + lag;
+                    if (j >= 0 && j < n) sum += a[i] * b[j];
+                }
+                const val = sum / norm;
+                if (val > bestVal) { bestVal = val; bestLag = lag; }
+            }
+            return { peak: bestVal, lag: bestLag };
+        }
+
+        function _extractMidpoints(wfChannel) {
+            // Convert min/max pairs to midpoints for correlation
+            const n = wfChannel.length / 2;
+            const mid = new Float32Array(n);
+            for (let i = 0; i < n; i++) {
+                mid[i] = (wfChannel[i * 2] + wfChannel[i * 2 + 1]) / 2;
+            }
+            return mid;
+        }
+
+        function _checkAudioPhase(slot) {
+            const wf = waveformData[slot];
+            if (!wf || !wf.L) return;
+            const warnings = [];
+            const midL = _extractMidpoints(wf.L);
+
+            // 1. L/R polarity check within this track
+            if (wf.R) {
+                const midR = _extractMidpoints(wf.R);
+                const lr = _correlate(midL, midR, 5);
+                if (lr.peak < -0.5) {
+                    warnings.push('L/R polarity inverted');
+                } else if (lr.peak < -0.2) {
+                    warnings.push('L/R phase issue');
+                }
+            }
+
+            // 2. Cross-track comparison (compare this slot against original or first loaded)
+            const refSlot = mediaData.original ? 'original' : assetOrder.find(s => s !== slot && waveformData[s]);
+            if (refSlot && refSlot !== slot && waveformData[refSlot] && waveformData[refSlot].L) {
+                const refMidL = _extractMidpoints(waveformData[refSlot].L);
+                const cross = _correlate(midL, refMidL, 20);
+                if (cross.peak < -0.5) {
+                    warnings.push('Polarity inverted vs ' + slotLabel(refSlot));
+                }
+                if (Math.abs(cross.lag) > 1) {
+                    // Convert lag in buckets to approximate ms
+                    const buf = _videoAudioBuffers[slot];
+                    const dur = buf ? buf.duration : 10;
+                    const bucketMs = (dur / (wf.L.length / 2)) * 1000;
+                    const delayMs = Math.round(cross.lag * bucketMs);
+                    if (Math.abs(delayMs) >= 5) {
+                        warnings.push('Audio offset: ' + (delayMs > 0 ? '+' : '') + delayMs + 'ms vs ' + slotLabel(refSlot));
+                    }
+                }
+            }
+
+            _phaseWarnings[slot] = warnings;
+            _showPhaseWarnings(slot);
+        }
+
+        function _showPhaseWarnings(slot) {
+            const layer = getLayer(slot);
+            if (!layer) return;
+            const infoBar = layer.querySelector('.asset-info-bar');
+            if (!infoBar) return;
+            // Remove existing warning
+            let badge = infoBar.querySelector('.phase-warning');
+            if (badge) badge.remove();
+            const warnings = _phaseWarnings[slot];
+            if (!warnings || warnings.length === 0) return;
+            badge = document.createElement('span');
+            badge.className = 'phase-warning';
+            badge.textContent = warnings.join(' · ');
+            badge.title = warnings.join('\n');
+            infoBar.appendChild(badge);
         }
 
         // Fallback for browsers where decodeAudioData fails (e.g. Safari + Opus).
@@ -5165,6 +5272,7 @@
 
             video.addEventListener('play', function() {
                 if (_bulkSyncActive) return;
+                if (isDragging || _frameKicking) return; // _frameKick may trigger play during scrub; don't cascade
                 // Sync all videos when any video plays
                 syncVideos(video, v => {
                     v.play().catch(() => {});
@@ -5566,14 +5674,19 @@
             let _scrubVideo = null;
             let _scrubAllVideos = null;
             let _scrubContainerRect = null;
+            let _scrubMutedStates = null; // saved muted flags, restored on mouseup
+            let _activeLastSeekTime = 0;   // last time the active video was seeked (drag throttle)
+            let _inactiveLastSeekTime = 0; // last time inactive videos were seeked (grid throttle)
 
             // Force Chrome to render a frame on a muted+paused video by briefly
             // playing then immediately pausing. Without this, Chrome skips frame
             // decoding for muted paused videos on seek.
             function _frameKick(video) {
-                if (!_isChrome || !video.muted || !video.paused) return;
-                video.play().then(() => video.pause()).catch(() => {});
+                if (!_isChrome || !video.muted || !video.paused || _frameKicking) return;
+                _frameKicking = true;
+                video.play().then(() => { video.pause(); _frameKicking = false; }).catch(() => { _frameKicking = false; });
             }
+
 
             // Seek all videos to the position under the cursor and update the UI.
             // Direct synchronous currentTime assignment — no rAF needed; browsers
@@ -5596,12 +5709,25 @@
                 const fps = videoFrameRates[video.src] || 30;
                 const endGuard = 0.5 / fps; // half a frame
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
-                video.currentTime = t;
-                _frameKick(video);
+                // Throttle active video to ~33ms during drag so Chrome's decode queue
+                // doesn't back up. mouseup always seeks precisely (isDragging is false).
+                const now = performance.now();
+                const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
+                if (seekActive) {
+                    if (isDragging) _activeLastSeekTime = now;
+                    video.currentTime = t;
+                    _frameKick(video);
+                }
                 if (_scrubAllVideos) {
+                    // Stack mode: inactive videos are hidden — skip their seeks during drag.
+                    // Grid mode: throttle inactive seeks to ~100ms; all synced on mouseup.
+                    const seekInactive = !isDragging ||
+                        (isGridMode && now - _inactiveLastSeekTime >= 100);
+                    if (seekInactive && isGridMode) _inactiveLastSeekTime = now;
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
                         if (v !== video && !isNaN(v.duration)) {
+                            if (!seekInactive) continue;
                             const vfps = videoFrameRates[v.src] || 30;
                             v.currentTime = Math.min(pct * seekDur, v.duration - 0.5 / vfps);
                             _frameKick(v);
@@ -5647,12 +5773,21 @@
                 const fps = videoFrameRates[media.src] || 30;
                 const endGuard = 0.5 / fps;
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
-                media.currentTime = t;
-                _frameKick(media);
+                const now = performance.now();
+                const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
+                if (seekActive) {
+                    if (isDragging) _activeLastSeekTime = now;
+                    media.currentTime = t;
+                    _frameKick(media);
+                }
                 if (_scrubAllVideos) {
+                    const seekInactive = !isDragging ||
+                        (isGridMode && now - _inactiveLastSeekTime >= 100);
+                    if (seekInactive && isGridMode) _inactiveLastSeekTime = now;
                     for (let i = 0; i < _scrubAllVideos.length; i++) {
                         const v = _scrubAllVideos[i];
                         if (v !== media && !isNaN(v.duration)) {
+                            if (!seekInactive) continue;
                             const vfps = videoFrameRates[v.src] || 30;
                             v.currentTime = Math.min(pct * seekDur, v.duration - 0.5 / vfps);
                             _frameKick(v);
@@ -5693,6 +5828,8 @@
                 e.preventDefault(); // prevent default drag/selection behavior from trackpad taps
                 _scrubCanvas = canvas;
                 isDragging = true;
+                _activeLastSeekTime = 0;
+                _inactiveLastSeekTime = 0;
 
                 if (globalAnimationId !== null) {
                     cancelAnimationFrame(globalAnimationId);
@@ -5719,6 +5856,12 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
+                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
+                // Muted state is restored on mouseup; no audio plays because videos are paused.
+                if (_scrubAllVideos) {
+                    _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
+                    _scrubAllVideos.forEach(v => { v.muted = false; });
+                }
 
                 if (e.shiftKey) {
                     _regionSelectStart = canvasXToTime(e, canvas);
@@ -5743,6 +5886,8 @@
                 }
 
                 isDragging = true;
+                _activeLastSeekTime = 0;
+                _inactiveLastSeekTime = 0;
 
                 // Cancel any pending progress-loop frame so it can't override the bar during drag
                 if (globalAnimationId !== null) {
@@ -5769,8 +5914,12 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                // Unmute during scrub — Chrome won't render frames on paused+muted video.
-                // Re-muted on mouseup. Native audio won't play since video is paused.
+                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
+                // Muted state is restored on mouseup; no audio plays because videos are paused.
+                if (_scrubAllVideos) {
+                    _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
+                    _scrubAllVideos.forEach(v => { v.muted = false; });
+                }
 
                 if (e.shiftKey) {
                     _regionSelectStart = progressBarXToTime(e);
@@ -5869,9 +6018,14 @@
                     // Don't resume playback if scrubbed to the very end — play() would wrap to 0
                     const _scrubAtEnd = _scrubVideo && _scrubVideo.duration - _scrubVideo.currentTime < 0.05;
 
+                    // Restore per-video muted states saved at mousedown
+                    if (_scrubAllVideos && _scrubMutedStates) {
+                        _scrubAllVideos.forEach((v, i) => { v.muted = _scrubMutedStates[i]; });
+                    }
                     _scrubVideo = null;
                     _scrubAllVideos = null;
                     _scrubContainerRect = null;
+                    _scrubMutedStates = null;
 
                     // Reset so the RAF loop doesn't misinterpret the seek as a backward jump
                     _lastPrimaryAudioTime = 0;
@@ -6241,6 +6395,7 @@
             _audioSlotVizData = {};
             _audioMaxDuration = 0;
             _audioVizDecodeStarted = false;
+            _phaseWarnings = {};
             // audioVizVisible persists across loads (saved in localStorage)
             magnifierEnabled = false;
             // Keep persisted prefs (magnifierLinked, magnifierZoom, magnifierSize,
@@ -7672,6 +7827,9 @@
 
                 function startFadeIn() {
                     hideLoading();
+                    // Eagerly decode audio for all slots so scrub snippet audio works
+                    // without requiring the user to open the waveform panel first.
+                    _ensureAudioVizDecoded();
                     // Double-rAF ensures opacity:0 is painted before adding the transition.
                     requestAnimationFrame(() => requestAnimationFrame(() => {
                         loadedLayers.forEach(layer => {
@@ -8397,7 +8555,7 @@
             </ul>
 
             <h3>Header Icons</h3>
-            <table style="font-size:12px; margin: 4px 0 8px;" id="helpIconTable"></table>
+            <table style="font-size:12px; margin: 4px 0 8px; border-spacing: 0 6px;" id="helpIconTable"></table>
 
             <h3>Zoom Loupe</h3>
             <ul>
@@ -8443,6 +8601,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.7.6</h3>
+            <ul>
+                <li>Improved scrubbing — smoother frame updates and audio preview while dragging</li>
+            </ul>
             <h3>v3.7.5</h3>
             <ul>
                 <li>Scopes and waveform panels persist across file loads</li>
