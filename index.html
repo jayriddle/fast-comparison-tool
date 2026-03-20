@@ -2808,6 +2808,7 @@
 
             const ctx = getAudioContext();
             const slot = currentAudioSource || assetOrder[currentAssetIndex];
+            if (isMuted || audioMuteStates[slot]) return; // respect global + per-slot mute (Web Audio bypasses video.muted)
             const vizData = _audioSlotVizData[slot];
             const buf = (vizData && vizData.audioBuffer) || _videoAudioBuffers[slot];
             if (!buf) return;
