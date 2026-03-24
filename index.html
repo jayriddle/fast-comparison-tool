@@ -2639,22 +2639,54 @@
         }
 
         // ── IHWA Pull ─────────────────────────────────────────────────────
+        let _ihwaPullTimer   = null;
+        let _ihwaPullRetries = 0;
+        const _IHWA_MAX_RETRIES = 3;
+        const _IHWA_RETRY_MS    = 2000;
+
+        function _ihwaPullReset(msg, isError) {
+            clearTimeout(_ihwaPullTimer);
+            _ihwaPullTimer   = null;
+            _ihwaPullRetries = 0;
+            const btn = document.getElementById('ihwaPullBtn');
+            btn.disabled = false;
+            btn.style.opacity = '';
+            if (msg) showLoadToast(msg, isError, 6000);
+        }
+
         function pullFromIHWA() {
             const btn = document.getElementById('ihwaPullBtn');
             btn.disabled = true;
             btn.style.opacity = '0.4';
+            _ihwaPullRetries = 0;
+            clearTimeout(_ihwaPullTimer);
+            _ihwaPullTimer = setTimeout(() => {
+                _ihwaPullReset('Extension not responding — try refreshing the IHWA page', true);
+            }, 12000);
             window.postMessage({ type: 'WARPDIFF_PULL' }, '*');
+        }
+
+        function _ihwaPullRetry() {
+            // Empty response with no error — extension may not be ready yet
+            // (common race when IHWA page just refreshed). Retry a few times
+            // before surfacing an error to the user.
+            if (_ihwaPullRetries < _IHWA_MAX_RETRIES) {
+                _ihwaPullRetries++;
+                setTimeout(() => {
+                    const btn = document.getElementById('ihwaPullBtn');
+                    if (btn && btn.disabled) // only if a pull session is still active
+                        window.postMessage({ type: 'WARPDIFF_PULL' }, '*');
+                }, _IHWA_RETRY_MS);
+            } else {
+                _ihwaPullReset('No media files found — try refreshing the IHWA page', true);
+            }
         }
 
         window.addEventListener('message', async (event) => {
             if (event.source !== window || !event.data || event.data.type !== 'WARPDIFF_LOAD') return;
 
-            const btn = document.getElementById('ihwaPullBtn');
-
             if (event.data.error) {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                showLoadToast(event.data.error, true, 5000);
+                _ihwaPullReset(event.data.error + ' — try refreshing the IHWA page', true);
                 return;
             }
 
@@ -2674,13 +2706,13 @@
                     const files = await Promise.all(filePromises);
                     console.log(`[IHWA] Direct fetch: ${files.length} files in ${Math.round(performance.now() - t0)}ms`);
 
-                    btn.disabled = false;
-                    btn.style.opacity = '';
+                    _ihwaPullReset();
                     handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
                     return;
                 } catch (e) {
                     // CORS or network error — fall back to base64 via background
                     console.warn('[IHWA] Direct fetch failed, requesting fallback:', e.message);
+                    // Reuse existing timer — still waiting for a WARPDIFF_LOAD response
                     window.postMessage({ type: 'WARPDIFF_PULL_FALLBACK' }, '*');
                     return;
                 }
@@ -2688,9 +2720,7 @@
 
             // Fallback path: base64-encoded files from background
             if (!event.data.files || event.data.files.length === 0) {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                showLoadToast('No media files received', true, 5000);
+                _ihwaPullRetry(); // may be a race on IHWA page refresh — retry before giving up
                 return;
             }
 
@@ -2711,8 +2741,7 @@
             const files = await Promise.all(filePromises);
             console.log(`[IHWA] Base64 fallback: ${files.length} files in ${Math.round(performance.now() - t0)}ms`);
 
-            btn.disabled = false;
-            btn.style.opacity = '';
+            _ihwaPullReset();
             handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
         });
 
@@ -2724,14 +2753,14 @@
             );
 
             if (mediaFiles.length < 1 || mediaFiles.length > 3) {
-                alert(`Please select 1–3 media files.\nYou selected ${mediaFiles.length} media file(s).\n\n1 file = single asset review\n2 files = A vs B\n3 files = Original vs Edit A vs Edit B`);
+                showLoadToast(`${mediaFiles.length} files received — WarpDiff supports 1–3 (single review, A vs B, or A vs B vs C)`, true, 8000);
                 return;
             }
 
             // Reject mixed audio + non-audio loads
             const audioCount = mediaFiles.filter(f => f.type.startsWith('audio/')).length;
             if (audioCount > 0 && audioCount < mediaFiles.length) {
-                alert('Cannot mix audio files with image/video files.\nPlease load either all audio files or all image/video files.');
+                showLoadToast('Cannot mix audio with image/video files — load all audio or all image/video', true, 8000);
                 return;
             }
 
@@ -7435,10 +7464,18 @@
             document.getElementById('headerRight').style.display = 'flex';
             document.getElementById('analysisStrip').style.display = 'flex';
             document.getElementById('iconSep1').style.display = '';
-            if (loadedCount <= 1) { strip.style.display = 'none'; return; }
-
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
             const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
+
+            if (loadedCount <= 1) {
+                strip.style.display = 'none';
+                // Still update icon states so Stack appears active for single-file loads
+                const stackIconBtn = document.getElementById('stackIconBtn');
+                const gridIconBtn = document.getElementById('gridIconBtn');
+                if (stackIconBtn) { stackIconBtn.classList.add('active'); }
+                if (gridIconBtn) { gridIconBtn.classList.remove('active'); }
+                return;
+            }
 
             // No sequential close-then-open — rebuild immediately and let
             // incoming animations (grid width expand / overlay slide-in) play naturally.
