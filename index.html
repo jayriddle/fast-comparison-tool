@@ -896,15 +896,6 @@
             color: #ffffff;
         }
 
-        .phase-warning {
-            font-size: 10px;
-            color: #f0a030;
-            background: rgba(240, 160, 48, 0.15);
-            padding: 1px 6px;
-            border-radius: 3px;
-            margin-left: auto;
-        }
-
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
             padding: 1px 6px;
@@ -3252,102 +3243,6 @@
                 updateAudioVisForSlot(slot);
             }
 
-            // Run phase/polarity analysis
-            _checkAudioPhase(slot);
-        }
-
-        // ── Audio phase/polarity analysis ──
-        // Detects L/R polarity inversion within a track and polarity/delay
-        // differences between tracks. Uses downsampled waveform data (fast).
-        let _phaseWarnings = {}; // { slot: [warning strings] }
-
-        function _correlate(a, b, maxLag) {
-            // Normalized cross-correlation between two Float32Arrays
-            // Returns { peak, lag } — peak is -1..1, lag is offset in buckets
-            const n = Math.min(a.length, b.length);
-            let sumA2 = 0, sumB2 = 0;
-            for (let i = 0; i < n; i++) { sumA2 += a[i] * a[i]; sumB2 += b[i] * b[i]; }
-            const norm = Math.sqrt(sumA2 * sumB2);
-            if (norm < 1e-10) return { peak: 0, lag: 0 };
-            let bestVal = -Infinity, bestLag = 0;
-            for (let lag = -maxLag; lag <= maxLag; lag++) {
-                let sum = 0;
-                for (let i = 0; i < n; i++) {
-                    const j = i + lag;
-                    if (j >= 0 && j < n) sum += a[i] * b[j];
-                }
-                const val = sum / norm;
-                if (val > bestVal) { bestVal = val; bestLag = lag; }
-            }
-            return { peak: bestVal, lag: bestLag };
-        }
-
-        function _extractMidpoints(wfChannel) {
-            // Convert min/max pairs to midpoints for correlation
-            const n = wfChannel.length / 2;
-            const mid = new Float32Array(n);
-            for (let i = 0; i < n; i++) {
-                mid[i] = (wfChannel[i * 2] + wfChannel[i * 2 + 1]) / 2;
-            }
-            return mid;
-        }
-
-        function _checkAudioPhase(slot) {
-            const wf = waveformData[slot];
-            if (!wf || !wf.L) return;
-            const warnings = [];
-            const midL = _extractMidpoints(wf.L);
-
-            // 1. L/R polarity check within this track
-            if (wf.R) {
-                const midR = _extractMidpoints(wf.R);
-                const lr = _correlate(midL, midR, 5);
-                if (lr.peak < -0.5) {
-                    warnings.push('L/R polarity inverted');
-                } else if (lr.peak < -0.2) {
-                    warnings.push('L/R phase issue');
-                }
-            }
-
-            // 2. Cross-track comparison (compare this slot against original or first loaded)
-            const refSlot = mediaData.original ? 'original' : assetOrder.find(s => s !== slot && waveformData[s]);
-            if (refSlot && refSlot !== slot && waveformData[refSlot] && waveformData[refSlot].L) {
-                const refMidL = _extractMidpoints(waveformData[refSlot].L);
-                const cross = _correlate(midL, refMidL, 20);
-                if (cross.peak < -0.5) {
-                    warnings.push('Polarity inverted vs ' + slotLabel(refSlot));
-                }
-                if (Math.abs(cross.lag) > 1) {
-                    // Convert lag in buckets to approximate ms
-                    const buf = _videoAudioBuffers[slot];
-                    const dur = buf ? buf.duration : 10;
-                    const bucketMs = (dur / (wf.L.length / 2)) * 1000;
-                    const delayMs = Math.round(cross.lag * bucketMs);
-                    if (Math.abs(delayMs) >= 5) {
-                        warnings.push('Audio offset: ' + (delayMs > 0 ? '+' : '') + delayMs + 'ms vs ' + slotLabel(refSlot));
-                    }
-                }
-            }
-
-            _phaseWarnings[slot] = warnings;
-            _showPhaseWarnings(slot);
-        }
-
-        function _showPhaseWarnings(slot) {
-            const layer = getLayer(slot);
-            if (!layer) return;
-            const infoBar = layer.querySelector('.asset-info-bar');
-            if (!infoBar) return;
-            // Remove existing warning
-            let badge = infoBar.querySelector('.phase-warning');
-            if (badge) badge.remove();
-            const warnings = _phaseWarnings[slot];
-            if (!warnings || warnings.length === 0) return;
-            badge = document.createElement('span');
-            badge.className = 'phase-warning';
-            badge.textContent = warnings.join(' · ');
-            badge.title = warnings.join('\n');
-            infoBar.appendChild(badge);
         }
 
         // Fallback for browsers where decodeAudioData fails (e.g. Safari + Opus).
@@ -6425,7 +6320,6 @@
             _audioSlotVizData = {};
             _audioMaxDuration = 0;
             _audioVizDecodeStarted = false;
-            _phaseWarnings = {};
             // audioVizVisible persists across loads (saved in localStorage)
             magnifierEnabled = false;
             // Keep persisted prefs (magnifierLinked, magnifierZoom, magnifierSize,
