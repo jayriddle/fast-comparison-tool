@@ -2191,7 +2191,7 @@
             const media = _fll ? _fll.querySelector('video') : getAllPlayableMedia()[0];
             const fps = (media && videoFrameRates[media.src]) || 30;
             if (timecodeMode === 'frames') {
-                return 'F' + (Math.floor(t * fps + 0.01) + 1);
+                return (Math.floor(t * fps + 0.01) + 1) + 'F';
             } else if (timecodeMode === 'seconds') {
                 const m = Math.floor(t / 60);
                 const s = t - m * 60;
@@ -2522,7 +2522,7 @@
         let splitZoomLevel = null; // null = fit-to-panel; 1 = cap at 100% actual pixels (compare modes)
         let splitStepZoom = 1.0; // multiplicative zoom for split modes (1.0 = no extra zoom)
         let _gridZoomWasCapped = false; // set by offset pre-pass; read by '1' key handler
-        let timecodeMode = 'time'; // 'time', 'frames', or 'seconds'
+        let timecodeMode = _prefs.load('timecodeMode', 'time'); // 'time', 'frames', or 'seconds'
         let videoFrameRates = {}; // Store framerate for each video
 
         // Audio visualization state
@@ -5437,8 +5437,8 @@
             if (timecodeMode === 'frames') {
                 const totalFrames = Math.floor(duration * fps + 0.01);
                 const currentFrame = Math.min(Math.floor(currentTime * fps + 0.01), totalFrames - 1);
-                _elTimecode.textContent = `Frame ${currentFrame + 1}`;
-                _elDuration.textContent = `${totalFrames}`;
+                _elTimecode.textContent = `${currentFrame + 1}F`;
+                _elDuration.textContent = `${totalFrames}F`;
             } else if (timecodeMode === 'seconds') {
                 // Centiseconds mode: S.cc / M:SS.cc
                 const fmtCs = (t, showMin) => {
@@ -5502,7 +5502,8 @@
         }
 
         function toggleTimecodeMode() {
-            timecodeMode = timecodeMode === 'time' ? 'frames' : timecodeMode === 'frames' ? 'seconds' : 'time';
+            timecodeMode = timecodeMode === 'time' ? 'seconds' : timecodeMode === 'seconds' ? 'frames' : 'time';
+            _prefs.save('timecodeMode', timecodeMode);
             // Update display immediately
             const activeLayer = document.querySelector('.asset-layer.active');
             if (activeLayer) {
@@ -6402,8 +6403,7 @@
             if (_elTimecode) _elTimecode.textContent = '0:00';
             if (_elDuration) _elDuration.textContent = '0:00';
 
-            // Reset timecode display mode and stale fps cache
-            timecodeMode = 'time';
+            // Reset stale fps cache (timecode mode persists via prefs)
             videoFrameRates = {};
 
             // Clean up loop and audio visualization state
