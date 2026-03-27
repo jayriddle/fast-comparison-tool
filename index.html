@@ -1777,6 +1777,16 @@
             overflow: hidden;
         }
 
+        /* No-video mode: hide picture, show per-slot audio viz canvas */
+        body.no-video .video-wrapper video { display: none; }
+
+        /* Black-and-white mode */
+        body.bw-mode video, body.bw-mode img { filter: grayscale(1); }
+        body.no-video.grid-mode .video-wrapper.no-video-group {
+            top: 0 !important; left: 0 !important;
+            width: 100% !important; height: 100% !important;
+        }
+
     </style>
 </head>
 <body>
@@ -1962,7 +1972,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.7.6';
+        const APP_VERSION = '3.7.7';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2137,8 +2147,8 @@
         }
 
         function redrawAudioSlotCanvases() {
-            if (hasAudios) {
-                ['original', 'editA', 'editB'].forEach(s => {
+            if (hasAudios || _noVideoMode) {
+                assetOrder.forEach(s => {
                     if (_audioSlotVizData[s]) drawAudioSlotCanvas(s);
                 });
             } else if (hasVideos && audioVizVisible) {
@@ -2524,6 +2534,9 @@
         let audioVizVisible = _prefs.load('audioVizVisible', false);   // W key toggle
         let _preVizZoomLevel = null;   // saved zoom when waveform panel forces fit
         let audioVizExpanded = false;  // removed — kept as false for compat
+        let _noVideoMode = false;
+        let _noVideoLayoutSnapshot = null; // { isGridMode, layoutMode } saved on entry
+        let _bwMode = false;
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
         let videoScopesVisible = _prefs.load('videoScopesVisible', false); // V key toggle
         // _scopeOffscreen moved to js/scopes.js
@@ -3243,6 +3256,11 @@
                 updateAudioVisForSlot(slot);
             }
 
+            // If no-video mode is active, populate viz data and draw canvas now
+            if (_noVideoMode && hasVideos) {
+                _populateNoVideoSlotData(slot);
+                drawAudioSlotCanvas(slot);
+            }
         }
 
         // Fallback for browsers where decodeAudioData fails (e.g. Safari + Opus).
@@ -3982,6 +4000,92 @@
             animateRelayout(350);
         }
 
+        // ── No-video mode (N key) ──
+        // Hides video picture and shows per-slot waveform+spectrogram, like audio-only mode.
+
+        function _populateNoVideoSlotData(slot) {
+            const buf = _videoAudioBuffers[slot];
+            if (!buf || _audioSlotVizData[slot]) return;
+            const dpr = window.devicePixelRatio || 1;
+            const maxPx = Math.round(window.innerWidth * dpr);
+            const numBuckets = Math.min(Math.ceil(buf.duration * 1000), maxPx);
+            _audioSlotVizData[slot] = {
+                waveform: computeWaveformData(buf, numBuckets),
+                spectrogram: computeSpectrogramData(buf),
+                audioBuffer: buf
+            };
+            _audioMaxDuration = Math.max(_audioMaxDuration, buf.duration);
+        }
+
+        function _setupNoVideoCanvas(slot) {
+            const layer = getLayer(slot);
+            if (!layer) return;
+            const wrapper = layer.querySelector('.video-wrapper');
+            if (!wrapper || wrapper.querySelector('.audio-canvas-wrap')) return;
+            wrapper.classList.add('audio-slot-group', 'no-video-group');
+            const canvas = document.createElement('canvas');
+            canvas.className = 'audio-viz-slot-canvas';
+            canvas.dataset.slot = slot;
+            const cursor = document.createElement('div');
+            cursor.className = 'audio-slot-cursor';
+            cursor.dataset.slot = slot;
+            cursor.style.left = '30px';
+            const wrap = document.createElement('div');
+            wrap.className = 'audio-canvas-wrap';
+            wrap.appendChild(canvas);
+            wrap.appendChild(cursor);
+            wrapper.appendChild(wrap);
+            _populateNoVideoSlotData(slot);
+            if (_audioSlotVizData[slot]) drawAudioSlotCanvas(slot);
+        }
+
+        function _teardownNoVideoCanvas(slot) {
+            const layer = getLayer(slot);
+            if (!layer) return;
+            const wrapper = layer.querySelector('.video-wrapper');
+            if (!wrapper) return;
+            wrapper.classList.remove('audio-slot-group', 'no-video-group');
+            const wrap = wrapper.querySelector('.audio-canvas-wrap');
+            if (wrap) wrap.remove();
+        }
+
+        function toggleNoVideoMode() {
+            if (!hasVideos) return;
+            _noVideoMode = !_noVideoMode;
+            if (_noVideoMode) {
+                _noVideoLayoutSnapshot = { isGridMode, layoutMode };
+                document.body.classList.add('no-video');
+                for (const slot of assetOrder) {
+                    if (mediaData[slot] && mediaData[slot].type === 'video') _setupNoVideoCanvas(slot);
+                }
+                _ensureAudioVizDecoded(); // trigger decode if not yet done (lazy)
+                if (!isGridMode || layoutMode !== 'vertical') setViewMode('vertical');
+                // Redraw canvases after layout settles (positionLabelsToMedia needs two rAFs)
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    redrawAllAudioSlotCanvases();
+                    const _nvPrimary = getAllPlayableMedia()[0];
+                    if (_nvPrimary) updateAllAudioSlotCursors(_nvPrimary);
+                }));
+                showToast('Video hidden');
+            } else {
+                document.body.classList.remove('no-video');
+                for (const slot of assetOrder) {
+                    if (mediaData[slot] && mediaData[slot].type === 'video') _teardownNoVideoCanvas(slot);
+                }
+                if (_noVideoLayoutSnapshot) {
+                    setViewMode(_noVideoLayoutSnapshot.isGridMode ? _noVideoLayoutSnapshot.layoutMode : 'overlay');
+                    _noVideoLayoutSnapshot = null;
+                }
+                showToast('Video restored');
+            }
+        }
+
+        function toggleBwMode() {
+            _bwMode = !_bwMode;
+            document.body.classList.toggle('bw-mode', _bwMode);
+            showToast(_bwMode ? 'Black & white' : 'Color restored');
+        }
+
         function toggleSpectrogramScale() {
             spectrogramLogScale = !spectrogramLogScale;
             _prefs.save('spectrogramLogScale', spectrogramLogScale);
@@ -3991,7 +4095,7 @@
                 const slot = currentAudioSource || assetOrder[currentAssetIndex];
                 drawSpectrogram(slot);
             }
-            if (hasAudios) redrawAllAudioSlotCanvases();
+            if (hasAudios || _noVideoMode) redrawAllAudioSlotCanvases();
             showToast('Frequency scale: ' + (spectrogramLogScale ? 'LOG' : 'LINEAR'));
         }
 
@@ -4006,7 +4110,7 @@
                 const slot = currentAudioSource || assetOrder[currentAssetIndex];
                 drawSpectrogram(slot);
             }
-            if (hasAudios) redrawAllAudioSlotCanvases();
+            if (hasAudios || _noVideoMode) redrawAllAudioSlotCanvases();
             showToast('Palette: ' + name.toUpperCase());
         }
 
@@ -5069,6 +5173,7 @@
 
                 if (primary && !primary.paused) {
                     updateMediaProgress(primary);
+                    if (_noVideoMode) updateAllAudioSlotCursors(primary);
                     if (hasAudios) {
                         const t = primary.currentTime;
                         if (_lastPrimaryAudioTime > 0 && t < _lastPrimaryAudioTime - 0.5) {
@@ -5121,6 +5226,7 @@
                 } else {
                     // Final update so progress bar reaches 100% when video ends
                     if (primary) updateMediaProgress(primary);
+                    if (primary && _noVideoMode) updateAllAudioSlotCursors(primary);
                     globalAnimationId = null;
                 }
             }
@@ -5233,6 +5339,7 @@
                 // Refresh scopes after seek completes (frame is decoded)
                 if (videoScopesVisible) updateVideoScopes();
                 if (_diffMode) requestAnimationFrame(drawDiffComposite);
+                if (_noVideoMode) updateAllAudioSlotCursors(video);
             });
         }
 
@@ -5726,6 +5833,7 @@
                 } else {
                     updateVideoProgressFromTime(media, t);
                     updateSpectrogramCursor(media);
+                    if (_noVideoMode) updateAllAudioSlotCursors(media);
                 }
                 playScrubSnippet(t);
             }
@@ -6408,6 +6516,11 @@
                     .forEach(n => { n.textContent = n.textContent.replace('GT', 'O'); });
             }
             document.body.classList.remove('audio-mode');
+            document.body.classList.remove('no-video');
+            document.body.classList.remove('bw-mode');
+            _noVideoMode = false;
+            _noVideoLayoutSnapshot = null;
+            _bwMode = false;
 
             // Reset file input
             document.getElementById('multiFileInput').value = '';
@@ -6571,7 +6684,14 @@
                 if (!mediaData[slot]) return;
                 const layer = getLayer(slot);
                 const mediaContainer = layer ? layer.querySelector('.media-container') : null;
-                const media = mediaContainer ? mediaContainer.querySelector('img, video, canvas.audio-viz-slot-canvas') : null;
+                // In no-video mode, prefer the audio-viz canvas over the hidden video so
+                // positionLabelsToMedia uses wide canvas dims (1920×480) rather than the
+                // video's 16:9 aspect ratio, matching the full-height audio-mode layout.
+                const media = mediaContainer ? (
+                    _noVideoMode
+                        ? (mediaContainer.querySelector('canvas.audio-viz-slot-canvas') || mediaContainer.querySelector('img, video'))
+                        : mediaContainer.querySelector('img, video, canvas.audio-viz-slot-canvas')
+                ) : null;
                 const videoWrapper = mediaContainer ? mediaContainer.querySelector('.video-wrapper') : null;
                 const infoBar = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
                 if (!media || !mediaContainer || !videoWrapper) return;
@@ -8080,6 +8200,10 @@
                   if (hasAudios) { showToast('Audio visualization is shown in main view'); }
                   else if (hasVideos) { toggleAudioViz(); }
               } },
+            { id: 'noVideo', defaultKey: 'n', label: 'No video (audio focus)', section: 'analysis',
+              fn: () => { if (hasVideos) toggleNoVideoMode(); } },
+            { id: 'bwMode', defaultKey: 'b', label: 'Black & white', section: 'analysis',
+              fn: () => { if (hasVideos || hasImages) toggleBwMode(); } },
             { id: 'spectroScale', defaultKey: 'w', shift: true, label: 'Linear / log frequency', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale(); } },
             { id: 'spectroPalette', defaultKey: 'c', shift: true, label: 'Cycle color palette', section: 'analysis',
