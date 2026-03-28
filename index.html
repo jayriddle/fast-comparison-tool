@@ -3985,14 +3985,12 @@
 
         // Lazy audio viz decode — only triggered when user opens waveform panel
         let _audioVizDecodeStarted = false;
-        async function _ensureAudioVizDecoded() {
+        function _ensureAudioVizDecoded() {
             if (_audioVizDecodeStarted) return;
             _audioVizDecodeStarted = true;
-            // Sequential — keeps only one video ArrayBuffer in the JS heap at a time.
-            // Concurrent decode would hold all files in RAM simultaneously (e.g. 3×300 MB).
             for (const s of assetOrder) {
                 if (audioFileBuffers[s] && !waveformData[s]) {
-                    await decodeAndComputeAudioViz(s, audioFileBuffers[s]);
+                    decodeAndComputeAudioViz(s, audioFileBuffers[s]);
                 }
             }
         }
