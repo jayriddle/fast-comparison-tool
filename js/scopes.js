@@ -129,6 +129,11 @@ function drawHistogram(imageData, canvas, mode) {
     }
 }
 
+// Cached buffers for waveform monitor — reused across frames to avoid per-frame GC pressure.
+// Reallocated only when canvas dimensions change (rare — only on window resize).
+let _wfmBuf = null, _wfmCachedW = 0, _wfmCachedH = 0;
+let _wfmHits0 = null, _wfmHits1 = null, _wfmHits2 = null;
+
 function drawWaveformMonitor(imageData, canvas, mode) {
     const w = canvas.clientWidth * devicePixelRatio;
     const h = canvas.clientHeight * devicePixelRatio;
@@ -141,11 +146,22 @@ function drawWaveformMonitor(imageData, canvas, mode) {
     const srcW = imageData.width;
     const srcH = imageData.height;
 
-    const buf = ctx.createImageData(w, h);
+    // Reallocate cached buffers only when canvas size changes
+    if (_wfmCachedW !== w || _wfmCachedH !== h) {
+        _wfmBuf   = new ImageData(w, h);
+        _wfmHits0 = new Uint16Array(w * h);
+        _wfmHits1 = new Uint16Array(w * h);
+        _wfmHits2 = new Uint16Array(w * h);
+        _wfmCachedW = w;
+        _wfmCachedH = h;
+    }
+
+    const buf = _wfmBuf;
     const out = buf.data;
 
     if (mode === 'luma') {
-        const hits = new Uint16Array(w * h);
+        const hits = _wfmHits0;
+        hits.fill(0);
         for (let sx = 0; sx < srcW; sx++) {
             const ox0 = Math.floor((sx / srcW) * w);
             const ox1 = Math.floor(((sx + 1) / srcW) * w);
@@ -159,27 +175,32 @@ function drawWaveformMonitor(imageData, canvas, mode) {
             }
         }
         const maxHits = Math.max(1, srcH * 0.02);
-        for (let i = 0; i < hits.length; i++) {
+        const n = w * h * 4;
+        for (let i = 0, p = 0; p < n; i++, p += 4) {
             if (hits[i] > 0) {
                 const intensity = Math.min(1, hits[i] / maxHits);
-                const p = i * 4;
                 out[p]     = Math.round(intensity * 80);
                 out[p + 1] = Math.round(140 + intensity * 115);
                 out[p + 2] = Math.round(intensity * 40);
                 out[p + 3] = 255;
+            } else {
+                out[p] = out[p + 1] = out[p + 2] = out[p + 3] = 0;
             }
         }
     } else if (mode === 'parade') {
         // RGB Parade — three side-by-side waveforms, one per channel
+        // Clear the full output buffer up front
+        out.fill(0);
         const third = Math.floor(w / 3);
         const channels = [
-            { offset: 0, cIdx: 0, color: [255, 60, 60] },
-            { offset: third, cIdx: 1, color: [60, 255, 60] },
-            { offset: third * 2, cIdx: 2, color: [60, 100, 255] }
+            { offset: 0, cIdx: 0, color: [255, 60, 60], hits: _wfmHits0 },
+            { offset: third, cIdx: 1, color: [60, 255, 60], hits: _wfmHits1 },
+            { offset: third * 2, cIdx: 2, color: [60, 100, 255], hits: _wfmHits2 }
         ];
         for (const ch of channels) {
             const cw = ch === channels[2] ? w - ch.offset : third;
-            const hits = new Uint16Array(cw * h);
+            const hits = ch.hits;
+            hits.fill(0, 0, cw * h);
             for (let sx = 0; sx < srcW; sx++) {
                 const ox0 = Math.floor((sx / srcW) * cw);
                 const ox1 = Math.floor(((sx + 1) / srcW) * cw);
@@ -209,9 +230,10 @@ function drawWaveformMonitor(imageData, canvas, mode) {
         }
     } else {
         // RGB Overlay — all three channels on the same graph in color
-        const hitsR = new Uint16Array(w * h);
-        const hitsG = new Uint16Array(w * h);
-        const hitsB = new Uint16Array(w * h);
+        const hitsR = _wfmHits0, hitsG = _wfmHits1, hitsB = _wfmHits2;
+        hitsR.fill(0);
+        hitsG.fill(0);
+        hitsB.fill(0);
         for (let sx = 0; sx < srcW; sx++) {
             const ox0 = Math.floor((sx / srcW) * w);
             const ox1 = Math.floor(((sx + 1) / srcW) * w);
@@ -228,13 +250,16 @@ function drawWaveformMonitor(imageData, canvas, mode) {
             }
         }
         const maxHits = Math.max(1, srcH * 0.02);
-        for (let i = 0; i < w * h; i++) {
+        const n = w * h;
+        for (let i = 0; i < n; i++) {
+            const p = i * 4;
             if (hitsR[i] > 0 || hitsG[i] > 0 || hitsB[i] > 0) {
-                const p = i * 4;
                 out[p]     = Math.min(255, Math.round(Math.min(1, hitsR[i] / maxHits) * 255));
                 out[p + 1] = Math.min(255, Math.round(Math.min(1, hitsG[i] / maxHits) * 255));
                 out[p + 2] = Math.min(255, Math.round(Math.min(1, hitsB[i] / maxHits) * 255));
                 out[p + 3] = 255;
+            } else {
+                out[p] = out[p + 1] = out[p + 2] = out[p + 3] = 0;
             }
         }
     }
@@ -272,6 +297,10 @@ function drawWaveformMonitor(imageData, canvas, mode) {
     }
 }
 
+// Cached buffers for vectorscope — reused across frames to avoid per-frame GC pressure.
+let _vsBuf = null, _vsCachedSize = 0;
+let _vsHitR = null, _vsHitG = null, _vsHitB = null, _vsHitN = null;
+
 function drawVectorscope(imageData, canvas) {
     const size = canvas.clientHeight * devicePixelRatio;
     if (canvas.width !== size || canvas.height !== size) {
@@ -280,14 +309,23 @@ function drawVectorscope(imageData, canvas) {
     }
     const ctx = canvas.getContext('2d');
 
-    // Build pixel buffer for the dot plot — colored dots
-    const buf = ctx.createImageData(size, size);
+    // Reallocate cached buffers only when canvas size changes
+    if (_vsCachedSize !== size) {
+        _vsBuf    = new ImageData(size, size);
+        _vsHitR   = new Float32Array(size * size);
+        _vsHitG   = new Float32Array(size * size);
+        _vsHitB   = new Float32Array(size * size);
+        _vsHitN   = new Uint16Array(size * size);
+        _vsCachedSize = size;
+    }
+
+    const buf = _vsBuf;
     const out = buf.data;
-    // Accumulate color + hit count per output pixel
-    const hitR = new Float32Array(size * size);
-    const hitG = new Float32Array(size * size);
-    const hitB = new Float32Array(size * size);
-    const hitN = new Uint16Array(size * size);
+    const hitR = _vsHitR, hitG = _vsHitG, hitB = _vsHitB, hitN = _vsHitN;
+    hitR.fill(0);
+    hitG.fill(0);
+    hitB.fill(0);
+    hitN.fill(0);
 
     const cx = size / 2;
     const cy = size / 2;
@@ -312,19 +350,21 @@ function drawVectorscope(imageData, canvas) {
 
     // Map accumulated colors to output — boost saturation for visibility
     const maxHits = Math.max(1, pixels.length / 4 * 0.0001);
-    for (let i = 0; i < hitN.length; i++) {
+    const n = size * size;
+    for (let i = 0; i < n; i++) {
+        const p = i * 4;
         if (hitN[i] > 0) {
-            const n = hitN[i];
-            const intensity = Math.min(1, n / maxHits);
-            // Average color, boosted toward full brightness for readability
-            let ar = hitR[i] / n, ag = hitG[i] / n, ab = hitB[i] / n;
+            const nv = hitN[i];
+            const intensity = Math.min(1, nv / maxHits);
+            let ar = hitR[i] / nv, ag = hitG[i] / nv, ab = hitB[i] / nv;
             const maxC = Math.max(ar, ag, ab, 1);
             const boost = 0.4 + 0.6 * intensity;
-            const p = i * 4;
             out[p]     = Math.round(Math.min(255, (ar / maxC) * 255 * boost));
             out[p + 1] = Math.round(Math.min(255, (ag / maxC) * 255 * boost));
             out[p + 2] = Math.round(Math.min(255, (ab / maxC) * 255 * boost));
             out[p + 3] = 255;
+        } else {
+            out[p] = out[p + 1] = out[p + 2] = out[p + 3] = 0;
         }
     }
 
