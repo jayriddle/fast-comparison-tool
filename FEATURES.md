@@ -13,6 +13,17 @@ Load 1–3 images, videos, or audio files by dragging and dropping, pressing `L`
 - Active asset highlighted with cyan border and info bar. Mixed orientations use an equal-area layout so each asset has the same visual weight.
 - Responsive grid layout auto-picks horizontal or vertical based on viewport dimensions and asset aspect ratios, re-evaluated on resize.
 
+## Stack zoom modes
+
+Press `\` (backslash) to toggle between **Fit** and **Match** zoom in Stack mode. A pill indicator in the header shows the current mode.
+
+- **Fit** (default, gray pill) — each asset independently fills the viewport. Best for comparing files of different formats, aspect ratios, or crops.
+- **Match** (orange pill, labeled **Match · GT**) — all assets are displayed at the same spatial scale, anchored to the **GT slot** (Ground Truth — the reference file, typically the original or unedited version). This keeps the subject the same physical size across all assets so you can judge quality, artifacts, or subtle edits directly. Requires a GT slot to be loaded; pressing `\` without one shows a reminder.
+
+> **What is GT?** When you load files, WarpDiff sorts them by save time and assigns them to slots: **GT** (the oldest file — your reference or ground truth), **A**, and **B**. GT is the baseline you're comparing against.
+
+Match mode is most useful when comparing assets of the **same or similar resolution** — for example, the same 1080p shot encoded two different ways. When resolutions differ significantly (e.g. a low-res reference vs. high-res outputs), Match will cause the larger assets to overflow the viewport or appear unexpectedly small, because all are locked to the GT's scale. Use Fit mode in that case.
+
 ## Zoom loupe
 
 Press `Z` for a circular zoom loupe that follows your cursor, showing magnified native pixels without changing the overall zoom level.

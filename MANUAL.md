@@ -60,6 +60,7 @@ Zoom and pan are available in **Stack mode only**.
 | **−** | Zoom out |
 | **0** | Zoom to fit |
 | **1** | Zoom to 100% (actual pixels) |
+| **\\** | Toggle Fit / Match zoom mode |
 | **Click and drag** | Pan (when zoomed in) |
 
 Zoom range: 5% – 3200%. Each step multiplies/divides by √2 (~1.41×).
@@ -67,6 +68,20 @@ Zoom range: 5% – 3200%. Each step multiplies/divides by √2 (~1.41×).
 In **Grid mode**, pressing **1** toggles between fit-to-panel and 100% native pixels. Assets zoom to their actual pixel size, even if that means overflowing the panel.
 
 A zoom indicator appears in the info bar showing the current scale as a percentage (e.g. `150%`).
+
+### Fit vs. Match zoom
+
+A pill indicator in the header shows the current Stack zoom mode. Press **\\** or click the pill to toggle.
+
+- **Fit** (default) — each asset independently fills the viewport at whatever scale best uses the available space. A portrait image and a landscape image each fill the screen on their own terms. Best for comparing files with different formats, crops, or aspect ratios.
+
+- **Match · GT** — all assets are displayed at the same spatial scale, anchored to the **GT slot**. This means a 1-pixel feature in GT appears the same physical size on screen regardless of which asset you're viewing. Best for judging subtle edits, compression artifacts, or quality differences where the content is the same across all files.
+
+> **What is GT?** WarpDiff assigns loaded files to three slots based on save time: **GT** (Ground Truth — the oldest file, your reference or original), **A**, and **B**. GT is the baseline you're comparing against.
+
+Match mode requires a GT slot to be loaded. If you load only two files without a GT (e.g. two edited versions with no original), pressing **\\** shows a reminder and stays in Fit mode.
+
+**Best used when assets have the same or similar resolution** — for example, the same 1080p shot encoded two different ways. If GT is significantly lower resolution than A or B, those assets will overflow or appear much smaller than GT at fit zoom, since all are locked to GT's spatial scale. In that case, Fit mode is more appropriate.
 
 ---
 

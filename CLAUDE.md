@@ -12,7 +12,9 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 - Frame stepping uses midpoint seeking `(frame+0.5)/fps` to avoid IEEE 754 boundary issues
 - Timecode display uses `Math.floor(time * fps + 0.01)` epsilon to match frame numbers
 - `_frameStepping` flag pattern for suppressing play/pause sync handlers during programmatic seeks
-- Stack mode layout: `applyZoom()` uses per-asset independent fit — `_perAssetFits[slot] = min(viewW/nw, viewH/nh)`; `fitZoom` = smallest per-asset fit; `perAssetScale = perAssetFit * (zoomLevel / fitZoom)`. Each asset fills viewport independently regardless of other assets' aspect ratios.
+- Stack mode layout: `applyZoom()` supports two zoom reference modes toggled by `\` (`_stackZoomMode`):
+  - **Fit** (default) — `_perAssetFits[slot] = min(viewW/nw, viewH/nh)`; `fitZoom` = smallest per-asset fit; each asset fills the viewport independently.
+  - **Match** — `fitZoom = _perAssetFits['original']`; all assets rendered at the GT slot's fit scale so spatial scale is consistent across assets. Only available when the GT slot is loaded; `_toggleStackZoomMode()` no-ops with a toast otherwise. Pill indicator in header shows `Fit` (gray) or `Match · GT` (orange).
 - Equal-area layout for mixed orientations (Grid inline mode): `A = min((availW/Σ√ri)², availH²·min(ri))`
 - Scope rendering uses Uint16Array hit counts + putImageData for performance; hit buffers cached in `js/scopes.js`
 - Audio viz uses `decodeAudioData()` → waveform/spectrogram computation, drawn to canvas

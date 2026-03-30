@@ -38,11 +38,13 @@
             background: #2a2a2a;
             border-bottom: 1px solid #444;
             display: flex;
-            justify-content: space-between;
             align-items: center;
             position: relative;
             z-index: 100;
         }
+        /* Three-column flex: left/right are auto-width, center takes remaining space */
+        #headerLeft  { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+        #headerRight { flex: 0 0 auto; }
 
         .header h1 {
             font-size: 16px;
@@ -906,6 +908,98 @@
         }
         .asset-info-bar .asset-zoom:empty { display: none; }
 
+        #stackZoomPill {
+            font-size: 11px;
+            font-weight: 600;
+            color: #ccc;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 10px;
+            padding: 1px 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        #stackZoomPill:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        #stackZoomPill.match { color: #f0a030; border-color: rgba(240,160,48,0.45); background: rgba(240,160,48,0.1); }
+        body.grid-mode #stackZoomPill { display: none !important; }
+
+        #stackMiniMap {
+            position: fixed;
+            bottom: 8px;
+            right: 12px;
+            border-radius: 6px;
+            background: rgba(12, 12, 12, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.11);
+            cursor: crosshair;
+            display: none;
+            z-index: 80;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+        }
+        body.grid-mode #stackMiniMap { display: none !important; }
+
+        /* Stack mode: traveling info bar is replaced by the fixed header strip */
+        body:not(.grid-mode) .video-wrapper > .asset-info-bar { display: none !important; }
+
+        /* Header info strip — center column of the three-column header flex layout */
+        #stackInfoStrip {
+            flex: 1 1 0;
+            min-width: 0;
+            display: none; /* JS sets to flex when active */
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        /* Name and zoom never shrink — they're the primary identity */
+        #stackInfoStrip .sih-name {
+            flex: 0 0 auto;
+            font-weight: 600;
+            color: #fff;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        #stackInfoStrip .sih-zoom {
+            flex: 0 0 auto;
+            background: rgba(255,255,255,0.18);
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            color: #fff;
+            white-space: nowrap;
+        }
+        /* Resolution and aspect ratio shrink together (same priority) */
+        #stackInfoStrip .sih-aspect {
+            flex: 0 2 auto;
+            min-width: 0;
+            color: rgba(255,255,255,0.42);
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #stackInfoStrip .sih-resolution {
+            flex: 0 2 auto;
+            min-width: 0;
+            color: rgba(255,255,255,0.42);
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Filename shrinks first and fastest */
+        #stackInfoStrip .sih-filename {
+            flex: 0 3 auto;
+            min-width: 0;
+            color: rgba(255,255,255,0.3);
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .asset-info-bar .asset-filename {
             margin-left: auto;
             color: #666;
@@ -1244,6 +1338,18 @@
             padding-top: 4px;
             padding-bottom: 4px;
         }
+
+        #audioNoDataMsg {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 12px;
+            letter-spacing: 0.03em;
+        }
+        .spectrogram-panel.active.no-audio-data #audioNoDataMsg { display: flex; }
+        .spectrogram-panel.active.no-audio-data .audio-viz-row { visibility: hidden; }
 
 
         .audio-viz-row {
@@ -1792,16 +1898,23 @@
 <body>
     <div class="container">
         <div class="header">
-            <div style="position: relative; display: flex; align-items: center; gap: 6px;">
+            <div id="headerLeft" style="position: relative;">
                 <img src="WarpDiff_Logo_v1.png" alt="" style="width: 22px; height: 22px;"><span style="font-size: 16px; font-weight: 600;"><i>Warp</i>Diff</span><span id="appVersion" style="font-size: 11px; color: #888; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
                 <button class="analysis-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" title="Load files (L)" style="margin-left: 12px;"></button>
                 <input type="file" id="multiFileInput" accept="image/*,video/*,audio/*" multiple onchange="handleMultiFileLoad(event)" style="display: none;">
                 <button class="analysis-btn" onclick="resetAll()" style="display: none;" id="resetBtn" title="Reset"></button>
                 <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull Assets" style="display:none;"></button>
                 <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)" id="helpBtn"></button>
-
             </div>
-            <div id="headerRight" style="display:none; align-items:center; gap:2px;">
+            <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
+            <div id="stackInfoStrip">
+                <span class="sih-name"></span>
+                <span class="sih-zoom"></span>
+                <span class="sih-resolution"></span>
+                <span class="sih-aspect"></span>
+                <span class="sih-filename"></span>
+            </div>
+            <div id="headerRight" style="display:none; align-items:center; gap:2px; margin-left:auto;">
             <!-- Mode strip: asset labels + grid sub-options -->
             <div id="modeStrip" style="display:none;"></div>
             <!-- Asset strip -->
@@ -1810,6 +1923,7 @@
             <span class="icon-sep" style="color:#555; margin:0 2px; display:none;" id="iconSep1">|</span>
             <div id="analysisStrip" style="display:none; align-items:center; gap:2px;">
                 <button class="analysis-btn" id="stackIconBtn" title="Stack mode (S)"></button>
+                <span id="stackZoomPill" onclick="_toggleStackZoomMode()" title="Stack: Fit / Balance zoom (\)">Fit</span>
                 <button class="analysis-btn" id="gridIconBtn" title="Grid mode (G)"></button>
                 <span style="color:#555; margin:0 2px;">|</span>
                 <button class="analysis-btn" id="waveformToggleBtn" onclick="toggleAudioViz(); this.blur();" title="Audio waveform / spectrogram (W)"></button>
@@ -1910,6 +2024,7 @@
                 </div>
             </div>
             <div class="spectrogram-panel" id="spectrogramPanel">
+                <div id="audioNoDataMsg">No audio for this asset</div>
                 <div class="audio-viz-row waveform-row">
                     <div class="audio-viz-label" id="waveformLabels"><span>L</span><span>R</span></div>
                     <div class="audio-viz-canvas-wrap">
@@ -1972,7 +2087,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.7.7';
+        const APP_VERSION = '3.8';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2152,10 +2267,8 @@
                     if (_audioSlotVizData[s]) drawAudioSlotCanvas(s);
                 });
             } else if (hasVideos && audioVizVisible) {
-                // Redraw video audio viz panel
-                const slot = assetOrder[currentAssetIndex];
-                if (waveformData[slot]) drawWaveform(slot);
-                if (spectrogramData[slot]) drawSpectrogram(slot);
+                // Redraw video audio viz panel (updateAudioVisForSlot also manages placeholder)
+                updateAudioVisForSlot(assetOrder[currentAssetIndex]);
             }
         }
 
@@ -2519,12 +2632,22 @@
         let panStartY = 0;
         let panOffsetX = 0;
         let panOffsetY = 0;
+        // Pan bounds (asset-union flush-with-viewport-edge limits); updated by applyZoom().
+        // _panBoundsXMin ≤ 0 ≤ _panBoundsXMax always (0 = no pan needed in that direction).
+        let _panBoundsXMin = 0, _panBoundsXMax = 0;
+        let _panBoundsYMin = 0, _panBoundsYMax = 0;
+        let _snapAnimId = null; // rAF id for rubber-band snap-back animation
+        let _currentMatchAnchor = null; // slot with tightest per-asset fit; set by applyZoom()
+        let _stackPerAssetFit = {};    // slot → effective per-asset fit scale; updated by applyZoom()
+        let _savedFitZoom = null, _savedFitPanX = 0, _savedFitPanY = 0; // saved before entering Balance
 
         let zoomLevel = 1; // Default 1x zoom (actual size/fit)
         let splitZoomLevel = null; // null = fit-to-panel; 1 = cap at 100% actual pixels (compare modes)
         let splitStepZoom = 1.0; // multiplicative zoom for split modes (1.0 = no extra zoom)
         let _gridZoomWasCapped = false; // set by offset pre-pass; read by '1' key handler
         let timecodeMode = _prefs.load('timecodeMode', 'time'); // 'time', 'frames', or 'seconds'
+        let _stackZoomMode = _prefs.load('stackZoomMode', 'fit') === 'balance' ? 'balance' : 'fit'; // 'fit' or 'balance'
+        let _stackCanPan = false; // set by applyZoom(); true when any asset overflows viewport
         let videoFrameRates = {}; // Store framerate for each video
 
         // Audio visualization state
@@ -3061,6 +3184,11 @@
         }
 
         function updateAudioVisForSlot(slot) {
+            const panel = document.getElementById('spectrogramPanel');
+            // Show placeholder when this slot has no audio but at least one other slot does.
+            const slotHasAudio = !!(waveformData[slot]);
+            const anyHasAudio = assetOrder.some(s => !!waveformData[s]);
+            if (panel) panel.classList.toggle('no-audio-data', !slotHasAudio && anyHasAudio);
             drawWaveform(slot);
             drawSpectrogram(slot);
         }
@@ -6181,64 +6309,68 @@
             const controlsEl = document.getElementById('videoControls');
             const controlsH = (controlsEl && controlsEl.classList.contains('active')) ? controlsEl.offsetHeight : 0;
 
-            // Compute a shared scale anchored to the narrowest asset's width.
-            // Every asset is rendered so its width = minNW * sharedScale, giving identical
-            // rendered widths for same-width assets and scaling wider ones down to match.
-            // fitZoom is set so the widest rendered asset just fits the viewport at zoomLevel=1.
+            // Per-asset fit scales: each asset independently sized to fill the viewport.
+            // In Stack mode only one asset is visible at a time, so coupling asset sizes
+            // to the narrowest width (old approach) needlessly shrinks landscape assets
+            // when paired with portrait ones. Independent fitting gives every asset equal
+            // visual weight — each fills as much of the viewport as its aspect ratio allows.
+            // fitZoom = smallest per-asset fit (most constrained asset), used as the
+            // zoom/pan reference so controls behave consistently across all assets.
             const prevFitZoom = fitZoom;
-            let minNW = Infinity;
-            {
-                assetOrder.forEach(slot => {
-                    if (mediaData[slot]) {
-                        const layer = getLayer(slot);
-                        const media = layer && layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
-                        if (media) {
-                            const { w: nw } = mediaDims(media);
-                            if (nw > 0 && nw < minNW) minNW = nw;
-                        }
-                    }
-                });
-                if (minNW === Infinity) minNW = 0;
-                // fitZoom: scale so the narrowest (reference) asset fits the viewport
-                const viewW = window.innerWidth;
-                const sampleBarFit = document.querySelector('.asset-layer.active .video-wrapper > .asset-info-bar');
-                const infoBarHFit = sampleBarFit && sampleBarFit.offsetHeight > 0 ? sampleBarFit.offsetHeight : 22;
-                const viewH = window.innerHeight - headerH - infoBarHFit - 1 - controlsH;
-                if (minNW > 0) {
-                    // fitZoom = scale that makes the narrowest asset's width fill the viewport.
-                    // Height is also clamped: find the tallest rendered height across all assets
-                    // at width-fit scale and ensure that fits vertically too.
-                    let maxRenderedH = 0;
-                    assetOrder.forEach(slot => {
-                        if (mediaData[slot]) {
-                            const layer = getLayer(slot);
-                            const media = layer && layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
-                            if (media) {
-                                const { w: nw, h: nh } = mediaDims(media);
-                                if (nw > 0 && nh > 0) {
-                                    // rendered height at width-fit scale = nh * (minNW/nw)
-                                    const rh = nh * (minNW / nw);
-                                    if (rh > maxRenderedH) maxRenderedH = rh;
-                                }
-                            }
-                        }
-                    });
-                    fitZoom = Math.min(viewW / minNW, maxRenderedH > 0 ? viewH / maxRenderedH : Infinity);
+            const _stackViewW = window.innerWidth;
+            // Info bar is hidden in Stack mode (shown in header strip instead) — no vertical offset needed.
+            const _stackIbH = 0;
+            const _stackViewH = window.innerHeight - headerH - _stackIbH - 1 - controlsH;
+            const _perAssetFits = {};
+            const _srcAreas = {};
+            let _minFit = Infinity;
+            let _minFitSlot = null;
+            assetOrder.forEach(slot => {
+                if (!mediaData[slot]) return;
+                const layer = getLayer(slot);
+                const media = layer && layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
+                if (!media || media.classList.contains('audio-viz-slot-canvas')) return;
+                const { w: nw, h: nh } = mediaDims(media);
+                if (nw > 0 && nh > 0) {
+                    const paf = Math.min(_stackViewW / nw, _stackViewH / nh);
+                    _perAssetFits[slot] = paf;
+                    _srcAreas[slot] = nw * nh;
+                    if (paf < _minFit) { _minFit = paf; _minFitSlot = slot; }
                 }
-            }
+            });
+            fitZoom = _minFit === Infinity ? 1 : _minFit;
+            _currentMatchAnchor = _minFitSlot;
+
+            // Balance: scale all assets to the same rendered screen area.
+            // T = min over all slots of (perAssetFit² × srcPixels) — the smallest screen
+            // area any asset occupies at its natural fit scale. Using the minimum guarantees
+            // balanceFit[slot] = sqrt(T / srcPixels[slot]) ≤ perAssetFit[slot] for every
+            // slot, so no asset overflows regardless of resolution or orientation.
+            let _balanceT = Infinity;
+            Object.keys(_perAssetFits).forEach(slot => {
+                if (_srcAreas[slot]) {
+                    const sa = _perAssetFits[slot] * _perAssetFits[slot] * _srcAreas[slot];
+                    if (sa < _balanceT) _balanceT = sa;
+                }
+            });
+            if (_balanceT === Infinity) _balanceT = 0;
+            const _eqAreaFits = {};
+            Object.keys(_perAssetFits).forEach(slot => {
+                _eqAreaFits[slot] = (_balanceT && _srcAreas[slot])
+                    ? Math.sqrt(_balanceT / _srcAreas[slot])
+                    : _perAssetFits[slot];
+            });
 
             // If the user was at fit-to-viewport zoom, track the new fitZoom on resize.
             if (zoomLevel === prevFitZoom) {
                 zoomLevel = fitZoom;
             }
 
-            // Position each asset wrapper. Every asset is scaled so its rendered width equals
-            // minNW * sharedScale — same-width assets appear identically wide on screen.
-            // Reserve space for the info bar above the media so it sits below the header.
-            // Measure from the active layer's info bar (non-active ones are display:none → offsetHeight 0).
-            const sampleBar = document.querySelector('.asset-layer.active .video-wrapper > .asset-info-bar');
-            const infoBarH = sampleBar && sampleBar.offsetHeight > 0 ? sampleBar.offsetHeight : 22;
+            // Position each asset wrapper. Info bar is in the header strip in Stack mode,
+            // so no vertical offset is needed — asset fills straight from below the header.
+            const infoBarH = 0;
             const availH = window.innerHeight - headerH - infoBarH - 1 - controlsH;
+            _stackCanPan = false; // recomputed below; true if any asset overflows viewport
             assetOrder.forEach(slot => {
                 if (!mediaData[slot]) return;
                 const layer = getLayer(slot);
@@ -6262,10 +6394,19 @@
                     centerTop = headerH + 1 + Math.max(0, Math.round((audioAvailH - scaledH) / 2));
                     centerLeft = 0;
                 } else {
-                    // Scale this asset so its rendered width matches the narrowest asset's width.
-                    // (minNW/nw) normalises wider assets down; zoomLevel is already in px/naturalPx
-                    // units (fitZoom at fit-to-viewport, 1 at 100% actual pixels).
-                    const perAssetScale = minNW > 0 ? (minNW / nw) * zoomLevel : zoomLevel;
+                    // Each asset independently fills the viewport at its own fit scale (Fit mode),
+                    // or all assets are scaled to the same rendered screen area (Balance mode).
+                    // relZoom is the user's zoom multiplier relative to fitZoom.
+                    const perAssetFit = _stackZoomMode === 'balance'
+                        ? (_eqAreaFits[slot] !== undefined
+                            ? _eqAreaFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh))
+                        : (_perAssetFits[slot] !== undefined
+                            ? _perAssetFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh));
+                    _stackPerAssetFit[slot] = perAssetFit; // expose for '1' key handler
+                    const relZoom = fitZoom > 0 ? zoomLevel / fitZoom : 1;
+                    const perAssetScale = perAssetFit * relZoom;
                     scaledW = Math.round(nw * perAssetScale);
                     scaledH = Math.round(nh * perAssetScale);
                     // Vertically center media in the available space below the header.
@@ -6273,6 +6414,12 @@
                     // doesn't touch/overlap the header's bottom border.
                     centerTop = headerH + infoBarH + 1 + Math.max(0, Math.round((availH - scaledH) / 2));
                     centerLeft = Math.max(0, Math.round((window.innerWidth - scaledW) / 2));
+                }
+
+                // Track whether any non-audio asset overflows so pan is enabled
+                // even when zoomLevel === fitZoom (user may have zoomed in manually).
+                if (!isAudioCanvas && (scaledW > window.innerWidth || scaledH > availH)) {
+                    _stackCanPan = true;
                 }
 
                 // Pan is applied to the wrapper position directly (not as a media transform)
@@ -6294,7 +6441,15 @@
 
                 // Media fills its wrapper; no transform needed — pan is on the wrapper
                 if (!isAudioCanvas) {
-                    media.style.imageRendering = zoomLevel >= 2 ? 'pixelated' : '';
+                    const _paf = _stackZoomMode === 'balance'
+                        ? (_eqAreaFits[slot] !== undefined
+                            ? _eqAreaFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh))
+                        : (_perAssetFits[slot] !== undefined
+                            ? _perAssetFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh));
+                    const _pas = _paf * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
+                    media.style.imageRendering = _pas >= 2 ? 'pixelated' : '';
                     media.style.width = '100%';
                     media.style.height = '100%';
                     media.style.maxWidth = 'none';
@@ -6305,7 +6460,14 @@
 
                 // Update per-asset zoom in info bar (actual pixel ratio for this specific asset)
                 if (!isAudioCanvas) {
-                    const perAssetScale = minNW > 0 ? (minNW / nw) * zoomLevel : zoomLevel;
+                    const _paf = _stackZoomMode === 'balance'
+                        ? (_eqAreaFits[slot] !== undefined
+                            ? _eqAreaFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh))
+                        : (_perAssetFits[slot] !== undefined
+                            ? _perAssetFits[slot]
+                            : Math.min(window.innerWidth / nw, availH / nh));
+                    const perAssetScale = _paf * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
                     const infoBarLocal = layer.querySelector('.asset-info-bar');
                     const zoomSpan = infoBarLocal && infoBarLocal.querySelector('.asset-zoom');
                     if (zoomSpan) zoomSpan.textContent = formatZoom(perAssetScale);
@@ -6318,6 +6480,46 @@
 
             // Reposition difference overlay
             if (_diffMode) requestAnimationFrame(drawDiffComposite);
+
+            // Compute pan bounds from union of all asset positions.
+            // Bounds = pan values where the content edge is flush with the viewport edge.
+            // Min ≤ 0 ≤ Max always: 0 means "no pan needed / not possible in this direction".
+            {
+                let uMinCL = Infinity, uMaxCR = -Infinity;
+                let uMinCT = Infinity, uMaxCB = -Infinity;
+                assetOrder.forEach(slot => {
+                    if (!mediaData[slot]) return;
+                    const lyr = getLayer(slot);
+                    const vw2 = lyr && lyr.querySelector('.video-wrapper');
+                    if (!vw2 || !vw2.dataset.scaledW) return;
+                    const cL = parseFloat(vw2.dataset.centerLeft);
+                    const cT = parseFloat(vw2.dataset.centerTop);
+                    const sW = parseFloat(vw2.dataset.scaledW);
+                    const sH = parseFloat(vw2.dataset.scaledH);
+                    if (isNaN(cL) || isNaN(cT) || !sW || !sH) return;
+                    uMinCL = Math.min(uMinCL, cL);
+                    uMaxCR = Math.max(uMaxCR, cL + sW);
+                    uMinCT = Math.min(uMinCT, cT);
+                    uMaxCB = Math.max(uMaxCB, cT + sH);
+                });
+                if (uMinCL === Infinity) {
+                    _panBoundsXMin = _panBoundsXMax = _panBoundsYMin = _panBoundsYMax = 0;
+                } else {
+                    _panBoundsXMin = Math.min(0, window.innerWidth - uMaxCR);
+                    _panBoundsXMax = Math.max(0, -uMinCL);
+                    _panBoundsYMin = Math.min(0, headerH + 1 + availH - uMaxCB);
+                    _panBoundsYMax = Math.max(0, -(uMinCT - headerH - 1));
+                }
+                // Hard-clamp current pan to bounds when not mid-drag (e.g. after zoom change).
+                if (!isPanning) {
+                    panOffsetX = Math.min(_panBoundsXMax, Math.max(_panBoundsXMin, panOffsetX));
+                    panOffsetY = Math.min(_panBoundsYMax, Math.max(_panBoundsYMin, panOffsetY));
+                }
+            }
+
+            // Update mini-map navigator and header info strip
+            _renderMiniMap();
+            _updateStackInfoStrip();
         }
 
         function zoomIn() {
@@ -6365,6 +6567,296 @@
             applyZoom();
         }
 
+        function _matchAnchorSlot() {
+            return _currentMatchAnchor; // slot with tightest per-asset fit; set by applyZoom()
+        }
+
+
+        function _toggleStackZoomMode() {
+            if (_stackZoomMode === 'fit' && !getLoadedSlotCount()) {
+                showToast('Load assets first');
+                return;
+            }
+            if (_stackZoomMode === 'fit') {
+                // Entering Balance — save current Fit zoom/pan so we can restore on exit.
+                _savedFitZoom = zoomLevel;
+                _savedFitPanX = panOffsetX;
+                _savedFitPanY = panOffsetY;
+                zoomLevel = fitZoom;
+                panOffsetX = 0;
+                panOffsetY = 0;
+            } else {
+                // Returning to Fit — restore saved zoom/pan if available.
+                if (_savedFitZoom !== null) {
+                    zoomLevel = _savedFitZoom;
+                    panOffsetX = _savedFitPanX;
+                    panOffsetY = _savedFitPanY;
+                    _savedFitZoom = null;
+                } else {
+                    zoomLevel = fitZoom;
+                    panOffsetX = 0;
+                    panOffsetY = 0;
+                }
+            }
+            _stackZoomMode = _stackZoomMode === 'fit' ? 'balance' : 'fit';
+            _prefs.save('stackZoomMode', _stackZoomMode);
+            applyZoom();
+            _updateStackZoomPill();
+            showToast(_stackZoomMode === 'fit' ? 'Fit' : 'Balance');
+        }
+
+        function _updateStackZoomPill() {
+            const pill = document.getElementById('stackZoomPill');
+            if (!pill) return;
+            if (isGridMode) { pill.style.display = 'none'; return; }
+            pill.style.display = '';
+            if (_stackZoomMode === 'balance') {
+                pill.textContent = 'Balance';
+                pill.classList.add('match');
+            } else {
+                pill.textContent = 'Fit';
+                pill.classList.remove('match');
+            }
+        }
+
+        // ── Stack mode header info strip ──────────────────────────────────────────
+        // Mirrors the active asset's info bar content in the fixed header so it's
+        // always visible regardless of zoom / pan state.
+
+        function _updateStackInfoStrip() {
+            const strip = document.getElementById('stackInfoStrip');
+            if (!strip) return;
+
+            if (isGridMode || !getLoadedSlotCount()) {
+                strip.style.display = 'none';
+                return;
+            }
+
+            // Find the active layer and its slot
+            const activeLayer = document.querySelector('.asset-layer.active');
+            if (!activeLayer) { strip.style.display = 'none'; return; }
+            const slot = activeLayer.id === 'layerOriginal' ? 'original'
+                       : activeLayer.id === 'layerEditA'    ? 'editA'
+                       : activeLayer.id === 'layerEditB'    ? 'editB' : null;
+            if (!slot || !mediaData[slot]) { strip.style.display = 'none'; return; }
+
+            // Read from the hidden info bar spans — they're kept up to date by applyZoom()
+            // and file-load handlers even though the bar itself isn't displayed in Stack mode.
+            const bar = activeLayer.querySelector('.asset-info-bar');
+            const name       = bar ? bar.querySelector('.asset-name')?.textContent       : slotLabel(slot);
+            const zoom       = bar ? bar.querySelector('.asset-zoom')?.textContent       : '';
+            const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
+            const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
+            const filename   = bar ? bar.querySelector('.asset-filename')?.textContent   : '';
+
+            strip.querySelector('.sih-name').textContent = name || '';
+            const zoomEl = strip.querySelector('.sih-zoom');
+            zoomEl.textContent = zoom || '';
+            zoomEl.style.display = zoom ? '' : 'none';
+            strip.querySelector('.sih-resolution').textContent = resolution && resolution !== '-' ? resolution : '';
+            strip.querySelector('.sih-aspect').textContent = aspect && aspect !== '-' ? aspect : '';
+            strip.querySelector('.sih-filename').textContent = filename || '';
+
+            strip.style.display = 'flex';
+        }
+
+        // ── Stack mode mini-map navigator ─────────────────────────────────────────
+        // Shows the "world space" extent of all loaded assets as colored outlines
+        // plus a white viewport rect that moves with pan. Drag or click to navigate.
+        // Only visible in Stack mode when any asset overflows the viewport.
+
+        function _renderMiniMap() {
+            const canvas = document.getElementById('stackMiniMap');
+            if (!canvas) return;
+
+            if (isGridMode || !_stackCanPan) {
+                canvas.style.display = 'none';
+                return;
+            }
+
+            // Measure layout geometry
+            const headerH = getHeaderHeight();
+            const controlsEl = document.getElementById('videoControls');
+            const controlsH = (controlsEl && controlsEl.classList.contains('active')) ? controlsEl.offsetHeight : 0;
+            // Info bar is in header strip in Stack mode — no infoBarH offset.
+            const availH = window.innerHeight - headerH - 1 - controlsH;
+            const vpTop = headerH + 1;
+
+            // Collect asset bounding boxes from data stashed by applyZoom()
+            const SLOT_COLORS = { original: '#f0a030', editA: '#4a9eff', editB: '#4dbb5f' };
+            const assets = [];
+            assetOrder.forEach(slot => {
+                if (!mediaData[slot]) return;
+                const layer = getLayer(slot);
+                const vw = layer && layer.querySelector('.video-wrapper');
+                if (!vw || !vw.dataset.scaledW) return;
+                const w = parseFloat(vw.dataset.scaledW);
+                const h = parseFloat(vw.dataset.scaledH);
+                const x = parseFloat(vw.dataset.centerLeft);
+                const y = parseFloat(vw.dataset.centerTop);
+                if (!w || !h) return;
+                assets.push({ slot, x, y, w, h });
+            });
+
+            if (assets.length === 0) { canvas.style.display = 'none'; return; }
+
+            // Viewport rect in world space: left edge = -panOffsetX (screen_x = world_x + panOffsetX)
+            const vp = { x: -panOffsetX, y: vpTop - panOffsetY, w: window.innerWidth, h: availH };
+
+            // World bounding box = asset union only (NOT including viewport).
+            // Keeping the viewport out of this computation means the mini-map size stays
+            // fixed regardless of pan position — the viewport rect floats over it and
+            // clips naturally at the canvas edge when panned past the content boundary.
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            assets.forEach(a => {
+                minX = Math.min(minX, a.x);
+                maxX = Math.max(maxX, a.x + a.w);
+                minY = Math.min(minY, a.y);
+                maxY = Math.max(maxY, a.y + a.h);
+            });
+            const worldW = maxX - minX;
+            const worldH = maxY - minY;
+            if (worldW <= 0 || worldH <= 0) { canvas.style.display = 'none'; return; }
+
+            // Canvas CSS size: proportional to world extent, capped at 200×150
+            const MAX_W = 200, MAX_H = 150;
+            const scl = Math.min(MAX_W / worldW, MAX_H / worldH);
+            const cw = Math.max(60, Math.round(worldW * scl));
+            const ch = Math.max(60, Math.round(worldH * scl));
+            const mmScale = cw / worldW; // actual scale after size clamping
+
+            // DPR-aware canvas pixel dimensions
+            const dpr = window.devicePixelRatio || 1;
+            const pw = Math.round(cw * dpr), ph = Math.round(ch * dpr);
+            if (canvas.width !== pw || canvas.height !== ph) {
+                canvas.width = pw;
+                canvas.height = ph;
+            }
+            canvas.style.width = cw + 'px';
+            canvas.style.height = ch + 'px';
+            canvas.style.bottom = (controlsH + 8) + 'px';
+            canvas.style.display = 'block';
+
+            // Stash for interaction handler
+            canvas._mmScale = mmScale;
+            canvas._mmMinX = minX;
+            canvas._mmMinY = minY;
+            canvas._mmVpTop = vpTop;
+            canvas._mmAvailH = availH;
+
+            const ctx = canvas.getContext('2d');
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, cw, ch);
+
+            // World → canvas coordinate helpers
+            const toX = v => (v - minX) * mmScale;
+            const toY = v => (v - minY) * mmScale;
+
+            // Draw asset bounding rects (colored outline + faint fill)
+            assets.forEach(({ slot, x, y, w, h }) => {
+                const col = SLOT_COLORS[slot] || '#888888';
+                const rx = toX(x), ry = toY(y), rw = w * mmScale, rh = h * mmScale;
+                ctx.fillStyle = col + '20'; // ~12% opacity fill
+                ctx.fillRect(rx, ry, rw, rh);
+                ctx.strokeStyle = col;
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(rx + 0.75, ry + 0.75, Math.max(1, rw - 1.5), Math.max(1, rh - 1.5));
+            });
+
+            // Draw viewport indicator (white outline + very faint fill)
+            const vx = toX(vp.x), vy = toY(vp.y), vw = vp.w * mmScale, vh = vp.h * mmScale;
+            ctx.fillStyle = 'rgba(255,255,255,0.10)';
+            ctx.fillRect(vx, vy, vw, vh);
+            ctx.strokeStyle = 'rgba(255,255,255,0.82)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(vx + 0.75, vy + 0.75, Math.max(1, vw - 1.5), Math.max(1, vh - 1.5));
+
+            ctx.restore();
+        }
+
+        function _setupMiniMapInteraction() {
+            const canvas = document.getElementById('stackMiniMap');
+            if (!canvas || canvas._mmInteractionSetup) return;
+            canvas._mmInteractionSetup = true;
+
+            let dragging = false;
+            let dragStartX, dragStartY, dragStartPanX, dragStartPanY;
+
+            function clampToBounds(x, y) {
+                return {
+                    x: Math.min(_panBoundsXMax, Math.max(_panBoundsXMin, x)),
+                    y: Math.min(_panBoundsYMax, Math.max(_panBoundsYMin, y))
+                };
+            }
+
+            // Dragging the viewport rect by (dx, dy) canvas pixels moves the viewport
+            // by (dx, dy) / mmScale in world space → panOffset changes inversely.
+            // Hard-clamped: mini-map is a precision tool, no rubber-band here.
+            function applyDrag(clientX, clientY) {
+                const s = canvas._mmScale || 1;
+                const raw = clampToBounds(
+                    dragStartPanX - (clientX - dragStartX) / s,
+                    dragStartPanY - (clientY - dragStartY) / s
+                );
+                panOffsetX = Math.round(raw.x);
+                panOffsetY = Math.round(raw.y);
+                applyZoom();
+            }
+
+            // Click-to-jump: center the viewport on the clicked world point.
+            function jumpToPoint(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                const s = canvas._mmScale || 1;
+                const worldX = (clientX - rect.left) / s + (canvas._mmMinX || 0);
+                const worldY = (clientY - rect.top) / s + (canvas._mmMinY || 0);
+                const vpTop = canvas._mmVpTop || 0;
+                const avH = canvas._mmAvailH || window.innerHeight;
+                const raw = clampToBounds(
+                    window.innerWidth / 2 - worldX,
+                    vpTop + avH / 2 - worldY
+                );
+                panOffsetX = Math.round(raw.x);
+                panOffsetY = Math.round(raw.y);
+                applyZoom();
+            }
+
+            canvas.addEventListener('mousedown', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragging = true;
+                dragStartX = e.clientX; dragStartY = e.clientY;
+                dragStartPanX = panOffsetX; dragStartPanY = panOffsetY;
+            });
+            window.addEventListener('mousemove', e => {
+                if (!dragging) return;
+                applyDrag(e.clientX, e.clientY);
+            });
+            window.addEventListener('mouseup', e => {
+                if (!dragging) return;
+                if (Math.abs(e.clientX - dragStartX) < 4 && Math.abs(e.clientY - dragStartY) < 4) {
+                    jumpToPoint(dragStartX, dragStartY);
+                }
+                dragging = false;
+            });
+
+            // Touch
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                const t = e.touches[0];
+                dragging = true;
+                dragStartX = t.clientX; dragStartY = t.clientY;
+                dragStartPanX = panOffsetX; dragStartPanY = panOffsetY;
+            }, { passive: false });
+            canvas.addEventListener('touchmove', e => {
+                e.preventDefault();
+                if (!dragging) return;
+                applyDrag(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: false });
+            canvas.addEventListener('touchend', () => { dragging = false; });
+        }
+
         function setupPanHandlers() {
             const container = document.getElementById('assetContainer');
             // Remove first to prevent double-attachment on repeated inspect entries
@@ -6378,58 +6870,60 @@
             container.addEventListener('mouseleave', handlePanEnd);
         }
 
-        // Clamp panOffsetX/Y so each edge of the image can't travel more than
-        // ~25% of the viewport past the corresponding side of the frame.
-        function clampPanOffsets() {
-            const vw = _panVw;
-            if (!vw) return;
-            const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
-            const centerLeft = parseFloat(vw.dataset.centerLeft || 0);
-            const scaledW    = parseFloat(vw.dataset.scaledW    || 0);
-            const scaledH    = parseFloat(vw.dataset.scaledH    || 0);
-            const headerH    = getHeaderHeight();
-            const viewW = window.innerWidth;
-            const viewH = window.innerHeight;
-            const slackX = viewW * 0.25;
-            const slackY = viewH * 0.25;
-
-            // Right edge can't go more than slackX past the left of the viewport
-            const minX = -(centerLeft + scaledW) + slackX;
-            // Left edge can't go more than slackX past the right of the viewport
-            const maxX = (viewW - centerLeft) - slackX;
-
-            // Bottom edge can't go more than slackY above the header
-            const minY = (headerH - centerTop - scaledH) + slackY;
-            // Top edge can't go more than slackY below the viewport bottom
-            const maxY = (viewH - centerTop) - slackY;
-
-            panOffsetX = Math.min(maxX, Math.max(minX, panOffsetX));
-            panOffsetY = Math.min(maxY, Math.max(minY, panOffsetY));
+        // Animate pan back to the nearest in-bounds position after a rubber-band overstretch.
+        // Uses a simple exponential spring: each frame moves 22% of remaining distance.
+        function _snapPanBack(targetX, targetY) {
+            if (_snapAnimId) cancelAnimationFrame(_snapAnimId);
+            function step() {
+                const dX = targetX - panOffsetX;
+                const dY = targetY - panOffsetY;
+                if (Math.abs(dX) < 0.5 && Math.abs(dY) < 0.5) {
+                    panOffsetX = targetX;
+                    panOffsetY = targetY;
+                    applyZoom();
+                    _snapAnimId = null;
+                    return;
+                }
+                panOffsetX += dX * 0.16;
+                panOffsetY += dY * 0.16;
+                applyZoom();
+                _snapAnimId = requestAnimationFrame(step);
+            }
+            _snapAnimId = requestAnimationFrame(step);
         }
 
         function handlePanStart(e) {
-            if (zoomLevel <= fitZoom) return; // no pan when full image is visible
-            e.preventDefault(); // Prevent browser's default drag behavior
+            if (isGridMode || e.button !== 0 || !getLoadedSlotCount()) return;
+            e.preventDefault();
+            // Cancel any in-progress snap-back so the user takes control immediately.
+            if (_snapAnimId) { cancelAnimationFrame(_snapAnimId); _snapAnimId = null; }
             isPanning = true;
             panStartX = e.clientX - panOffsetX;
             panStartY = e.clientY - panOffsetY;
             document.getElementById('assetContainer').classList.add('panning');
-            // Cache the active layer's vw so handlePanMove/clampPanOffsets
-            // never query the DOM during the hot mousemove path.
+            // Cache active layer's vw — avoids DOM queries in the hot mousemove path.
             _panLayer = document.querySelector('.asset-layer.active');
             _panVw    = _panLayer ? _panLayer.querySelector('.video-wrapper') : null;
         }
 
         function handlePanMove(e) {
             if (!isPanning) return;
-
             e.preventDefault();
-            panOffsetX = e.clientX - panStartX;
-            panOffsetY = e.clientY - panStartY;
-            clampPanOffsets();
 
-            // Move the wrapper using cached refs set in handlePanStart — no DOM queries.
-            // The info bar is a CSS child (bottom:100%) so it moves with the wrapper for free.
+            const rawX = e.clientX - panStartX;
+            const rawY = e.clientY - panStartY;
+
+            // Outside-bounds: apply rubber-band resistance (0.3× speed) so dragging
+            // past content edges feels elastic rather than hard-stopping or drifting freely.
+            const K = 0.3;
+            panOffsetX = rawX < _panBoundsXMin ? _panBoundsXMin + (rawX - _panBoundsXMin) * K
+                       : rawX > _panBoundsXMax ? _panBoundsXMax + (rawX - _panBoundsXMax) * K
+                       : rawX;
+            panOffsetY = rawY < _panBoundsYMin ? _panBoundsYMin + (rawY - _panBoundsYMin) * K
+                       : rawY > _panBoundsYMax ? _panBoundsYMax + (rawY - _panBoundsYMax) * K
+                       : rawY;
+
+            // Fast path: move the active wrapper directly without full applyZoom().
             const vw = _panVw;
             if (vw) {
                 const centerTop  = parseFloat(vw.dataset.centerTop  || 0);
@@ -6437,13 +6931,23 @@
                 vw.style.top  = (centerTop  + panOffsetY) + 'px';
                 vw.style.left = (centerLeft + panOffsetX) + 'px';
             }
+            _renderMiniMap();
         }
 
         function handlePanEnd(e) {
+            if (!isPanning) return;
             isPanning = false;
-            _panVw = null; _panLayer = null; // release cached refs
+            _panVw = null; _panLayer = null;
             document.getElementById('assetContainer').classList.remove('panning');
-            applyZoom(); // re-anchor wrapper to the settled pan position
+
+            // Snap back to bounds if the rubber-band left us outside.
+            const clampedX = Math.min(_panBoundsXMax, Math.max(_panBoundsXMin, panOffsetX));
+            const clampedY = Math.min(_panBoundsYMax, Math.max(_panBoundsYMin, panOffsetY));
+            if (clampedX !== panOffsetX || clampedY !== panOffsetY) {
+                _snapPanBack(clampedX, clampedY);
+            } else {
+                applyZoom();
+            }
         }
 
         // Clear all loaded media and reset state — called both by resetAll() and at the
@@ -6470,6 +6974,7 @@
             panOffsetX = 0;
             panOffsetY = 0;
             isPanning = false;
+            _savedFitZoom = null; _savedFitPanX = 0; _savedFitPanY = 0;
 
             // Stop video/audio progress loop — will be restarted if new load includes videos/audio
             stopProgressUpdateLoop();
@@ -6830,6 +7335,12 @@
                 if (controls) controls.style.bottom = '';
             }
 
+            // Clear any inline width overrides from a previous optimal 2-asset horizontal split
+            // so they don't persist into vertical-stack or other layout modes.
+            if (!document.body.classList.contains('side-by-side')) {
+                slots.forEach(slot => { const l = getLayer(slot); if (l) l.style.width = ''; });
+            }
+
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
             // center the group. Clear those overrides first so offsetHeight reads CSS values.
             if (isVertical) {
@@ -6867,9 +7378,18 @@
                     if (!isEqualLayout && m.nw < m.nh) widthConstrained = true;
                     gridLayout[slot] = { nw: m.nw, nh: m.nh, cw: m.cw, ch: m.ch,
                                          ibH: m.ibH, fitW: m.fitW, fitH: m.fitH };
-                    minW = Math.min(minW, m.fitW);
+                    // inline-rows: images share width = cell width (height clamp handles overflow).
+                    // Using fitW here would let a portrait asset's tiny cell-height-constrained
+                    // fitW drag all other images down to the same small width.
+                    const _mw = (isEqualLayout && document.body.classList.contains('inline-rows')) ? m.cw : m.fitW;
+                    minW = Math.min(minW, _mw);
                     minH = Math.min(minH, m.fitH);
                 });
+                // Flags for equal-area layout modes — defined early so the clamping
+                // block below can skip for balance-rows (it has its own clamping).
+                const useEqualAreaCols = isEqualLayout && document.body.classList.contains('inline-cols');
+                const useBalanceRows   = isEqualLayout && document.body.classList.contains('inline-rows');
+
                 // Determine the effective zoom multiplier for offset rendering.
                 // splitZoomLevel===1 means "smallest-resolution asset at 100% native pixels,
                 // others scaled down to match its physical size" — compute the multiplier
@@ -6901,9 +7421,10 @@
 
                 // Clamp offsetEffectiveZoom so no asset overflows its cell
                 // (only when NOT at 100% native — the 1 key should allow overflow).
+                // Balance-rows has its own clamping pass; skip this block for it.
                 // When splitZoomLevel===1, skip clamping so assets render at true 1:1 pixels
                 // even if they exceed the cell bounds (CSS overflow handles the visual).
-                if (splitZoomLevel !== 1) {
+                if (splitZoomLevel !== 1 && !useBalanceRows) {
                     let maxAllowed = Infinity;
                     const isRows = document.body.classList.contains('inline-rows');
                     if (isRows && widthConstrained) {
@@ -6954,12 +7475,12 @@
 
                 // Apply shared dimension: same width (portrait) or same height (landscape).
                 // Then apply the effective zoom so +/- and 1 keys scale all three assets together.
-                const useEqualArea = isEqualLayout && document.body.classList.contains('inline-cols');
+                // useEqualAreaCols and useBalanceRows both compute rw/rh in their own passes below.
                 slots.forEach(slot => {
                     const d = gridLayout[slot];
                     if (!d) return;
-                    if (useEqualArea) {
-                        // Placeholder — computed in equal-area pass below
+                    if (useEqualAreaCols || useBalanceRows) {
+                        // Placeholder — overridden in equal-area / balance pass below
                         d.rw = d.fitW;
                         d.rh = d.fitH;
                         d.sharedZoom = d.rw / d.nw;
@@ -7023,7 +7544,7 @@
                         // For area A and aspect ratio r = nw/nh:
                         //   rendered width  = √(A·r)
                         //   rendered height = √(A/r)
-                        if (useEqualArea) {
+                        if (useEqualAreaCols) {
                             const anyD = gridLayout[loadedSlots[0]];
                             const availH = anyD.ch - anyD.ibH - 8;
                             const availW = window.innerWidth - (loadedSlots.length - 1) * gap - 16;
@@ -7125,7 +7646,59 @@
                             cellLeftEdge += d.cw + gap;
                         });
                     } else if (!isColumns && loadedSlots.length > 0) {
-                        // inline-rows: cluster vertically, center the group
+                        // Balance-rows equal-area: each asset gets same screen area A.
+                        // For rows with aspect ratios r_i = nw/nh:
+                        //   rw_i = √(A·r_i),  rh_i = √(A/r_i)
+                        // Height constraint: Σ√(A/r_i) ≤ availH → A ≤ (availH / Σ√(1/r_i))²
+                        // Width constraint:  max(√(A·r_i)) ≤ availW → A ≤ availW² / max(r_i)
+                        // (Exact dual of the cols formula with W↔H and r↔1/r.)
+                        if (useBalanceRows) {
+                            const totalAvailH = loadedSlots.reduce((sum, s) =>
+                                sum + gridLayout[s].ch - gridLayout[s].ibH, 0)
+                                - (loadedSlots.length - 1) * gap - 8;
+                            const availW = window.innerWidth - 16;
+
+                            const ratios = {};
+                            loadedSlots.forEach(s => { ratios[s] = gridLayout[s].nw / gridLayout[s].nh; });
+
+                            const sumInvSqrtR = loadedSlots.reduce((sum, s) => sum + Math.sqrt(1 / ratios[s]), 0);
+                            const aFromH = Math.pow(totalAvailH / sumInvSqrtR, 2);
+                            const maxR = Math.max(...loadedSlots.map(s => ratios[s]));
+                            const aFromW = availW * availW / maxR;
+                            const fitArea = Math.min(aFromH, aFromW);
+
+                            let linearZoom = splitStepZoom;
+                            if (splitZoomLevel === 1) {
+                                let minNativeScale = Infinity;
+                                loadedSlots.forEach(s => {
+                                    const d = gridLayout[s];
+                                    const baseH = Math.sqrt(fitArea / ratios[s]);
+                                    if (baseH > 0) minNativeScale = Math.min(minNativeScale, d.nh / baseH);
+                                });
+                                if (minNativeScale < Infinity) linearZoom = minNativeScale * splitStepZoom;
+                            }
+                            let targetArea = fitArea * linearZoom * linearZoom;
+
+                            // Clamp so nothing overflows
+                            const projMaxW = Math.max(...loadedSlots.map(s => Math.sqrt(targetArea * ratios[s])));
+                            const projTotalH = loadedSlots.reduce((sum, s) => sum + Math.sqrt(targetArea / ratios[s]), 0);
+                            const clamped = projMaxW > availW || projTotalH > totalAvailH;
+                            if (clamped) {
+                                targetArea = fitArea;
+                                const nativeScale = linearZoom / splitStepZoom;
+                                if (nativeScale > 0) splitStepZoom = Math.min(splitStepZoom, 1 / nativeScale);
+                            }
+                            _gridZoomWasCapped = clamped;
+
+                            loadedSlots.forEach(s => {
+                                const d = gridLayout[s];
+                                d.rw = Math.round(Math.sqrt(targetArea * ratios[s]));
+                                d.rh = Math.round(Math.sqrt(targetArea / ratios[s]));
+                                d.sharedZoom = d.rw / d.nw;
+                            });
+                        }
+
+                        // Cluster vertically, center the group in the viewport
                         const totalGroupH = loadedSlots.reduce((sum, s) => {
                             const d = gridLayout[s];
                             return sum + d.ibH + Math.round(d.rh);
@@ -7182,8 +7755,48 @@
                     const loadedSlots = slots.filter(s => measured.data[s]);
                     const nSlots = loadedSlots.length;
                     const gap = 4;
-                    // Compute per-slot rendered size (same for all since we anchor on longest-side,
-                    // but clampScale differs per cell — use min clampScale for group consistency).
+
+                    // For 2-asset horizontal, compute optimal column widths instead of the
+                    // hard CSS 50/50 split. Portrait assets need far less width than landscape
+                    // at a shared height — giving the remaining width to the other asset lets
+                    // it render as large as possible.
+                    // Algorithm: give each height-constrained asset exactly r·availH width;
+                    // if only one is height-constrained, it gets that width and the other gets
+                    // the rest. If both are width-constrained, equal scale is optimal.
+                    if (nSlots === 2) {
+                        const [sa, sb] = loadedSlots;
+                        const ma = measured.data[sa], mb = measured.data[sb];
+                        const avW = window.innerWidth - gap;
+                        const avH = ma.availH; // same for both cells in horizontal layout
+                        const waHC = ma.nw * avH / ma.nh; // width to fill height for asset a
+                        const wbHC = mb.nw * avH / mb.nh; // width to fill height for asset b
+                        let optWa, optWb;
+                        if (waHC + wbHC <= avW) {
+                            // Both can be height-constrained — each gets its exact fill width
+                            optWa = waHC; optWb = wbHC;
+                        } else {
+                            const sEq = avW / (ma.nw + mb.nw); // scale at equal-width split
+                            if (ma.nh * sEq > avH) {
+                                // Asset a height-constrained: give it its fill width
+                                optWa = Math.min(waHC, avW - 1);
+                                optWb = avW - optWa;
+                            } else if (mb.nh * sEq > avH) {
+                                // Asset b height-constrained
+                                optWb = Math.min(wbHC, avW - 1);
+                                optWa = avW - optWb;
+                            } else {
+                                // Both width-constrained: equal scale (proportional to native width)
+                                optWa = ma.nw * sEq; optWb = mb.nw * sEq;
+                            }
+                        }
+                        // Apply inline width overrides and read back actual px after reflow
+                        if (ma.layer) ma.layer.style.width = Math.round(optWa) + 'px';
+                        if (mb.layer) mb.layer.style.width = Math.round(optWb) + 'px';
+                        measured.data[sa].cw = ma.layer ? ma.layer.offsetWidth : Math.round(optWa);
+                        measured.data[sb].cw = mb.layer ? mb.layer.offsetWidth : Math.round(optWb);
+                    }
+
+                    // Compute per-slot rendered size. clampScale uses updated m.cw values.
                     let groupRenderedW = 0, groupRenderedH = 0;
                     const perSlot = {};
                     loadedSlots.forEach(s => {
@@ -7198,17 +7811,21 @@
                         const rh = Math.round(baseH * clampScale * splitStepZoom);
                         perSlot[s] = { rw, rh, baseW, baseH, clampScale };
                     });
-                    // Group centering: center the whole group around the screen midpoint.
-                    const firstSlot = loadedSlots[0];
-                    const rw0 = perSlot[firstSlot].rw;
-                    const groupW = rw0 * nSlots + gap * (nSlots - 1);
+                    // Group centering: accumulate actual per-slot rendered widths, which may
+                    // differ between slots when portrait and landscape assets are paired.
+                    const groupW = loadedSlots.reduce((sum, s) => sum + perSlot[s].rw, 0)
+                        + gap * (nSlots - 1);
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
-                    loadedSlots.forEach((s, idx) => {
+                    let cumImgLeft = groupLeft; // viewport x where next image starts
+                    let cumCellLeft = 0;        // viewport x where current cell starts
+                    loadedSlots.forEach(s => {
                         const m = measured.data[s];
                         const p = perSlot[s];
-                        const tx = groupLeft + idx * (rw0 + gap) - idx * m.cw;
+                        const tx = cumImgLeft - cumCellLeft;
                         const ty = m.ibH + Math.round((m.availH - p.rh) / 2);
                         slotGeometry[s] = { rw: p.rw, rh: p.rh, tx, ty, zoom: p.rw / m.nw };
+                        cumImgLeft += p.rw + gap;
+                        cumCellLeft += m.cw;
                     });
                 }
             } else {
@@ -7528,6 +8145,8 @@
             // Update mode and asset strips in header
             updateModeStrip(isGridMode ? layoutMode : 'overlay');
             updateAssetStrip();
+            _updateStackZoomPill();
+            _updateStackInfoStrip();
         }
 
         // Swap between inline and offset grid layouts without rebuilding the mode strip.
@@ -8098,6 +8717,8 @@
                   } else if (allThreeLoaded) { setViewMode('offset'); }
                   else { setViewMode(layoutMode); }
               } },
+            { id: 'stackZoomMode', defaultKey: '\\', label: 'Stack: Fit / Balance zoom', section: 'view',
+              fn: () => { if (!isGridMode) _toggleStackZoomMode(); } },
             { id: 'gridMode', defaultKey: 'g', label: 'Grid mode', section: 'view',
               fn: () => {
                   const allThreeLoaded = getLoadedSlotCount() === 3;
@@ -8146,7 +8767,13 @@
             { id: 'zoom100', defaultKey: '1', label: 'Zoom to 100%', section: 'zoom',
               fn: () => {
                   if (!isGridMode) {
-                      zoomLevel = 1; panOffsetX = 0; panOffsetY = 0; applyZoom();
+                      // Target: perAssetScale = 1.0 for the active slot.
+                      // perAssetScale = perAssetFit × (zoomLevel / fitZoom) = 1
+                      // → zoomLevel = fitZoom / perAssetFit
+                      const slot = assetOrder[currentAssetIndex];
+                      const paf = _stackPerAssetFit[slot];
+                      zoomLevel = (paf && fitZoom) ? fitZoom / paf : 1;
+                      panOffsetX = 0; panOffsetY = 0; applyZoom();
                   } else {
                       const atTrue100 = splitZoomLevel === 1 && splitStepZoom === 1.0;
                       splitZoomLevel = atTrue100 ? null : 1;
@@ -8290,6 +8917,7 @@
               fn: () => {
                   if (hasAudios) { showToast('Audio visualization is shown in main view'); }
                   else if (hasVideos) { toggleAudioViz(); }
+                  else { showToast('No assets chosen with audio'); }
               } },
             { id: 'noVideo', defaultKey: 'n', label: 'No video (audio focus)', section: 'analysis',
               fn: () => { if (hasVideos) toggleNoVideoMode(); else showToast('Load videos to use this mode'); } },
@@ -8402,6 +9030,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             setupDragAndDrop();
             setupPanHandlers(); // pan always available in overlay mode
+            _setupMiniMapInteraction();
 
             // Restore persisted preferences to UI
             const savedVol = _prefs.load('volume', 100);
@@ -8544,9 +9173,9 @@
             <p><strong>Reset:</strong> Click the reset icon (circular arrow, visible after loading) to clear all files and start over.</p>
 
             <h2>View Modes</h2>
-            <p><strong>Stack</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets.</p>
-            <p><strong>Grid (2 files)</strong> — Both assets displayed side-by-side with a gap between them. Assets are scaled so their shorter sides match. The layout can be switched between <strong>Horizontal</strong> (left/right) and <strong>Vertical</strong> (top/bottom). The app auto-picks the best layout on first load.</p>
-            <p><strong>Grid (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between Inline (columns or rows, auto-picked by aspect ratio) and Offset (Original alone, A/B paired).</p>
+            <p><strong>Stack</strong> — The default mode. One asset is visible at a time, layered on top of the others. Use arrow keys or the asset buttons in the header to switch between assets. Asset name, zoom, resolution, aspect ratio, and filename are shown in the header. A mini-map thumbnail appears in the lower-right when the asset overflows the viewport — click or drag it to pan. Press <kbd>\</kbd> to toggle between <em>Fit</em> (each asset fills the viewport independently) and <em>Balance</em> (all assets scaled to the same rendered screen area).</p>
+            <p><strong>Grid (2 files)</strong> — Both assets displayed side-by-side with a gap between them. The layout auto-picks Horizontal or Vertical on load based on which gives larger images, and re-evaluates on resize.</p>
+            <p><strong>Grid (3 files)</strong> — All three assets in a grid. Press <kbd>3</kbd> to toggle between <strong>Inline</strong> (columns or rows, auto-picked by aspect ratio; uses equal-area scaling so mixed-orientation assets share consistent visual weight) and <strong>Offset</strong> (Source alone, A/B paired).</p>
 
             <h2>Switching Modes</h2>
             <table>
@@ -8564,10 +9193,11 @@
                 <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
                 <tr><td><kbd>−</kbd></td><td>Zoom out</td></tr>
                 <tr><td><kbd>0</kbd></td><td>Zoom to fit screen</td></tr>
-                <tr><td><kbd>1</kbd></td><td>Zoom to 100% (actual pixels)</td></tr>
-                <tr><td>Click and drag</td><td>Pan (when zoomed in)</td></tr>
+                <tr><td><kbd>1</kbd></td><td>Zoom to 100% native pixels for the active asset</td></tr>
+                <tr><td><kbd>\</kbd></td><td>Toggle Fit / Balance zoom mode</td></tr>
+                <tr><td>Click and drag</td><td>Pan; drag past edges for elastic rubber-band resistance</td></tr>
             </table>
-            <p>Zoom range: 5%–3200%. Each step multiplies/divides by √2 (~1.41×). In split modes, pressing <kbd>1</kbd> toggles between fit to screen and 100% cap.</p>
+            <p>Zoom range: 5%–3200%. Each step multiplies/divides by √2 (~1.41×). <kbd>1</kbd> targets the currently active asset — switching assets and pressing <kbd>1</kbd> again re-centers 100% on the new slot. In Grid mode, <kbd>1</kbd> toggles between fit-to-screen and a 100% native pixel cap. In <em>Balance</em> mode all assets are scaled to equal rendered area; the mini-map in the lower-right shows the full extent of assets and a viewport indicator when any asset overflows.</p>
 
             <h2>Zoom Loupe</h2>
             <p>Press <kbd>Z</kbd> to toggle a circular zoom loupe that follows your cursor, showing a magnified view of native pixels without changing the overall zoom level. Works in all view modes.</p>
@@ -8614,7 +9244,7 @@
                 <tr><td><kbd>Shift</kbd> + click and drag</td><td>Select a region to set loop in/out points</td></tr>
                 <tr><td>Click on a different slot's canvas</td><td>Switch active audio to that slot</td></tr>
             </table>
-            <p><strong>Loop markers:</strong> Use <kbd>I</kbd> and <kbd>P</kbd> to set in and out points at the current playback position, or <kbd>Shift</kbd>-drag on a waveform to select a region visually. When both markers are set, playback loops between them. The progress bar turns orange and spans only the looped section. Non-looped regions are dimmed at 50% on waveforms and spectrograms. Drag the orange triangle markers on the progress bar to adjust loop boundaries. Loop points are saved per asset — switching videos preserves each one's loop selection.</p>
+            <p><strong>Loop markers:</strong> Use <kbd>I</kbd> and <kbd>O</kbd> to set in and out points at the current playback position, or <kbd>Shift</kbd>-drag on a waveform to select a region visually. When both markers are set, playback loops between them. The progress bar turns orange and spans only the looped section. Non-looped regions are dimmed at 50% on waveforms and spectrograms. Drag the orange triangle markers on the progress bar to adjust loop boundaries. Loop points are saved per asset — switching videos preserves each one's loop selection.</p>
             <table>
                 <tr><th>Shortcut</th><th>Action</th></tr>
                 <tr><td><kbd>I</kbd></td><td>Set loop in-point at current time</td></tr>
@@ -8634,6 +9264,7 @@
                 <tr><td><kbd>← → ↑ ↓</kbd></td><td>Switch asset</td></tr>
                 <tr><td><kbd>S</kbd></td><td>Toggle Stack mode</td></tr>
                 <tr><td><kbd>G</kbd></td><td>Toggle Grid mode</td></tr>
+                <tr><td><kbd>\</kbd></td><td>Stack: Fit / Balance zoom toggle</td></tr>
                 <tr><td><kbd>3</kbd></td><td>Toggle Grid layout (Inline ↔ Offset)</td></tr>
                 <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
                 <tr><td><kbd>+</kbd></td><td>Zoom in</td></tr>
@@ -8741,6 +9372,8 @@
         </div>
     </div>
 
+    <canvas id="stackMiniMap" title="Navigator — drag to pan, click to jump"></canvas>
+
     <div class="quick-start-backdrop" id="changelogBackdrop"></div>
     <div class="changelog-popup" id="changelogPopup">
         <div class="quick-start-header">
@@ -8748,6 +9381,12 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.8</h3>
+            <ul>
+                <li><strong>Fit / Balance zoom (&#92;)</strong> — new Stack mode toggle in the header. <em>Fit</em> scales each asset to fill the viewport independently. <em>Balance</em> scales all assets to the same rendered screen area — consistent visual weight regardless of resolution or orientation, without overflow.</li>
+                <li><strong>Stack mode header info strip</strong> — slot name, zoom %, resolution, aspect ratio, and filename are now displayed in the center of the header while in Stack mode, replacing the traveling info bar that moved with the image.</li>
+                <li><strong>Mini-map navigator</strong> — a floating thumbnail in the lower-right corner appears when an asset overflows the viewport in Stack mode. Shows asset outlines and a white viewport indicator; click or drag to pan.</li>
+            </ul>
             <h3>v3.7.7</h3>
             <ul>
                 <li><strong>No-video mode (N)</strong> — hides video picture and shows per-slot waveform + spectrogram for audio-focused review; supports scrub, time cursor, and loop regions</li>
@@ -8756,37 +9395,6 @@
             <h3>v3.7.6</h3>
             <ul>
                 <li>Improved scrubbing — smoother frame updates and audio preview while dragging</li>
-            </ul>
-            <h3>v3.7.5</h3>
-            <ul>
-                <li>Scopes and waveform panels persist across file loads</li>
-                <li>Bug fixes</li>
-            </ul>
-            <h3>v3.7.4</h3>
-            <ul>
-                <li>Icon-based header — Load, Reset, Help, Stack, Grid, Waveform, and Scopes are now icons with tooltips</li>
-                <li>Draggable loop markers — drag the orange in/out triangles on the progress bar to adjust loop range</li>
-                <li>Loop points saved per asset — switching videos preserves each one's loop selection</li>
-                <li>Passive frame rate detection — no more loading delay, fps detected during playback</li>
-                <li>Bug fixes</li>
-            </ul>
-            <h3>v3.7.2</h3>
-            <ul>
-                <li>Audio waveforms and spectrograms now work in Safari for Opus video</li>
-                <li>Improved audio/video sync for Opus video in Chrome</li>
-                <li>Audio scrub preview when dragging the progress bar or waveform</li>
-                <li>Centiseconds timecode mode — click timecode to cycle through time, frames, and seconds</li>
-                <li>Bug fixes</li>
-            </ul>
-            <h3>v3.7</h3>
-            <ul>
-                <li>Play/pause button on the progress bar</li>
-                <li>Loop fix — custom loop points no longer conflict with native looping</li>
-            </ul>
-            <h3>v3.6.5</h3>
-            <ul>
-                <li>Difference mode — press <kbd>D</kbd> in Stack mode to see pixel differences between two assets</li>
-                <li>Works with images and video — updates live during playback and on frame step</li>
             </ul>
         </div>
     </div>
