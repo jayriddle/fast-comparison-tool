@@ -630,7 +630,7 @@
             width: 100%;
             flex: 1;
             min-height: 0;
-            padding: 2px;
+            padding: 1px;
             box-sizing: border-box;
             position: relative;
             display: flex;
@@ -754,7 +754,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
-            row-gap: 2px;
+            row-gap: 1px;
             height: 100%;
             overflow: hidden;
             align-items: stretch;
@@ -780,7 +780,7 @@
             display: grid;
             grid-template-columns: 1fr;
             grid-template-rows: 1fr 1fr 1fr;
-            row-gap: 4px;
+            row-gap: 2px;
             height: 100%;
             overflow: hidden;
             align-items: stretch;
@@ -884,7 +884,7 @@
             padding: 4px 12px;
             background: rgba(0, 0, 0, 0.9);
             z-index: 10;
-            font-size: 11px;
+            font-size: 12px;
             color: #777;
             border-radius: 3px 3px 0 0;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 1px 0 0 rgba(255, 255, 255, 0.12), inset -1px 0 0 rgba(255, 255, 255, 0.12);
@@ -902,14 +902,14 @@
             background: rgba(255, 255, 255, 0.22);
             padding: 1px 6px;
             border-radius: 8px;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 600;
             color: #fff;
         }
         .asset-info-bar .asset-zoom:empty { display: none; }
 
         #stackZoomPill {
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 600;
             color: #ccc;
             background: rgba(255,255,255,0.08);
@@ -949,7 +949,7 @@
             display: none; /* JS sets to flex when active */
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 10px;
             overflow: hidden;
             pointer-events: none;
         }
@@ -957,8 +957,8 @@
         #stackInfoStrip .sih-name {
             flex: 0 0 auto;
             font-weight: 600;
-            color: #fff;
-            font-size: 12px;
+            color: #2d7cff;
+            font-size: 14px;
             white-space: nowrap;
         }
         #stackInfoStrip .sih-zoom {
@@ -966,7 +966,7 @@
             background: rgba(255,255,255,0.18);
             padding: 1px 6px;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: 13px;
             color: #fff;
             white-space: nowrap;
         }
@@ -975,7 +975,7 @@
             flex: 0 2 auto;
             min-width: 0;
             color: rgba(255,255,255,0.42);
-            font-size: 11px;
+            font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -984,7 +984,7 @@
             flex: 0 2 auto;
             min-width: 0;
             color: rgba(255,255,255,0.42);
-            font-size: 11px;
+            font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -994,7 +994,7 @@
             flex: 0 3 auto;
             min-width: 0;
             color: rgba(255,255,255,0.3);
-            font-size: 11px;
+            font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1688,7 +1688,7 @@
         }
 
         .mode-btn, .asset-btn {
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 0.05em;
             padding: 4px 8px;
@@ -1724,7 +1724,7 @@
             justify-content: center;
         }
         .analysis-btn:hover { background: #555; color: #fff; }
-        .analysis-btn.active { color: #5bc0de; }
+        .analysis-btn.active { color: #2d7cff; }
         .analysis-btn.active:hover { background: #3a4a50; }
         .analysis-btn svg { width: 20px; height: 20px; display: block; }
         .analysis-btn:focus { outline: none; }
@@ -1732,10 +1732,10 @@
 
         /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
         .asset-btn {
-            background: rgba(91, 192, 222, 0.15);
+            background: rgba(45, 124, 255, 0.15);
             transition: background 0.15s, color 0.15s;
             border-radius: 4px;
-            color: rgba(91, 192, 222, 0.6);
+            color: rgba(45, 124, 255, 0.6);
         }
 
         .asset-btn.first-asset {}
@@ -1743,15 +1743,15 @@
 
         .strip-sep.asset-sep {
             background: transparent;
-            color: rgba(91, 192, 222, 0.3);
+            color: rgba(45, 124, 255, 0.3);
             padding: 4px 0;
             margin: 0;
         }
 
         /* Active asset: brighter cyan text */
         .asset-btn.active {
-            background: rgba(91, 192, 222, 0.25);
-            color: #5bc0de;
+            background: rgba(45, 124, 255, 0.25);
+            color: #2d7cff;
         }
 
         /* Sliding underline bar — positioned absolutely over the active asset button */
@@ -1759,7 +1759,7 @@
             position: absolute;
             bottom: 0;
             height: 2px;
-            background: #5bc0de;
+            background: #2d7cff;
             border-radius: 1px;
             pointer-events: none;
             transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1949,7 +1949,7 @@
                 <!-- Layout controls for side-by-side mode -->
                 <div class="asset-layer" id="layerOriginal">
                     <div class="asset-info-bar">
-                        <span class="asset-name">REFERENCE</span>
+                        <span class="asset-name">Reference</span>
                         <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
@@ -2087,7 +2087,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8';
+        const APP_VERSION = '3.8.1';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2836,7 +2836,7 @@
                     console.log(`[IHWA] Direct fetch: ${files.length} files in ${Math.round(performance.now() - t0)}ms`);
 
                     _ihwaPullReset();
-                    handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType });
+                    handleMultipleFiles(files, { skipToast: true, taskType: event.data.taskType, slotLabels: event.data.slotLabels || null });
                     return;
                 } catch (e) {
                     // CORS or network error — fall back to base64 via background
@@ -2899,6 +2899,7 @@
             clearAllMedia();
             _ihwaMode = !!(opts && opts.skipToast);
             _taskType = (opts && opts.taskType) || null;
+            _ihwaSlotLabels = (opts && opts.slotLabels) || null;
             const assetType = audioCount > 0 ? 'audio file' : mediaFiles.some(f => f.type.startsWith('video/')) ? 'video' : 'image';
             showLoading('Loading ' + mediaFiles.length + ' ' + assetType + (mediaFiles.length > 1 ? 's' : '') + '…');
 
@@ -4387,12 +4388,13 @@
             function shortLabel(slot) {
                 const full = slotLabel(slot);
                 if (slot === 'original') {
-                    // "SOURCE" → "Source", "SOURCE VIDEO" → "Source", "REFERENCE IMAGE" → "Ref", "GROUND-TRUTH AUDIO" → "GT"
-                    if (full.startsWith('REFERENCE')) return 'Ref';
-                    if (full.startsWith('GROUND')) return 'GT';
+                    // "Source" / "Source Video" → "Source", "Reference Image/Video" → "Ref", "Ground-Truth Audio" → "GT"
+                    const lower = full.toLowerCase();
+                    if (lower.startsWith('reference')) return 'Ref';
+                    if (lower.startsWith('ground')) return 'GT';
                     return 'Source';
                 }
-                // "RESPONSE A" → "A", "VIDEO EDIT B" → "B", "IMAGE EDIT A" → "A"
+                // "Response A" → "A", "Video Edit B" → "B", "Image Edit A" → "A", "Prompt Image" → "Image"
                 return full.split(' ').pop();
             }
             return shortLabel(pair[0]) + ' – ' + shortLabel(pair[1]);
@@ -7127,6 +7129,7 @@
                 clearAllMedia();
                 _ihwaMode = false;
                 _taskType = null;
+                _ihwaSlotLabels = null;
             }
         }
 
@@ -7196,41 +7199,48 @@
         let layoutMode = 'horizontal'; // 'horizontal' or 'vertical'
         let _ihwaMode = false; // true when assets loaded from IHWA
         let _taskType = null;  // IHWA task type: 'image-editing', 'image-generation', 'video-editing', 'video-generation', 'audio', or null
+        let _ihwaSlotLabels = null; // slot index → label from IHWA page, e.g. { 0: 'Prompt Image', 1: 'Response A', 2: 'Response B' }
 
         function slotLabel(slot) {
+            // Use labels scraped from the IHWA page if available
+            if (_ihwaSlotLabels) {
+                const idx = slot === 'original' ? 0 : slot === 'editA' ? 1 : 2;
+                if (_ihwaSlotLabels[idx]) return _ihwaSlotLabels[idx];
+            }
+
             const isAudio = document.body.classList.contains('audio-mode');
             const isVideo = !!(mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video');
             const hasOriginal = !!mediaData.original;
 
             // 2-asset: no original slot, use generic type labels
             if (!hasOriginal) {
-                if (isAudio) return slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
-                if (isVideo) return slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
-                return slot === 'editA' ? 'IMAGE A' : 'IMAGE B';
+                if (isAudio) return slot === 'editA' ? 'Audio A' : 'Audio B';
+                if (isVideo) return slot === 'editA' ? 'Video A' : 'Video B';
+                return slot === 'editA' ? 'Image A' : 'Image B';
             }
 
             // 3-asset: use task type if available, otherwise infer from media type
             const tt = _taskType;
             if (tt === 'image-generation') {
-                return slot === 'original' ? 'REFERENCE IMAGE' : slot === 'editA' ? 'RESPONSE A' : 'RESPONSE B';
+                return slot === 'original' ? 'Reference Image' : slot === 'editA' ? 'Response A' : 'Response B';
             }
             if (tt === 'image-editing') {
-                return slot === 'original' ? 'SOURCE' : slot === 'editA' ? 'IMAGE EDIT A' : 'IMAGE EDIT B';
+                return slot === 'original' ? 'Source' : slot === 'editA' ? 'Image Edit A' : 'Image Edit B';
             }
             if (tt === 'video-generation') {
-                return slot === 'original' ? 'REFERENCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+                return slot === 'original' ? 'Reference Video' : slot === 'editA' ? 'Video A' : 'Video B';
             }
             if (tt === 'video-editing') {
-                return slot === 'original' ? 'SOURCE VIDEO' : slot === 'editA' ? 'VIDEO EDIT A' : 'VIDEO EDIT B';
+                return slot === 'original' ? 'Source Video' : slot === 'editA' ? 'Video Edit A' : 'Video Edit B';
             }
             if (tt === 'audio' || isAudio) {
-                return slot === 'original' ? 'GROUND-TRUTH AUDIO' : slot === 'editA' ? 'AUDIO A' : 'AUDIO B';
+                return slot === 'original' ? 'Ground-Truth Audio' : slot === 'editA' ? 'Audio A' : 'Audio B';
             }
             // Fallback: infer from loaded media type
             if (isVideo) {
-                return slot === 'original' ? 'SOURCE VIDEO' : slot === 'editA' ? 'VIDEO A' : 'VIDEO B';
+                return slot === 'original' ? 'Source Video' : slot === 'editA' ? 'Video A' : 'Video B';
             }
-            return slot === 'original' ? 'SOURCE' : slot === 'editA' ? 'IMAGE EDIT A' : 'IMAGE EDIT B';
+            return slot === 'original' ? 'Source' : slot === 'editA' ? 'Image Edit A' : 'Image Edit B';
         }
 
         // Pick horizontal vs vertical layout based on which gives larger rendered images
@@ -8530,10 +8540,10 @@
                     const md = mediaData[slot];
                     if (hasAudios) {
                         document.body.classList.add('audio-mode');
-                        document.querySelector('#layerEditA .asset-name').textContent = md.name || 'AUDIO';
+                        document.querySelector('#layerEditA .asset-name').textContent = md.name || 'Audio';
                         setViewMode('vertical');
                     } else {
-                        document.querySelector('#layerEditA .asset-name').textContent = md.name || (md.type === 'video' ? 'VIDEO' : 'IMAGE');
+                        document.querySelector('#layerEditA .asset-name').textContent = md.name || (md.type === 'video' ? 'Video' : 'Image');
                         setViewMode('overlay');
                     }
                 } else if (hasAudios) {
