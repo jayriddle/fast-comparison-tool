@@ -970,6 +970,25 @@
             color: #fff;
             white-space: nowrap;
         }
+        /* Duration and FPS — important video metadata, shrink before resolution */
+        #stackInfoStrip .sih-duration {
+            flex: 0 1 auto;
+            min-width: 0;
+            color: rgba(255,255,255,0.75);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #stackInfoStrip .sih-fps {
+            flex: 0 1 auto;
+            min-width: 0;
+            color: rgba(255,255,255,0.42);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         /* Resolution and aspect ratio shrink together (same priority) */
         #stackInfoStrip .sih-aspect {
             flex: 0 2 auto;
@@ -1910,6 +1929,8 @@
             <div id="stackInfoStrip">
                 <span class="sih-name"></span>
                 <span class="sih-zoom"></span>
+                <span class="sih-duration"></span>
+                <span class="sih-fps"></span>
                 <span class="sih-resolution"></span>
                 <span class="sih-aspect"></span>
                 <span class="sih-filename"></span>
@@ -2087,7 +2108,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8.1';
+        const APP_VERSION = '3.8.2';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -6647,6 +6668,8 @@
             const bar = activeLayer.querySelector('.asset-info-bar');
             const name       = bar ? bar.querySelector('.asset-name')?.textContent       : slotLabel(slot);
             const zoom       = bar ? bar.querySelector('.asset-zoom')?.textContent       : '';
+            const duration   = bar ? bar.querySelector('.asset-duration')?.textContent   : '';
+            const fps        = bar ? bar.querySelector('.asset-fps')?.textContent        : '';
             const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
             const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
             const filename   = bar ? bar.querySelector('.asset-filename')?.textContent   : '';
@@ -6655,6 +6678,12 @@
             const zoomEl = strip.querySelector('.sih-zoom');
             zoomEl.textContent = zoom || '';
             zoomEl.style.display = zoom ? '' : 'none';
+            const durEl = strip.querySelector('.sih-duration');
+            durEl.textContent = duration || '';
+            durEl.style.display = duration ? '' : 'none';
+            const fpsEl = strip.querySelector('.sih-fps');
+            fpsEl.textContent = fps || '';
+            fpsEl.style.display = fps ? '' : 'none';
             strip.querySelector('.sih-resolution').textContent = resolution && resolution !== '-' ? resolution : '';
             strip.querySelector('.sih-aspect').textContent = aspect && aspect !== '-' ? aspect : '';
             strip.querySelector('.sih-filename').textContent = filename || '';
@@ -7766,75 +7795,72 @@
                     const nSlots = loadedSlots.length;
                     const gap = 4;
 
-                    // For 2-asset horizontal, compute optimal column widths instead of the
-                    // hard CSS 50/50 split. Portrait assets need far less width than landscape
-                    // at a shared height — giving the remaining width to the other asset lets
-                    // it render as large as possible.
-                    // Algorithm: give each height-constrained asset exactly r·availH width;
-                    // if only one is height-constrained, it gets that width and the other gets
-                    // the rest. If both are width-constrained, equal scale is optimal.
-                    if (nSlots === 2) {
-                        const [sa, sb] = loadedSlots;
-                        const ma = measured.data[sa], mb = measured.data[sb];
-                        const avW = window.innerWidth - gap;
-                        const avH = ma.availH; // same for both cells in horizontal layout
-                        const waHC = ma.nw * avH / ma.nh; // width to fill height for asset a
-                        const wbHC = mb.nw * avH / mb.nh; // width to fill height for asset b
-                        let optWa, optWb;
-                        if (waHC + wbHC <= avW) {
-                            // Both can be height-constrained — each gets its exact fill width
-                            optWa = waHC; optWb = wbHC;
-                        } else {
-                            const sEq = avW / (ma.nw + mb.nw); // scale at equal-width split
-                            if (ma.nh * sEq > avH) {
-                                // Asset a height-constrained: give it its fill width
-                                optWa = Math.min(waHC, avW - 1);
-                                optWb = avW - optWa;
-                            } else if (mb.nh * sEq > avH) {
-                                // Asset b height-constrained
-                                optWb = Math.min(wbHC, avW - 1);
-                                optWa = avW - optWb;
-                            } else {
-                                // Both width-constrained: equal scale (proportional to native width)
-                                optWa = ma.nw * sEq; optWb = mb.nw * sEq;
-                            }
-                        }
-                        // Apply inline width overrides and read back actual px after reflow
-                        if (ma.layer) ma.layer.style.width = Math.round(optWa) + 'px';
-                        if (mb.layer) mb.layer.style.width = Math.round(optWb) + 'px';
-                        measured.data[sa].cw = ma.layer ? ma.layer.offsetWidth : Math.round(optWa);
-                        measured.data[sb].cw = mb.layer ? mb.layer.offsetWidth : Math.round(optWb);
-                    }
+                    // Equal-area layout: every asset gets the same rendered area so visual
+                    // weight is balanced regardless of resolution or aspect ratio.
+                    // For area A and aspect ratio r = nw/nh:
+                    //   rendered width  = √(A·r),  rendered height = √(A/r)
+                    // Max A from width:  Σ√(A·r_i) + gaps ≤ avW  →  A ≤ (avW / Σ√r_i)²
+                    // Max A from height: max √(A/r_i)  ≤ availH  →  A ≤ availH² · min(r_i)
+                    const avW = window.innerWidth - gap * (nSlots - 1) - 16;
+                    const availH = loadedSlots.reduce((mn, s) => Math.min(mn, measured.data[s].availH), Infinity);
+                    const ratios = {};
+                    loadedSlots.forEach(s => { const m = measured.data[s]; ratios[s] = m.nw / m.nh; });
+                    const sumSqrtR = loadedSlots.reduce((sum, s) => sum + Math.sqrt(ratios[s]), 0);
+                    const minR     = loadedSlots.reduce((mn, s)  => Math.min(mn, ratios[s]), Infinity);
+                    const aFromW   = Math.pow(avW / sumSqrtR, 2);
+                    const aFromH   = availH * availH * minR;
+                    const fitArea  = Math.min(aFromW, aFromH);
 
-                    // Compute per-slot rendered size. clampScale uses updated m.cw values.
-                    let groupRenderedW = 0, groupRenderedH = 0;
+                    let linearZoom = splitStepZoom;
+                    if (splitZoomLevel === 1) {
+                        // Scale so the smallest-area asset reaches native pixels
+                        const minNative = loadedSlots.reduce((mn, s) => {
+                            const m = measured.data[s];
+                            const baseW = Math.sqrt(fitArea * ratios[s]);
+                            return Math.min(mn, m.nw / baseW);
+                        }, Infinity);
+                        linearZoom = minNative * splitStepZoom;
+                    }
+                    let targetArea = fitArea * linearZoom * linearZoom;
+
+                    // Clamp so nothing overflows the viewport
+                    const projW    = loadedSlots.reduce((sum, s) => sum + Math.sqrt(targetArea * ratios[s]), 0);
+                    const projMaxH = loadedSlots.reduce((mx, s)  => Math.max(mx, Math.sqrt(targetArea / ratios[s])), 0);
+                    if (projW > avW || projMaxH > availH) {
+                        targetArea = fitArea;
+                        if (splitZoomLevel === 1) {
+                            const ns = loadedSlots.reduce((mn, s) => {
+                                const m = measured.data[s];
+                                return Math.min(mn, m.nw / Math.sqrt(fitArea * ratios[s]));
+                            }, Infinity);
+                            if (ns > 0) splitStepZoom = Math.min(splitStepZoom, 1 / ns);
+                        }
+                    }
+                    _gridZoomWasCapped = projW > avW || projMaxH > availH;
+
                     const perSlot = {};
                     loadedSlots.forEach(s => {
                         const m = measured.data[s];
-                        const longestSide = Math.max(m.nw, m.nh);
-                        const refScale = compareRefLong / longestSide;
-                        const baseW = m.nw * refScale;
-                        const baseH = m.nh * refScale;
-                        let clampScale = Math.min(m.cw / baseW, m.availH / baseH);
-                        if (splitZoomLevel === 1) clampScale = Math.min(clampScale, 1);
-                        const rw = Math.round(baseW * clampScale * splitStepZoom);
-                        const rh = Math.round(baseH * clampScale * splitStepZoom);
-                        perSlot[s] = { rw, rh, baseW, baseH, clampScale };
+                        const r = ratios[s];
+                        const rw = Math.round(Math.sqrt(targetArea * r));
+                        const rh = Math.round(Math.sqrt(targetArea / r));
+                        perSlot[s] = { rw, rh };
+                        if (m.layer) m.layer.style.width = rw + 'px';
+                        measured.data[s].cw = m.layer ? m.layer.offsetWidth : rw;
                     });
-                    // Group centering: accumulate actual per-slot rendered widths, which may
-                    // differ between slots when portrait and landscape assets are paired.
-                    const groupW = loadedSlots.reduce((sum, s) => sum + perSlot[s].rw, 0)
-                        + gap * (nSlots - 1);
+
+                    // Group centering
+                    const groupW    = loadedSlots.reduce((sum, s) => sum + perSlot[s].rw, 0) + gap * (nSlots - 1);
                     const groupLeft = Math.round((window.innerWidth - groupW) / 2);
-                    let cumImgLeft = groupLeft; // viewport x where next image starts
-                    let cumCellLeft = 0;        // viewport x where current cell starts
+                    let cumImgLeft = groupLeft;
+                    let cumCellLeft = 0;
                     loadedSlots.forEach(s => {
                         const m = measured.data[s];
                         const p = perSlot[s];
                         const tx = cumImgLeft - cumCellLeft;
-                        const ty = m.ibH + Math.round((m.availH - p.rh) / 2);
+                        const ty = m.ibH + Math.round(Math.max(0, m.availH - p.rh) / 2);
                         slotGeometry[s] = { rw: p.rw, rh: p.rh, tx, ty, zoom: p.rw / m.nw };
-                        cumImgLeft += p.rw + gap;
+                        cumImgLeft  += p.rw + gap;
                         cumCellLeft += m.cw;
                     });
                 }
@@ -9391,6 +9417,11 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.8.2</h3>
+            <ul>
+                <li><strong>Video duration &amp; frame rate in Stack header</strong> — the center info strip now shows duration and fps for video assets, alongside zoom, resolution, and aspect ratio</li>
+                <li><strong>Equal visual weight in Grid view</strong> — both assets now render at equal screen area regardless of resolution, so a higher-resolution image no longer appears larger than a lower-resolution one at the same effective scale</li>
+            </ul>
             <h3>v3.8</h3>
             <ul>
                 <li><strong>Fit / Balance zoom (&#92;)</strong> — new Stack mode toggle in the header. <em>Fit</em> scales each asset to fill the viewport independently. <em>Balance</em> scales all assets to the same rendered screen area — consistent visual weight regardless of resolution or orientation, without overflow.</li>
