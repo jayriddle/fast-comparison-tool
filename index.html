@@ -1748,6 +1748,117 @@
         .analysis-btn svg { width: 20px; height: 20px; display: block; }
         .analysis-btn:focus { outline: none; }
         .analysis-btn:focus-visible { outline: 2px solid #f0a030; outline-offset: 2px; }
+        .analysis-btn.warn { color: #f0a030; }
+        .analysis-btn.warn:hover { background: #3a2800; color: #f5c060; }
+
+        /* ── ffmpeg transcode panel ── */
+        .fp-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 1989;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+        .fp-backdrop.open { opacity: 1; pointer-events: auto; }
+        #ffmpegPanel {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            width: 540px; max-width: calc(100vw - 32px); max-height: 70vh;
+            background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 1990; display: flex; flex-direction: column; overflow: hidden;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        #ffmpegPanel.open {
+            opacity: 1; pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .fp-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px; background: #222; border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+        .fp-header span { font-size: 13px; font-weight: 600; color: #ccc; }
+        .fp-header button {
+            background: none; border: none; color: #888; cursor: pointer;
+            font-size: 14px; padding: 2px 4px; line-height: 1;
+        }
+        .fp-header button:hover { color: #ccc; }
+        .fp-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+        .fp-entry { margin-bottom: 18px; }
+        .fp-entry:last-of-type { margin-bottom: 0; }
+        .fp-entry-label {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.06em; color: #888; margin-bottom: 3px;
+        }
+        .fp-entry-codec { font-size: 12px; color: #999; margin-bottom: 7px; }
+        .fp-cmd-row { display: flex; align-items: stretch; gap: 6px; }
+        .fp-cmd {
+            flex: 1; font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+            font-size: 12px; background: #111; border: 1px solid #333;
+            border-radius: 4px; padding: 7px 10px; color: #ccc;
+            word-break: break-all; white-space: pre-wrap; line-height: 1.5;
+            user-select: all;
+        }
+        .fp-copy-btn {
+            flex-shrink: 0; align-self: flex-start; margin-top: 0;
+            padding: 5px 11px; background: #333; border: 1px solid #444;
+            border-radius: 4px; color: #ccc; font-size: 12px; cursor: pointer;
+            transition: background 0.1s, color 0.1s, border-color 0.1s;
+        }
+        .fp-copy-btn:hover { background: #444; color: #fff; }
+        .fp-copy-btn.copied { background: #1a3a1a; color: #4caf50; border-color: #2a5a2a; }
+        .fp-note {
+            font-size: 11px; color: #555; margin-top: 14px; line-height: 1.55;
+            padding-top: 12px; border-top: 1px solid #2a2a2a;
+        }
+
+        /* ── in-browser transcode button + progress ── */
+        .fp-transcode-btn {
+            width: 100%; margin-top: 9px; padding: 7px 12px;
+            background: #1b2e1b; border: 1px solid #2a4a2a;
+            border-radius: 4px; color: #5cb85c; font-size: 12px; font-weight: 500;
+            cursor: pointer; text-align: center;
+            transition: background 0.12s, border-color 0.12s, color 0.12s;
+        }
+        .fp-transcode-btn:hover:not(:disabled) { background: #243824; border-color: #3a5a3a; color: #6fcc6f; }
+        .fp-transcode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .fp-progress {
+            display: none; margin-top: 10px;
+        }
+        .fp-progress.active { display: block; }
+        .fp-progress-phase {
+            font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+            text-transform: uppercase; margin-bottom: 5px;
+            color: #f0a030; /* download = orange */
+        }
+        .fp-progress-phase.p-init     { color: #888; }
+        .fp-progress-phase.p-transcode{ color: #4a9eff; }
+        .fp-progress-phase.p-done     { color: #4caf50; }
+        .fp-progress-phase.p-error    { color: #e05555; }
+        .fp-progress-track {
+            height: 3px; background: #252525; border-radius: 2px;
+            overflow: hidden; margin-bottom: 5px;
+        }
+        .fp-progress-fill {
+            height: 100%; width: 0%; border-radius: 2px;
+            background: #f0a030;
+            transition: width 0.35s ease, background 0.3s ease;
+        }
+        .fp-progress-fill.p-init      { background: #555; }
+        .fp-progress-fill.p-transcode { background: #2d7cff; }
+        .fp-progress-fill.p-done      { background: #4caf50; width: 100% !important;
+                                        transition: background 0.25s ease; }
+        .fp-progress-fill.p-error     { background: #e05555; }
+        .fp-progress-status {
+            font-size: 11px; color: #777; line-height: 1.45;
+        }
+        .fp-progress-status.p-done  { color: #4caf50; }
+        .fp-progress-status.p-error { color: #e05555; }
+        .fp-wasm-note {
+            font-size: 11px; color: #484848; margin-top: 6px; font-style: italic;
+        }
 
         /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
         .asset-btn {
@@ -1924,6 +2035,7 @@
                 <button class="analysis-btn" onclick="resetAll()" style="display: none;" id="resetBtn" title="Reset"></button>
                 <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull Assets" style="display:none;"></button>
                 <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)" id="helpBtn"></button>
+                <button class="analysis-btn warn" onclick="toggleFfmpegPanel(); this.blur();" id="ffmpegBtn" title="Transcode commands" style="display:none;"></button>
             </div>
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
             <div id="stackInfoStrip">
@@ -2108,7 +2220,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8.2';
+        const APP_VERSION = '3.8.3';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2143,6 +2255,7 @@
         const _SVG_RESET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>';
         const _SVG_PULL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg>';
         const _SVG_HELP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        const _SVG_TERM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
         const _SVG_STACK = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="5" width="18" height="3" rx="1"/><rect x="3" y="11" width="18" height="3" rx="1"/><rect x="3" y="17" width="18" height="3" rx="1"/></svg>';
         const _SVG_GRID = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
         const _SVG_WAVEFORM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M5 12 l1.5-3 1.5 5 1.5-7 1.5 8 1.5-4 1.5 6 1.5-5 1.5 3 1.5-4 1.5 2"/><path d="M5 12 l1.5 3 1.5-5 1.5 7 1.5-8 1.5 4 1.5-6 1.5 5 1.5-3 1.5 4 1.5-2"/></svg>';
@@ -2156,6 +2269,7 @@
         document.getElementById('resetBtn').innerHTML = _SVG_RESET;
         document.getElementById('ihwaPullBtn').innerHTML = _SVG_PULL;
         document.getElementById('helpBtn').innerHTML = _SVG_HELP;
+        document.getElementById('ffmpegBtn').innerHTML = _SVG_TERM;
         document.getElementById('stackIconBtn').innerHTML = _SVG_STACK;
         document.getElementById('gridIconBtn').innerHTML = _SVG_GRID;
         document.getElementById('waveformToggleBtn').innerHTML = _SVG_WAVEFORM;
@@ -3237,6 +3351,16 @@
             }
             if (_isChrome && isOpus) _opusSyncPending[slot] = true;
 
+            // Detect unsupported audio (AC-3, EAC-3, DTS, TrueHD) — no browser decodes these
+            const unsupportedCodec = _detectUnsupportedAudio(bytes);
+            if (unsupportedCodec && source instanceof File && !_ffmpegCommands[slot]) {
+                _registerFfmpegCommand(slot, source.name, unsupportedCodec);
+            }
+            if (unsupportedCodec) {
+                console.warn('[audio] Unsupported codec (' + unsupportedCodec + ') in slot ' + slot + ' — skipping decode');
+                return;
+            }
+
             // For Opus on Chrome, always use WebCodecs — decodeAudioData succeeds but
             // produces wrong timing. For Safari, decodeAudioData hangs on Opus so the
             // timeout catches it. For non-Opus, decodeAudioData works correctly.
@@ -3247,7 +3371,7 @@
 
             try {
                 const ctx = getAudioContext();
-                const decodePromise = ctx.decodeAudioData(arrayBuffer);
+                const decodePromise = ctx.decodeAudioData(arrayBuffer.slice(0));
                 const hasWebCodecs = typeof AudioDecoder !== 'undefined';
                 const audioBuffer = await Promise.race([
                     decodePromise,
@@ -3259,9 +3383,16 @@
                 if (typeof AudioDecoder !== 'undefined') {
                     console.warn('Audio decode failed/timeout for', slot, '— trying WebCodecs fallback');
                     _opusSyncPending[slot] = true;
+                    // Track filename so _onWebCodecsGaveUp can register an ffmpeg command
+                    // if WebCodecs also fails (e.g. DTS wrapped in mp4a container tag).
+                    if (source instanceof File) _audioDecodeSlotFile[slot] = source.name;
                     _decodeAudioWebCodecs(slot, arrayBuffer);
                 } else {
                     console.warn('Audio decode failed for', slot, e);
+                    // No WebCodecs available — both paths exhausted
+                    if (source instanceof File && !_ffmpegCommands[slot]) {
+                        _registerFfmpegCommand(slot, source.name, 'unknown');
+                    }
                 }
             }
         }
@@ -3273,6 +3404,532 @@
         // video. For affected slots, we mute the <video> native audio and play
         // the decoded AudioBuffer via Web Audio API with correct timing.
         const _isChrome = /Chrome\//.test(navigator.userAgent) && !/Edge|Edg/.test(navigator.userAgent);
+
+        // ── Dolby Digital / ffmpeg assist ───────────────────────────────────
+        // Chrome (all desktop platforms) cannot decode AC-3 or EAC-3. When detected,
+        // we register a ready-to-run ffmpeg command and light up a header button.
+        let _ffmpegCommands = {};  // { slot: { filename, codec, codecLabel, cmd } }
+        let _ffmpegLoaded = false;            // true once ff.load() resolves
+        let _ffmpegLoadingPromise = null;     // pending load promise (deduplicates concurrent calls)
+        let _ffmpegInstance = null;           // the createFFmpeg() object
+        let _ffmpegTranscoding = {};          // { slot: { phase, downloaded, total, pct, eta, error } }
+        const _FFMPEG_WASM_SIZE = 24 * 1024 * 1024; // ~24 MB — fallback if Content-Length absent
+
+        function _detectUnsupportedAudio(bytes) {
+            // Scan first and last 64 KB for MP4 stsd entry type codes that no browser
+            // can decode: AC-3, EAC-3 (Dolby Digital), DTS variants, TrueHD.
+            const regions = [
+                [0, Math.min(bytes.length, 65536)],
+                [Math.max(0, bytes.length - 65536), bytes.length]
+            ];
+            for (const [s, e] of regions) {
+                for (let i = s; i < e - 3; i++) {
+                    const a = bytes[i], b = bytes[i+1], c = bytes[i+2], d = bytes[i+3];
+                    if (a===0x61 && b===0x63 && c===0x2D && d===0x33) return 'ac-3';  // Dolby Digital
+                    if (a===0x65 && b===0x63 && c===0x2D && d===0x33) return 'ec-3';  // Dolby Digital Plus
+                    if (a===0x64 && b===0x74 && c===0x73 && d===0x63) return 'dtsc';  // DTS Core
+                    if (a===0x64 && b===0x74 && c===0x73 && d===0x65) return 'dtse';  // DTS Express
+                    if (a===0x64 && b===0x74 && c===0x73 && d===0x68) return 'dtsh';  // DTS-HD
+                    if (a===0x64 && b===0x74 && c===0x73 && d===0x6C) return 'dtsl';  // DTS-HD MA
+                    if (a===0x6D && b===0x6C && c===0x70 && d===0x61) return 'mlpa';  // TrueHD
+                }
+            }
+            return null;
+        }
+
+        async function _detectUnsupportedAudioEager(slot, file) {
+            // Runs at load time for video files — reads only head/tail, not the full file.
+            // Covers properly-labelled DTS/AC3/TrueHD before the waveform panel is opened.
+            try {
+                const head = await file.slice(0, 65536).arrayBuffer();
+                let codec = _detectUnsupportedAudio(new Uint8Array(head));
+                if (!codec && file.size > 65536) {
+                    const tail = await file.slice(-65536).arrayBuffer();
+                    codec = _detectUnsupportedAudio(new Uint8Array(tail));
+                }
+                if (codec) _registerFfmpegCommand(slot, file.name, codec);
+            } catch (_) {}
+        }
+
+        let _audioDecodeSlotFile = {};  // { slot: filename } — set when falling back to WebCodecs
+
+        function _onWebCodecsGaveUp(slot) {
+            // Called when both decodeAudioData and WebCodecs failed for this slot.
+            // Registers a generic ffmpeg command if we have a filename and no specific
+            // command was already registered (e.g. from the codec byte scan).
+            if (_ffmpegCommands[slot]) return;
+            const filename = _audioDecodeSlotFile[slot];
+            if (!filename) return;
+            _registerFfmpegCommand(slot, filename, 'unknown');
+            delete _audioDecodeSlotFile[slot];
+        }
+
+        function _registerFfmpegCommand(slot, filename, codec) {
+            const labels = {
+                'ac-3': 'Dolby Digital (AC-3)',
+                'ec-3': 'Dolby Digital Plus (EAC-3)',
+                'dtsc': 'DTS', 'dtse': 'DTS Express',
+                'dtsh': 'DTS-HD', 'dtsl': 'DTS-HD Master Audio',
+                'mlpa': 'Dolby TrueHD'
+            };
+            const codecLabel = labels[codec] || 'Unsupported audio codec';
+            const ext = (filename.match(/(\.[^.]+)$/) || ['', '.mp4'])[1];
+            const base = filename.slice(0, filename.length - ext.length);
+            const outName = base + '_aac' + ext;
+            const cmd = 'ffmpeg -i "' + filename + '" -c:v copy -c:a aac "' + outName + '"';
+            _ffmpegCommands[slot] = { filename, codec, codecLabel, cmd };
+            _updateFfmpegBtn();
+        }
+
+        function _updateFfmpegBtn() {
+            const btn = document.getElementById('ffmpegBtn');
+            if (!btn) return;
+            btn.style.display = Object.keys(_ffmpegCommands).length > 0 ? '' : 'none';
+        }
+
+        function toggleFfmpegPanel() {
+            const panel = document.getElementById('ffmpegPanel');
+            const backdrop = document.getElementById('ffmpegBackdrop');
+            if (!panel) return;
+            const opening = !panel.classList.contains('open');
+            if (opening) _renderFfmpegPanel();
+            panel.classList.toggle('open', opening);
+            backdrop.classList.toggle('open', opening);
+        }
+
+        function _renderFfmpegPanel() {
+            const body = document.getElementById('ffmpegPanelBody');
+            if (!body) return;
+            body.innerHTML = '';
+            const entries = Object.entries(_ffmpegCommands);
+            for (const [slot, info] of entries) {
+                const entry = document.createElement('div');
+                entry.className = 'fp-entry';
+                entry.dataset.fpSlot = slot;
+
+                const lbl = document.createElement('div');
+                lbl.className = 'fp-entry-label';
+                lbl.textContent = slotLabel(slot);
+
+                const codec = document.createElement('div');
+                codec.className = 'fp-entry-codec';
+                codec.textContent = info.codecLabel + ' \u00b7 ' + info.filename;
+
+                const row = document.createElement('div');
+                row.className = 'fp-cmd-row';
+
+                const cmdEl = document.createElement('div');
+                cmdEl.className = 'fp-cmd';
+                cmdEl.textContent = info.cmd;
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'fp-copy-btn';
+                copyBtn.textContent = 'Copy';
+                copyBtn.addEventListener('click', function() { _copyFfmpegCmd(this, slot); });
+
+                row.appendChild(cmdEl);
+                row.appendChild(copyBtn);
+                entry.appendChild(lbl);
+                entry.appendChild(codec);
+                entry.appendChild(row);
+
+                // ── In-browser Transcode button ──
+                const transcodeBtn = document.createElement('button');
+                transcodeBtn.className = 'fp-transcode-btn';
+                transcodeBtn.textContent = '⚡ Transcode in browser';
+                transcodeBtn.addEventListener('click', function() { _transcodeSlot(slot); });
+                entry.appendChild(transcodeBtn);
+
+                // ── Progress section (hidden until transcoding starts) ──
+                const progress = document.createElement('div');
+                progress.className = 'fp-progress';
+                progress.dataset.fpProgress = slot;
+
+                const phaseEl = document.createElement('div');
+                phaseEl.className = 'fp-progress-phase';
+
+                const track = document.createElement('div');
+                track.className = 'fp-progress-track';
+                const fill = document.createElement('div');
+                fill.className = 'fp-progress-fill';
+                track.appendChild(fill);
+
+                const statusEl = document.createElement('div');
+                statusEl.className = 'fp-progress-status';
+
+                progress.appendChild(phaseEl);
+                progress.appendChild(track);
+                progress.appendChild(statusEl);
+                entry.appendChild(progress);
+
+                body.appendChild(entry);
+
+                // Restore in-flight or completed state if panel was reopened mid-transcode
+                if (_ffmpegTranscoding[slot]) _updateTranscodeDOM(slot);
+            }
+
+            // Bottom note: two lines — terminal command hint + browser transcode explanation
+            const note = document.createElement('div');
+            note.className = 'fp-note';
+            note.textContent = 'Run the command in a terminal, then reload the transcoded file. Or click \u201cTranscode in browser\u201d below each entry \u2014 no install required.';
+            body.appendChild(note);
+
+            const wasmNote = document.createElement('div');
+            wasmNote.className = 'fp-wasm-note';
+            wasmNote.textContent = _ffmpegLoaded
+                ? 'FFmpeg engine is loaded and ready.'
+                : 'First transcode downloads the FFmpeg engine (~23 MB). Subsequent uses are instant.';
+            body.appendChild(wasmNote);
+        }
+
+        function _copyFfmpegCmd(btn, slot) {
+            const info = _ffmpegCommands[slot];
+            if (!info) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(info.cmd).then(() => {
+                    btn.textContent = 'Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+                }).catch(() => _ffmpegFallbackSelect(btn));
+            } else {
+                _ffmpegFallbackSelect(btn);
+            }
+        }
+
+        function _ffmpegFallbackSelect(btn) {
+            // Clipboard API unavailable (http) — select the text so user can Cmd+C
+            const cmdEl = btn.previousElementSibling;
+            if (cmdEl) {
+                const range = document.createRange();
+                range.selectNodeContents(cmdEl);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+
+        // ── ffmpeg.wasm in-browser transcoding ──────────────────────────────
+
+        // Human-readable ETA string: '< 1s', '~8s', '~2m 14s'
+        function _formatEta(s) {
+            if (s < 1) return '< 1s';
+            if (s < 60) return '~' + Math.ceil(s) + 's';
+            const m = Math.floor(s / 60), r = Math.ceil(s % 60);
+            return '~' + m + 'm ' + (r < 10 ? '0' : '') + r + 's';
+        }
+
+        // Update the progress section inside the panel for a given slot.
+        // Reads _ffmpegTranscoding[slot] — call after mutating it.
+        function _updateTranscodeDOM(slot) {
+            const progEl = document.querySelector('[data-fp-progress="' + slot + '"]');
+            if (!progEl) return;
+            const state = _ffmpegTranscoding[slot];
+
+            const entryEl = progEl.closest('.fp-entry');
+            const btn = entryEl && entryEl.querySelector('.fp-transcode-btn');
+            const phaseEl  = progEl.querySelector('.fp-progress-phase');
+            const fillEl   = progEl.querySelector('.fp-progress-fill');
+            const statusEl = progEl.querySelector('.fp-progress-status');
+
+            // Helper: replace all phase classes on an element
+            function setPhaseClass(el, cls) {
+                if (!el) return;
+                el.classList.remove('p-init', 'p-transcode', 'p-done', 'p-error');
+                if (cls) el.classList.add(cls);
+            }
+
+            if (!state) {
+                progEl.classList.remove('active');
+                if (btn) { btn.disabled = false; btn.textContent = '⚡ Transcode in browser'; }
+                return;
+            }
+            progEl.classList.add('active');
+
+            const { phase, downloaded, total, pct, eta, error } = state;
+
+            if (phase === 'download') {
+                if (btn) { btn.disabled = true; btn.textContent = 'Downloading…'; }
+                setPhaseClass(phaseEl, null);
+                if (phaseEl) phaseEl.textContent = 'Downloading FFmpeg  (first time only)';
+                const mb = (downloaded || 0) / (1024 * 1024);
+                const totalMb = (total || _FFMPEG_WASM_SIZE) / (1024 * 1024);
+                const pctDl = total > 0 ? (downloaded / total) * 100 : 0;
+                if (fillEl) { setPhaseClass(fillEl, null); fillEl.style.width = pctDl.toFixed(1) + '%'; }
+                let s = mb.toFixed(1) + ' MB / ' + totalMb.toFixed(0) + ' MB';
+                if (eta > 0) s += '  ·  ' + _formatEta(eta) + ' remaining';
+                if (statusEl) { setPhaseClass(statusEl, null); statusEl.textContent = s; }
+
+            } else if (phase === 'init') {
+                if (btn) { btn.disabled = true; btn.textContent = 'Initializing…'; }
+                if (phaseEl) { setPhaseClass(phaseEl, 'p-init'); phaseEl.textContent = 'Initializing'; }
+                if (fillEl)  { setPhaseClass(fillEl,  'p-init'); fillEl.style.width = '100%'; }
+                if (statusEl){ setPhaseClass(statusEl,'p-init'); statusEl.textContent = 'Loading engine…'; }
+
+            } else if (phase === 'transcode') {
+                if (btn) { btn.disabled = true; btn.textContent = 'Transcoding…'; }
+                if (phaseEl) { setPhaseClass(phaseEl, 'p-transcode'); phaseEl.textContent = 'Transcoding'; }
+                const p = Math.max(0, Math.min(99, Math.round((pct || 0) * 100)));
+                if (fillEl)  { setPhaseClass(fillEl, 'p-transcode'); fillEl.style.width = p + '%'; }
+                let s = p + '%';
+                if (eta > 0) s += '  ·  ' + _formatEta(eta) + ' remaining';
+                if (statusEl){ setPhaseClass(statusEl, 'p-transcode'); statusEl.textContent = s; }
+
+            } else if (phase === 'done') {
+                if (btn) { btn.disabled = true; btn.textContent = '✓ Done'; }
+                if (phaseEl) { setPhaseClass(phaseEl, 'p-done'); phaseEl.textContent = 'Done'; }
+                if (fillEl)  { setPhaseClass(fillEl,  'p-done'); }
+                if (statusEl){ setPhaseClass(statusEl,'p-done'); statusEl.textContent = 'Slot reloaded — audio is now AAC'; }
+
+            } else if (phase === 'error') {
+                if (btn) { btn.disabled = false; btn.textContent = '↺ Retry'; }
+                if (phaseEl) { setPhaseClass(phaseEl, 'p-error'); phaseEl.textContent = 'Error'; }
+                if (fillEl)  { setPhaseClass(fillEl,  'p-error'); }
+                if (statusEl){ setPhaseClass(statusEl,'p-error'); statusEl.textContent = error || 'Transcoding failed'; }
+            }
+        }
+
+        // Pre-fetch ffmpeg-core.wasm with ReadableStream so we can show download progress.
+        // Stores bytes in browser HTTP cache; ff.load() will serve from cache (fast).
+        async function _prefetchWasmWithProgress(onPhase) {
+            const url = './ffmpeg/ffmpeg-core.wasm';
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const contentLen = res.headers.get('Content-Length');
+                const total = contentLen ? parseInt(contentLen, 10) : _FFMPEG_WASM_SIZE;
+                const reader = res.body.getReader();
+                const chunks = [];
+                let downloaded = 0;
+                const t0 = performance.now();
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    downloaded += value.length;
+                    const elapsed = (performance.now() - t0) / 1000;
+                    const rate = elapsed > 0.3 ? downloaded / elapsed : 0;
+                    const eta = rate > 0 ? (total - downloaded) / rate : 0;
+                    onPhase({ phase: 'download', downloaded, total, eta });
+                }
+                // Put the assembled bytes back into the HTTP cache under the same URL
+                // so ff.load()'s internal fetch hits the cache instead of the network.
+                try {
+                    const blob = new Blob(chunks, { type: 'application/wasm' });
+                    const cache = await caches.open('warpdiff-ffmpeg');
+                    await cache.put(url, new Response(blob, {
+                        headers: { 'Content-Type': 'application/wasm', 'Content-Length': String(downloaded) }
+                    }));
+                } catch (_) { /* non-critical */ }
+            } catch (e) {
+                // Network or stream error — still proceed; ff.load() will try its own fetch
+                console.warn('[ffmpeg] WASM prefetch failed:', e.message);
+            }
+        }
+
+        // Lazily load ffmpeg.min.js and initialise the ffmpeg engine.
+        // onPhase({ phase }) is called at each stage so the caller can update progress UI.
+        // Returns the ffmpeg instance. Deduplicates concurrent calls.
+        async function _loadFfmpeg(onPhase) {
+            if (_ffmpegLoaded && _ffmpegInstance) return _ffmpegInstance;
+            if (_ffmpegLoadingPromise) return _ffmpegLoadingPromise;
+
+            _ffmpegLoadingPromise = (async () => {
+                try {
+                    // 1. Inject the script if not yet present
+                    if (!window.FFmpeg) {
+                        await new Promise((resolve, reject) => {
+                            const s = document.createElement('script');
+                            s.src = './ffmpeg/ffmpeg.min.js';
+                            s.onload = resolve;
+                            s.onerror = () => reject(new Error('Could not load ffmpeg.min.js'));
+                            document.head.appendChild(s);
+                        });
+                    }
+
+                    // 2. Pre-fetch WASM with download progress (populates cache for ff.load)
+                    await _prefetchWasmWithProgress(onPhase);
+
+                    // 3. Initialise
+                    onPhase({ phase: 'init' });
+                    const { createFFmpeg } = window.FFmpeg;
+                    const ff = createFFmpeg({ corePath: './ffmpeg/ffmpeg-core.js', log: false });
+                    await ff.load();
+
+                    _ffmpegInstance = ff;
+                    _ffmpegLoaded = true;
+                    _ffmpegLoadingPromise = null;
+                    return ff;
+                } catch (e) {
+                    _ffmpegLoadingPromise = null; // allow retry
+                    throw e;
+                }
+            })();
+
+            return _ffmpegLoadingPromise;
+        }
+
+        // Replace a slot's media element src + audio buffers with the transcoded file.
+        // Called after a successful ff.run(). Handles blob URL management and re-decode.
+        function _applyTranscodedFile(slot, uint8Array, newFilename) {
+            const newFile = new File([uint8Array], newFilename, { type: 'video/mp4' });
+            const newBlobUrl = URL.createObjectURL(newFile);
+            _blobUrls.push(newBlobUrl);
+
+            // Swap the video element's src
+            const layer = getLayer(slot);
+            const video = layer && layer.querySelector('video');
+            if (video) {
+                // Revoke old blob URL
+                const oldSrc = mediaData[slot] && mediaData[slot].src;
+                if (oldSrc && oldSrc.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldSrc);
+                    _blobUrls = _blobUrls.filter(u => u !== oldSrc);
+                }
+                mediaData[slot].src  = newBlobUrl;
+                mediaData[slot].name = newFilename;
+                mediaData[slot].size = uint8Array.length;
+                video.src = newBlobUrl;
+                video.load();
+            }
+
+            // Refresh audio decode chain for this slot
+            audioFileBuffers[slot] = newFile;
+            delete waveformData[slot];
+            delete spectrogramData[slot];
+            delete _videoAudioBuffers[slot];
+            delete _audioSlotVizData[slot];
+
+            // Re-decode audio viz (will update waveform + spectrogram panels)
+            decodeAndComputeAudioViz(slot, newFile);
+
+            // Remove the ffmpeg command entry — this slot is now fixed
+            delete _ffmpegCommands[slot];
+            _updateFfmpegBtn();
+
+            showToast(slotLabel(slot) + ' transcoded to AAC');
+        }
+
+        // Orchestrate in-browser transcoding for a slot.
+        // Drives all progress phases and calls _applyTranscodedFile on success.
+        async function _transcodeSlot(slot) {
+            const info = _ffmpegCommands[slot];
+            if (!info) return;
+
+            // Prevent re-entry (allow retry after error)
+            const existing = _ffmpegTranscoding[slot];
+            if (existing && existing.phase !== 'error') return;
+
+            const srcFile = audioFileBuffers[slot];
+            if (!srcFile) {
+                showToast('File no longer available — reload and retry');
+                return;
+            }
+
+            // Derive input / output filenames (simple, no path separators in FS)
+            const dotIdx = info.filename.lastIndexOf('.');
+            const base = dotIdx >= 0 ? info.filename.slice(0, dotIdx) : info.filename;
+            const ext  = dotIdx >= 0 ? info.filename.slice(dotIdx) : '.mp4';
+            const inputName  = 'input' + ext;
+            const outputName = 'output_aac' + ext;
+            const newFilename = base + '_aac' + ext;
+
+            // Get video duration for progress ratio
+            const layerEl = getLayer(slot);
+            const videoEl = layerEl && layerEl.querySelector('video');
+            const duration = (videoEl && videoEl.duration > 0) ? videoEl.duration : 0;
+
+            // ── Phase callbacks ──
+            function onPhase(evt) {
+                if (evt.phase === 'download') {
+                    _ffmpegTranscoding[slot] = Object.assign(
+                        _ffmpegTranscoding[slot] || {},
+                        { phase: 'download', downloaded: evt.downloaded, total: evt.total, eta: evt.eta }
+                    );
+                } else if (evt.phase === 'init') {
+                    _ffmpegTranscoding[slot] = { phase: 'init' };
+                }
+                _updateTranscodeDOM(slot);
+            }
+
+            // If already loaded, go straight to transcoding — no download phase needed.
+            // If not yet loaded, show the download phase so the user knows what's happening.
+            if (_ffmpegLoaded) {
+                _ffmpegTranscoding[slot] = { phase: 'transcode', pct: 0, eta: 0 };
+            } else {
+                _ffmpegTranscoding[slot] = { phase: 'download', downloaded: 0, total: _FFMPEG_WASM_SIZE, eta: 0 };
+            }
+            _updateTranscodeDOM(slot);
+
+            let ff;
+            try {
+                ff = await _loadFfmpeg(onPhase);
+            } catch (e) {
+                _ffmpegTranscoding[slot] = { phase: 'error', error: 'Could not load FFmpeg: ' + e.message };
+                _updateTranscodeDOM(slot);
+                return;
+            }
+
+            // Transition from init → transcode once engine is ready
+            if (_ffmpegTranscoding[slot] && _ffmpegTranscoding[slot].phase !== 'transcode') {
+                _ffmpegTranscoding[slot] = { phase: 'transcode', pct: 0, eta: 0 };
+                _updateTranscodeDOM(slot);
+            }
+
+            const transcodeStart = performance.now();
+            ff.setLogger(({ message }) => {
+                // Parse 'time=HH:MM:SS.ss' from ffmpeg progress lines
+                const m = message.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+                if (!m || duration <= 0) return;
+                const t = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
+                const pct = Math.min(t / duration, 0.99);
+                const elapsed = (performance.now() - transcodeStart) / 1000;
+                const rate = pct > 0 ? elapsed / pct : 0;
+                const eta = rate > 0 ? rate * (1 - pct) : 0;
+                _ffmpegTranscoding[slot] = { phase: 'transcode', pct, eta };
+                _updateTranscodeDOM(slot);
+            });
+
+            try {
+                const { fetchFile } = window.FFmpeg;
+
+                // Write input to virtual FS
+                ff.FS('writeFile', inputName, await fetchFile(srcFile));
+
+                // Run: copy video stream, re-encode audio to AAC
+                await ff.run('-i', inputName, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', outputName);
+
+                // Read output
+                const outData = ff.FS('readFile', outputName);
+
+                // Clean up virtual FS
+                try { ff.FS('unlink', inputName);  } catch (_) {}
+                try { ff.FS('unlink', outputName); } catch (_) {}
+
+                // Mark done, apply
+                _ffmpegTranscoding[slot] = { phase: 'done' };
+                _updateTranscodeDOM(slot);
+
+                // Small delay so "Done" is visible before the entry vanishes
+                setTimeout(() => {
+                    delete _ffmpegTranscoding[slot];
+                    _applyTranscodedFile(slot, outData, newFilename);
+                    // Re-render panel: if no more entries, close it
+                    if (Object.keys(_ffmpegCommands).length === 0) {
+                        toggleFfmpegPanel();
+                    } else {
+                        _renderFfmpegPanel();
+                    }
+                }, 1200);
+
+            } catch (e) {
+                try { ff.FS('unlink', inputName);  } catch (_) {}
+                try { ff.FS('unlink', outputName); } catch (_) {}
+                console.error('[ffmpeg] transcode error:', e);
+                _ffmpegTranscoding[slot] = { phase: 'error', error: e.message || 'Transcode failed' };
+                _updateTranscodeDOM(slot);
+            }
+        }
+
         let _opusSyncPending = {};     // { slot: true } — slots that went through WebCodecs (Opus)
         let _opusSyncSlots = {};       // { slot: true } — slots needing Web Audio replacement
         let _opusSyncDuration = {};    // { slot: number } — corrected duration from decoded buffer
@@ -3399,6 +4056,7 @@
             waveformData[slot] = computeWaveformData(audioBuffer, 600);
             spectrogramData[slot] = computeSpectrogramData(audioBuffer);
             delete audioFileBuffers[slot];
+            delete _audioDecodeSlotFile[slot]; // decode succeeded — cancel any pending fallback
 
             // Store AudioBuffer for scrub audio.
             // Opus sync slots (Chrome) need full quality for correct A/V playback.
@@ -4024,6 +4682,7 @@
                 decoder.configure(config);
             } catch (err) {
                 console.warn('AudioDecoder configure failed for', slot, err);
+                _onWebCodecsGaveUp(slot);
                 _webcodecsFinished();
                 return;
             }
@@ -4044,6 +4703,7 @@
                     // If some chunks decoded before the error, use what we have
                     if (decodedChunks.length === 0) {
                         console.warn('WebCodecs decode produced no output for', slot);
+                        _onWebCodecsGaveUp(slot);
                         _webcodecsFinished();
                         return;
                     }
@@ -4089,6 +4749,7 @@
             }).catch(err => {
                 console.warn('AudioDecoder flush failed for', slot, err);
                 try { decoder.close(); } catch (_) {}
+                if (decodedChunks.length === 0) _onWebCodecsGaveUp(slot);
                 // If some chunks decoded before the error, use what we got
                 if (decodedChunks.length > 0) {
                     // Re-enter the success path with partial data
@@ -4770,6 +5431,14 @@
         }
 
         function decodeAndComputeAudioSlotViz(slot, arrayBuffer) {
+            // Detect unsupported audio codecs (AC-3, EAC-3, DTS, TrueHD)
+            const _ddCodec = _detectUnsupportedAudio(new Uint8Array(arrayBuffer));
+            if (_ddCodec) {
+                const _ddName = (mediaData[slot] && mediaData[slot].name) || slotLabel(slot);
+                if (!_ffmpegCommands[slot]) _registerFfmpegCommand(slot, _ddName, _ddCodec);
+                console.warn('[audio] Unsupported codec (' + _ddCodec + ') in slot ' + slot + ' — skipping decode');
+                return;
+            }
             const ctx = getAudioContext();
             ctx.decodeAudioData(arrayBuffer.slice(0)).then(audioBuffer => {
                 updateLoadingStatus('Computing waveforms…');
@@ -4798,6 +5467,10 @@
                 });
             }).catch(err => {
                 console.error('Audio decode error for slot ' + slot + ':', err);
+                if (!_ffmpegCommands[slot]) {
+                    const filename = mediaData[slot] && mediaData[slot].name;
+                    if (filename) _registerFfmpegCommand(slot, filename, 'unknown');
+                }
                 showLoadToast('Audio decode failed for ' + slotLabel(slot), true, 5000);
             });
         }
@@ -5227,6 +5900,9 @@
 
             // Store File for lazy audio decode (read on demand, not upfront)
             audioFileBuffers[slot] = file;
+            // Eagerly scan head/tail bytes for unsupported audio codecs so the
+            // ffmpeg button appears at load time, before the waveform panel opens.
+            _detectUnsupportedAudioEager(slot, file);
         }
 
         // ── loadImageFile ────────────────────────────────────────────────
@@ -7052,6 +7728,12 @@
             _opusSyncActive = false;
             _videoAudioBuffers = {};
             audioFileBuffers = {};
+            _ffmpegCommands = {};
+            _ffmpegTranscoding = {};
+            _audioDecodeSlotFile = {};
+            _updateFfmpegBtn();
+            const _fpEl = document.getElementById('ffmpegPanel');
+            if (_fpEl && _fpEl.classList.contains('open')) toggleFfmpegPanel();
             _audioSlotVizData = {};
             _audioMaxDuration = 0;
             _audioVizDecodeStarted = false;
@@ -7801,7 +8483,7 @@
                     //   rendered width  = √(A·r),  rendered height = √(A/r)
                     // Max A from width:  Σ√(A·r_i) + gaps ≤ avW  →  A ≤ (avW / Σ√r_i)²
                     // Max A from height: max √(A/r_i)  ≤ availH  →  A ≤ availH² · min(r_i)
-                    const avW = window.innerWidth - gap * (nSlots - 1) - 16;
+                    const avW = window.innerWidth - gap * (nSlots - 1);
                     const availH = loadedSlots.reduce((mn, s) => Math.min(mn, measured.data[s].availH), Infinity);
                     const ratios = {};
                     loadedSlots.forEach(s => { const m = measured.data[s]; ratios[s] = m.nw / m.nh; });
@@ -9036,6 +9718,8 @@
                     dismissChangelog();
                 } else if (document.getElementById('quickStartPopup').classList.contains('show')) {
                     toggleQuickStart();
+                } else if (document.getElementById('ffmpegPanel').classList.contains('open')) {
+                    toggleFfmpegPanel();
                 } else if (document.getElementById('shortcutsPanel').classList.contains('open')) {
                     toggleShortcutsPanel();
                 } else if (document.getElementById('manualPanel').classList.contains('open')) {
@@ -9447,6 +10131,15 @@
             <button onclick="toggleShortcutsPanel()">✕</button>
         </div>
         <div class="shortcuts-list"></div>
+    </div>
+
+    <div class="fp-backdrop" id="ffmpegBackdrop" onclick="toggleFfmpegPanel()"></div>
+    <div id="ffmpegPanel">
+        <div class="fp-header">
+            <span>Transcode Commands</span>
+            <button onclick="toggleFfmpegPanel()">✕</button>
+        </div>
+        <div class="fp-body" id="ffmpegPanelBody"></div>
     </div>
 
 </body>
