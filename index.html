@@ -1960,53 +1960,6 @@
         .load-toast.visible {
             opacity: 1;
         }
-        /* ── Unsupported-codec prompt card ── */
-        .codec-prompt {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(12px);
-            width: 400px; max-width: calc(100vw - 32px);
-            background: #1e1e1e;
-            border: 1px solid #b07010;
-            border-radius: 8px;
-            padding: 13px 15px 11px;
-            z-index: 310;
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.22s ease, transform 0.22s ease;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.55);
-        }
-        .codec-prompt.visible {
-            opacity: 1; pointer-events: auto;
-            transform: translateX(-50%) translateY(0);
-        }
-        .codec-prompt-title {
-            font-size: 11px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.07em; color: #f0a030; margin-bottom: 5px;
-        }
-        .codec-prompt-body {
-            font-size: 12px; color: #bbb; line-height: 1.5; margin-bottom: 11px;
-        }
-        .codec-prompt-actions {
-            display: flex; align-items: center; gap: 8px;
-        }
-        .codec-prompt-dismiss {
-            margin-right: auto; background: none; border: none; color: #555;
-            font-size: 12px; cursor: pointer; padding: 4px 2px;
-        }
-        .codec-prompt-dismiss:hover { color: #888; }
-        .codec-prompt-copy {
-            background: none; border: 1px solid #3a3a3a; border-radius: 4px;
-            color: #777; font-size: 12px; padding: 5px 12px; cursor: pointer;
-        }
-        .codec-prompt-copy:hover { border-color: #555; color: #aaa; }
-        .codec-prompt-fix {
-            background: #1b3a1b; border: 1px solid #2a5a2a; border-radius: 4px;
-            color: #5cb85c; font-size: 12px; font-weight: 600;
-            padding: 5px 14px; cursor: pointer;
-        }
-        .codec-prompt-fix:hover { background: #243824; border-color: #3a5a3a; color: #6fcc6f; }
-
         .audio-viz-slot-canvas {
             display: block;
             width: 100%;
@@ -2267,7 +2220,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8.4';
+        const APP_VERSION = '3.8.3';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3526,74 +3479,6 @@
             const cmd = 'ffmpeg -i "' + filename + '" -c:v copy -c:a aac "' + outName + '"';
             _ffmpegCommands[slot] = { filename, codec, codecLabel, cmd };
             _updateFfmpegBtn();
-            _showTranscodePrompt(slot);
-        }
-
-        function _showTranscodePrompt(slot) {
-            const info = _ffmpegCommands[slot];
-            if (!info) return;
-            // Remove any existing prompt for this slot before re-showing
-            const existing = document.querySelector('.codec-prompt[data-prompt-slot="' + slot + '"]');
-            if (existing) existing.remove();
-
-            const el = document.createElement('div');
-            el.className = 'codec-prompt';
-            el.dataset.promptSlot = slot;
-
-            const title = document.createElement('div');
-            title.className = 'codec-prompt-title';
-            title.textContent = 'Audio can\'t be played';
-
-            const body = document.createElement('div');
-            body.className = 'codec-prompt-body';
-            body.textContent = slotLabel(slot) + ' contains ' + info.codecLabel +
-                ' audio, which browsers don\'t support. WarpDiff can transcode it to AAC automatically.';
-
-            const actions = document.createElement('div');
-            actions.className = 'codec-prompt-actions';
-
-            const dismiss = document.createElement('button');
-            dismiss.className = 'codec-prompt-dismiss';
-            dismiss.textContent = 'Not now';
-            dismiss.addEventListener('click', () => _dismissTranscodePrompt(slot));
-
-            const copy = document.createElement('button');
-            copy.className = 'codec-prompt-copy';
-            copy.textContent = 'Copy command';
-            copy.addEventListener('click', () => {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(info.cmd).then(() => {
-                        copy.textContent = 'Copied!';
-                        setTimeout(() => { copy.textContent = 'Copy command'; }, 2000);
-                    });
-                }
-            });
-
-            const fix = document.createElement('button');
-            fix.className = 'codec-prompt-fix';
-            fix.textContent = 'Fix it';
-            fix.addEventListener('click', () => {
-                _dismissTranscodePrompt(slot);
-                if (!document.getElementById('ffmpegPanel').classList.contains('open'))
-                    toggleFfmpegPanel();
-                _transcodeSlot(slot);
-            });
-
-            actions.appendChild(dismiss);
-            actions.appendChild(copy);
-            actions.appendChild(fix);
-            el.appendChild(title);
-            el.appendChild(body);
-            el.appendChild(actions);
-            document.body.appendChild(el);
-            requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
-        }
-
-        function _dismissTranscodePrompt(slot) {
-            const el = document.querySelector('.codec-prompt[data-prompt-slot="' + slot + '"]');
-            if (!el) return;
-            el.classList.remove('visible');
-            setTimeout(() => el.remove(), 250);
         }
 
         function _updateFfmpegBtn() {
@@ -3693,7 +3578,7 @@
             wasmNote.className = 'fp-wasm-note';
             wasmNote.textContent = _ffmpegLoaded
                 ? 'FFmpeg engine is loaded and ready.'
-                : 'First transcode loads the FFmpeg engine (~23 MB). Subsequent uses are instant.';
+                : 'First transcode downloads the FFmpeg engine (~23 MB). Subsequent uses are instant.';
             body.appendChild(wasmNote);
         }
 
@@ -3867,8 +3752,7 @@
                     // 3. Initialise
                     onPhase({ phase: 'init' });
                     const { createFFmpeg } = window.FFmpeg;
-                    const _ffBase = new URL('./ffmpeg/', location.href).href;
-                    const ff = createFFmpeg({ corePath: _ffBase + 'ffmpeg-core.js', wasmPath: _ffBase + 'ffmpeg-core.wasm', log: false });
+                    const ff = createFFmpeg({ corePath: './ffmpeg/ffmpeg-core.js', log: false });
                     await ff.load();
 
                     _ffmpegInstance = ff;
@@ -9901,16 +9785,9 @@
             const changelogVer = document.getElementById('changelogVersion');
             if (changelogVer) changelogVer.textContent = 'v' + APP_VERSION;
 
-            // Register service worker for PWA / offline caching.
-            // Also handles cross-origin isolation: the SW injects COOP/COEP headers on
-            // HTML responses so SharedArrayBuffer is available (required by ffmpeg.wasm).
-            // On first activation, reload once so the headers take effect.
+            // Register service worker for PWA / offline caching
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('sw.js');
-                if (!crossOriginIsolated) {
-                    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-                    if (navigator.serviceWorker.controller) location.reload();
-                }
             }
         });
 
