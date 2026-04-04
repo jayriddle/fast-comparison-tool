@@ -15,16 +15,28 @@ function _keyDisplay(key, shift) {
 }
 
 // Build keymap: maps key (with shift prefix) → action id
+// Conflicts detected during keymap build: default key blocked by a user's custom mapping.
+// Each entry: { actionId, defaultKey, blockedBy } where blockedBy is the action that owns the key.
+let _keymapConflicts = [];
+
 function _buildKeymap() {
     _keymap = {};
+    _keymapConflicts = [];
     for (const action of _hotkeyActions) {
         const hasCustom = _customKeys[action.id] !== undefined;
         const key = hasCustom ? _customKeys[action.id] : action.defaultKey;
         const prefix = action.shift ? 'S+' : '';
         const mapKey = prefix + key;
-        // Custom keys always win; default keys only claim an unclaimed slot
         if (hasCustom || !_keymap[mapKey]) {
             _keymap[mapKey] = action.id;
+        } else {
+            // Default key is blocked by another action's custom mapping — record conflict
+            _keymapConflicts.push({
+                actionId:   action.id,
+                defaultKey: key,
+                shift:      !!action.shift,
+                blockedBy:  _keymap[mapKey],
+            });
         }
         // Also register altKey if present, not overridden, and slot unclaimed
         if (action.altKey && !hasCustom && !_keymap[prefix + action.altKey]) {
@@ -129,6 +141,44 @@ function _renderShortcutsList() {
     // Remove any previous reset-all row
     const oldReset = list.parentElement.querySelector('.shortcut-reset-all-row');
     if (oldReset) oldReset.remove();
+
+    // ── Conflict warnings ─────────────────────────────────────────
+    if (_keymapConflicts.length > 0) {
+        const box = document.createElement('div');
+        box.className = 'shortcut-conflicts';
+        const hdr = document.createElement('div');
+        hdr.className = 'shortcut-conflicts-header';
+        hdr.innerHTML = '&#9888; Key conflict' + (_keymapConflicts.length > 1 ? 's' : '');
+        box.appendChild(hdr);
+        _keymapConflicts.forEach(c => {
+            const blocker  = _hotkeyActions.find(a => a.id === c.blockedBy);
+            const unbound  = _hotkeyActions.find(a => a.id === c.actionId);
+            if (!blocker || !unbound) return;
+            const row = document.createElement('div');
+            row.className = 'shortcut-conflict-row';
+            const keyEl = document.createElement('span');
+            keyEl.className = 'shortcut-conflict-key';
+            keyEl.textContent = _keyDisplay(c.defaultKey, c.shift);
+            const desc = document.createElement('span');
+            desc.className = 'shortcut-conflict-desc';
+            desc.innerHTML =
+                '<strong>' + _keyDisplay(c.defaultKey, c.shift) + '</strong> ' +
+                'is your custom key for <strong>' + blocker.label + '</strong>. ' +
+                '<em>' + unbound.label + '</em> has no key assigned.';
+            const btn = document.createElement('button');
+            btn.className = 'shortcut-conflict-assign';
+            btn.textContent = 'Assign key';
+            btn.addEventListener('click', () => {
+                const kbd = document.querySelector('[data-action-id="' + c.actionId + '"]');
+                if (kbd) kbd.click();
+            });
+            row.appendChild(keyEl);
+            row.appendChild(desc);
+            row.appendChild(btn);
+            box.appendChild(row);
+        });
+        list.appendChild(box);
+    }
 
     const leftCol = document.createElement('div');
     leftCol.className = 'shortcuts-col';
@@ -265,10 +315,16 @@ function _buildSingleRow(action) {
 }
 
 function _buildKbd(action) {
+    const isBlocked = _keymapConflicts.some(c => c.actionId === action.id);
     const kbd = document.createElement('kbd');
-    kbd.textContent = _reassigningActionId === action.id ? 'Press a key…' : _keyDisplay(_actionKey(action.id), action.shift);
-    kbd.className = 'shortcut-kbd-clickable' + (_reassigningActionId === action.id ? ' reassigning' : '') + (_isCustomised(action.id) ? ' customised' : '');
-    kbd.title = 'Click to reassign';
+    kbd.textContent = _reassigningActionId === action.id ? 'Press a key\u2026'
+                    : isBlocked                          ? '\u2014'
+                    : _keyDisplay(_actionKey(action.id), action.shift);
+    kbd.className = 'shortcut-kbd-clickable' +
+                    (_reassigningActionId === action.id ? ' reassigning' : '') +
+                    (_isCustomised(action.id) ? ' customised' : '') +
+                    (isBlocked ? ' unbound' : '');
+    kbd.title = isBlocked ? 'No key assigned \u2014 click to assign' : 'Click to reassign';
     kbd.dataset.actionId = action.id;
     kbd.addEventListener('click', _startReassign);
     return kbd;

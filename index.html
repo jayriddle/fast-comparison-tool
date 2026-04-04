@@ -1304,6 +1304,11 @@
             border-color: #4a7a4a;
             color: #8c8;
         }
+        .shortcut-kbd-clickable.unbound {
+            background: #2a1e00;
+            border-color: #7a4a00;
+            color: #f0a030;
+        }
         .shortcut-reset {
             cursor: pointer;
             color: #666;
@@ -1327,6 +1332,39 @@
             transition: background 0.15s, color 0.15s;
         }
         .shortcut-reset-all:hover { background: #555; color: #fff; }
+
+        .shortcut-conflicts {
+            margin: 0 0 10px;
+            border: 1px solid #7a4a00;
+            border-radius: 6px;
+            background: #1e1400;
+            overflow: hidden;
+        }
+        .shortcut-conflicts-header {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 12px;
+            background: #2a1e00;
+            font-size: 12px; font-weight: 600; color: #f0a030;
+        }
+        .shortcut-conflict-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 12px; font-size: 12px; color: #aaa;
+            border-top: 1px solid #2a1e00;
+        }
+        .shortcut-conflict-key {
+            font-family: monospace; font-size: 11px;
+            background: #2a2000; border: 1px solid #7a4a00;
+            border-radius: 3px; padding: 1px 5px; color: #f0a030;
+            flex-shrink: 0;
+        }
+        .shortcut-conflict-desc { flex: 1; line-height: 1.4; }
+        .shortcut-conflict-desc em { color: #888; font-style: normal; }
+        .shortcut-conflict-assign {
+            background: #3a2800; border: 1px solid #7a4a00; border-radius: 4px;
+            color: #f0a030; font-size: 11px; padding: 3px 8px;
+            cursor: pointer; flex-shrink: 0; white-space: nowrap;
+        }
+        .shortcut-conflict-assign:hover { background: #5a4000; color: #ffb84d; }
 
         .video-controls {
             background: rgba(0, 0, 0, 0.85);
@@ -9915,6 +9953,12 @@
         let _keymap = {};
         let _reassigningActionId = null;
         _buildKeymap();
+
+        // Alert user if any new action's default key conflicts with their custom mappings
+        if (_keymapConflicts.length > 0) {
+            const n = _keymapConflicts.length;
+            showToast((n === 1 ? 'Key conflict' : n + ' key conflicts') + ' detected — press H to resolve', 5000);
+        }
 
         // Listen for the reassignment key press
         document.addEventListener('keydown', function _reassignListener(e) {
