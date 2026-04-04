@@ -2175,7 +2175,6 @@
                 <input type="file" id="multiFileInput" accept="image/*,video/*,audio/*" multiple onchange="handleMultiFileLoad(event)" style="display: none;">
                 <button class="analysis-btn" onclick="resetAll()" style="display: none;" id="resetBtn" title="Reset"></button>
                 <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull Assets" style="display:none;"></button>
-                <button class="analysis-btn warn" onclick="toggleFfmpegPanel(); this.blur();" id="ffmpegBtn" title="Transcode audio" style="display:none;"></button>
                 <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)" id="helpBtn"></button>
             </div>
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
@@ -2409,7 +2408,6 @@
         document.getElementById('loadBtn').innerHTML = _SVG_LOAD;
         document.getElementById('resetBtn').innerHTML = _SVG_RESET;
         document.getElementById('ihwaPullBtn').innerHTML = _SVG_PULL;
-        document.getElementById('ffmpegBtn').innerHTML = _SVG_TERM;
         document.getElementById('helpBtn').innerHTML = _SVG_HELP;
         document.getElementById('stackIconBtn').innerHTML = _SVG_STACK;
         document.getElementById('gridIconBtn').innerHTML = _SVG_GRID;
@@ -3862,13 +3860,7 @@
             const base = filename.slice(0, filename.length - ext.length);
             const cmd  = 'ffmpeg -i "' + filename + '" -c:v copy -c:a aac "' + base + '_aac' + ext + '"';
             _ffmpegCommands[slot] = { filename, codec, codecLabel, cmd };
-            _updateFfmpegBtn();
             _transcodeSlot(slot); // auto-start
-        }
-
-        function _updateFfmpegBtn() {
-            const btn = document.getElementById('ffmpegBtn');
-            if (btn) btn.style.display = Object.keys(_ffmpegCommands).length > 0 ? '' : 'none';
         }
 
         function toggleFfmpegPanel() {
@@ -4216,7 +4208,6 @@
             decodeAndComputeAudioViz(slot, newFile);
 
             delete _ffmpegCommands[slot];
-            _updateFfmpegBtn();
         }
 
         async function _transcodeSlot(slot) {
