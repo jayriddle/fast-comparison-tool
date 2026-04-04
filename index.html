@@ -3537,9 +3537,7 @@
 
             const wasmNote = document.createElement('div');
             wasmNote.className = 'fp-wasm-note';
-            wasmNote.textContent = _ffmpegLoaded
-                ? 'FFmpeg engine is loaded and ready.'
-                : 'First transcode loads the FFmpeg engine (~24 MB). Subsequent uses are instant.';
+            wasmNote.textContent = 'Each transcode loads the FFmpeg engine (~24 MB). Cached by the browser after the first download.';
             body.appendChild(wasmNote);
         }
 
@@ -3881,6 +3879,10 @@
                 try { ff.FS('unlink', inputName);  } catch (_) {}
                 try { ff.FS('unlink', outputName); } catch (_) {}
 
+                // Reset instance — wasm exits after each run and cannot be reused
+                _ffmpegLoaded = false;
+                _ffmpegInstance = null;
+
                 _ffmpegTranscoding[slot] = { phase: 'done' };
                 _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
 
@@ -3897,6 +3899,9 @@
             } catch (e) {
                 try { ff.FS('unlink', inputName);  } catch (_) {}
                 try { ff.FS('unlink', outputName); } catch (_) {}
+                // Reset instance so next attempt gets a fresh wasm context
+                _ffmpegLoaded = false;
+                _ffmpegInstance = null;
                 console.error('[ffmpeg] transcode error:', e);
                 _ffmpegTranscoding[slot] = { phase: 'error', error: e.message || 'Transcode failed' };
                 _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
