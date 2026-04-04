@@ -955,13 +955,14 @@
             overflow: hidden;
             pointer-events: auto; /* enables title tooltip on hover */
         }
-        /* Name and zoom never shrink — they're the primary identity */
+        /* Name: JS always supplies a short/truncated string so flex: 0 0 auto is safe */
         #stackInfoStrip .sih-name {
             flex: 0 0 auto;
             font-weight: 600;
             color: #2d7cff;
             font-size: 14px;
             white-space: nowrap;
+            overflow: hidden;
         }
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1018,6 +1019,23 @@
             font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
+        }
+
+        #sihTooltip {
+            position: fixed;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+            font-size: 12px;
+            color: #ccc;
+            white-space: pre;
+            z-index: 9999;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            line-height: 1.6;
         }
 
         .asset-info-bar .asset-filename {
@@ -2177,7 +2195,7 @@
                 <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)" id="helpBtn"></button>
             </div>
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
-            <div id="stackInfoStrip">
+            <div id="stackInfoStrip" onmouseenter="_sihTipShow(event)" onmousemove="_sihTipMove(event)" onmouseleave="_sihTipHide()">
                 <span class="sih-name"></span>
                 <span class="sih-filename"></span>
                 <span class="sih-zoom"></span>
@@ -2186,6 +2204,7 @@
                 <span class="sih-resolution"></span>
                 <span class="sih-aspect"></span>
             </div>
+            <div id="sihTooltip"></div>
             <div id="headerRight" style="display:none; align-items:center; gap:2px; margin-left:auto;">
             <!-- Mode strip: asset labels + grid sub-options -->
             <div id="modeStrip" style="display:none;"></div>
@@ -7703,19 +7722,23 @@
             // Read from the hidden info bar spans — they're kept up to date by applyZoom()
             // and file-load handlers even though the bar itself isn't displayed in Stack mode.
             const bar = activeLayer.querySelector('.asset-info-bar');
-            const name       = bar ? bar.querySelector('.asset-name')?.textContent       : slotLabel(slot);
+            // Always derive the slot label from slotLabel() — .asset-name can contain a filename
+            const rawName    = slotLabel(slot);
             const zoom       = bar ? bar.querySelector('.asset-zoom')?.textContent       : '';
             const duration   = bar ? bar.querySelector('.asset-duration')?.textContent   : '';
             const fps        = bar ? bar.querySelector('.asset-fps')?.textContent        : '';
             const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
             const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
-            // Use full filename from mediaData (not the pre-truncated info bar text)
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
-            strip.querySelector('.sih-name').textContent = name || '';
-            // Filename: middle-truncate for display, full name in tooltip
+            // Name: always middle-truncate in case the slot label is a long IHWA filename
+            strip.querySelector('.sih-name').textContent = _midTrunc(rawName, 20) || '';
+
+            // Filename: only show when it adds info (suppress if the slot label already is a filename)
             const fnEl = strip.querySelector('.sih-filename');
-            fnEl.textContent = _midTrunc(fullFilename, 26);
+            const labelIsFilename = rawName.includes('.');
+            fnEl.textContent = (!labelIsFilename && fullFilename) ? _midTrunc(fullFilename, 26) : '';
+
             const zoomEl = strip.querySelector('.sih-zoom');
             zoomEl.textContent = zoom || '';
             zoomEl.style.display = zoom ? '' : 'none';
@@ -7730,20 +7753,41 @@
             strip.querySelector('.sih-resolution').textContent = res;
             strip.querySelector('.sih-aspect').textContent = ar;
 
-            // Tooltip: right-aligned labels so colons line up (longest label = 4 chars)
-            const W = 4;
+            // Custom monospace tooltip — padStart alignment works because font is monospace
+            const W = 5;
             const row = (lbl, val) => val ? lbl.padStart(W) + ' : ' + val : '';
-            strip.title = [
-                row('Slot', name),
+            const tt = document.getElementById('sihTooltip');
+            if (tt) tt.textContent = [
+                row('Slot', rawName),
                 row('File', fullFilename),
                 row('Zoom', zoom),
                 row('Size', res),
-                row('AR',   ar),
-                row('FPS',  fps),
+                row('  AR', ar),
+                row(' FPS', fps),
                 row('Dur.', duration),
             ].filter(Boolean).join('\n');
 
             strip.style.display = 'flex';
+        }
+
+        // ── Stack info strip custom tooltip ───────────────────────────────────────
+        function _sihTipShow(e) {
+            const tt = document.getElementById('sihTooltip');
+            if (!tt || !tt.textContent.trim()) return;
+            tt.style.display = 'block';
+            _sihTipMove(e);
+        }
+        function _sihTipMove(e) {
+            const tt = document.getElementById('sihTooltip');
+            if (!tt || tt.style.display === 'none') return;
+            const x = Math.min(e.clientX + 14, window.innerWidth  - tt.offsetWidth  - 8);
+            const y = Math.min(e.clientY + 20, window.innerHeight - tt.offsetHeight - 8);
+            tt.style.left = x + 'px';
+            tt.style.top  = y + 'px';
+        }
+        function _sihTipHide() {
+            const tt = document.getElementById('sihTooltip');
+            if (tt) tt.style.display = 'none';
         }
 
         // ── Stack mode mini-map navigator ─────────────────────────────────────────
