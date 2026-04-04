@@ -1966,6 +1966,92 @@
         .xcode-toast-fill.done { background: #5cb85c; }
         .xcode-toast-fill.error { background: #e05050; }
 
+        /* ── Timecode copy format panel ── */
+        .tc-backdrop { display: none; position: fixed; inset: 0; z-index: 1299; }
+        .tc-backdrop.open { display: block; }
+        .tc-panel {
+            position: fixed; top: 0; right: 0; bottom: 0; width: 272px;
+            background: #1a1a1a; border-left: 1px solid #2a2a2a;
+            z-index: 1300; transform: translateX(100%);
+            transition: transform 0.2s ease;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .tc-panel.open { transform: translateX(0); }
+        .tc-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 16px; border-bottom: 1px solid #2a2a2a;
+            font-size: 13px; font-weight: 600; color: #ccc;
+        }
+        .tc-panel-header button {
+            background: none; border: none; color: #666; cursor: pointer;
+            font-size: 14px; padding: 2px 6px; border-radius: 4px;
+        }
+        .tc-panel-header button:hover { color: #ccc; background: #2a2a2a; }
+        .tc-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+        .tc-section { margin-bottom: 20px; }
+        .tc-section-label {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+            color: #555; margin-bottom: 8px;
+        }
+        .tc-fmt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .tc-fmt-btn {
+            background: #222; border: 1px solid #333; border-radius: 6px;
+            color: #aaa; padding: 8px 10px; cursor: pointer; text-align: left;
+            line-height: 1.4; transition: background 0.1s, border-color 0.1s;
+        }
+        .tc-fmt-btn:hover { background: #2a2a2a; border-color: #444; }
+        .tc-fmt-btn.active { background: #1e3a2a; border-color: #3a6a4a; color: #6c9; }
+        .tc-fmt-btn strong { display: block; font-size: 12px; font-family: monospace; }
+        .tc-fmt-btn span { display: block; font-size: 10px; color: #555; margin-top: 2px; }
+        .tc-fmt-btn.active span { color: #4a7a5a; }
+        .tc-sep-row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        .tc-chip {
+            background: #222; border: 1px solid #333; border-radius: 4px;
+            color: #aaa; padding: 4px 8px; font-size: 12px; font-family: monospace;
+            cursor: pointer; transition: background 0.1s;
+        }
+        .tc-chip:hover { background: #2a2a2a; }
+        .tc-chip.active { background: #1e3a2a; border-color: #3a6a4a; color: #6c9; }
+        .tc-sep-input {
+            flex: 1; min-width: 60px; background: #222; border: 1px solid #333;
+            border-radius: 4px; color: #ccc; padding: 4px 8px;
+            font-size: 12px; font-family: monospace;
+        }
+        .tc-sep-input:focus { outline: none; border-color: #555; }
+        .tc-preview-value {
+            font-family: monospace; font-size: 12px; color: #6c9;
+            background: #141a14; border: 1px solid #1e3a2a;
+            border-radius: 5px; padding: 8px 12px; word-break: break-all;
+        }
+        /* Timecode format chooser (click timecode) */
+        .tc-chooser {
+            position: fixed; background: #1e1e1e; border: 1px solid #333;
+            border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+            z-index: 2000; min-width: 260px; overflow: hidden; display: none;
+        }
+        .tc-chooser.visible { display: block; }
+        .tc-chooser-row {
+            display: flex; align-items: center;
+            padding: 8px 14px; cursor: pointer; gap: 12px;
+            transition: background 0.1s;
+        }
+        .tc-chooser-row:hover { background: #2a2a2a; }
+        .tc-chooser-row.active { background: #1a2a1a; }
+        .tc-chooser-fmt {
+            font-family: monospace; font-size: 10px; color: #555;
+            min-width: 78px; flex-shrink: 0;
+        }
+        .tc-chooser-val {
+            font-family: monospace; font-size: 12px; color: #ccc; flex: 1;
+        }
+        .tc-chooser-row.active .tc-chooser-fmt { color: #4a7a5a; }
+        .tc-chooser-row.active .tc-chooser-val { color: #6c9; }
+        .tc-chooser-check { font-size: 10px; color: #3a6a4a; min-width: 12px; }
+        .tc-chooser-hint {
+            border-top: 1px solid #252525; padding: 6px 14px;
+            font-size: 10px; color: #3a3a3a;
+        }
+
         .audio-viz-slot-canvas {
             display: block;
             width: 100%;
@@ -2193,7 +2279,7 @@
             <div class="video-controls-row">
                 <button class="play-pause-btn" id="playPauseBtn" onclick="togglePlayPause()" title="Play / Pause">▶</button>
                 <span class="video-time-group">
-                    <span class="video-timecode" id="videoTimecode" onclick="toggleTimecodeMode()" title="Click to toggle time/frame display">0:00</span>
+                    <span class="video-timecode" id="videoTimecode" onclick="_showTcChooser(event)" title="Click to change timecode format">0:00</span>
                     <span class="video-time-sep">/</span>
                     <span class="video-duration" id="videoDuration">0:00</span>
                 </span>
@@ -2436,30 +2522,243 @@
         }
 
         function formatLoopTime(t) {
-            if (hasAudios) {
-                const m = Math.floor(t / 60);
-                const s = t - m * 60;
-                return m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2);
-            }
-            const _fls = currentAudioSource || assetOrder[currentAssetIndex];
-            const _fll = getLayer(_fls);
-            const media = _fll ? _fll.querySelector('video') : getAllPlayableMedia()[0];
+            const slot = currentAudioSource || assetOrder[currentAssetIndex];
+            const layer = getLayer(slot);
+            const media = (layer && layer.querySelector('video')) || getAllPlayableMedia()[0];
             const fps = (media && videoFrameRates[media.src]) || 30;
-            if (timecodeMode === 'frames') {
-                return (Math.floor(t * fps + 0.01) + 1) + 'F';
-            } else if (timecodeMode === 'seconds') {
-                const m = Math.floor(t / 60);
-                const s = t - m * 60;
-                return m > 0 ? m + ':' + s.toFixed(2).padStart(5, '0') : s.toFixed(2);
-            } else {
-                const frame = Math.floor(t * fps + 0.01);
-                const totalSec = Math.floor(frame / fps);
-                const f = frame - totalSec * fps;
-                const m = Math.floor(totalSec / 60);
-                const s = totalSec - m * 60;
-                if (m > 0) return m + ':' + String(s).padStart(2, '0') + ':' + String(f).padStart(2, '0');
-                return s + ':' + String(f).padStart(2, '0');
+            return _formatTcForCopy(t, fps);
+        }
+
+        // ── Timecode copy format ─────────────────────────────────────────────
+
+        // Shared timecode formatter. fmt: 'hms' | 'hmsf' | 's' | 'sf'
+        // Pass fmt explicitly to preview all options in the chooser.
+        // Pass fps=0 for audio-only (frame-based formats fall back to ms-based).
+        function _formatTcForCopy(secs, fps, fmt) {
+            if (fmt === undefined) fmt = _prefs.load('timecopyFmt', 'hms');
+            // Frame-based formats need fps — fall back for audio
+            if (!fps && fmt === 'hmsf') fmt = 'hms';
+            if (!fps && fmt === 'sf')   fmt = 's';
+            secs = Math.max(0, secs);
+            fps  = fps || 30;
+            const h = Math.floor(secs / 3600);
+            const m = Math.floor((secs % 3600) / 60);
+            const s = Math.floor(secs % 60);
+            if (fmt === 'hms') {
+                const ms = Math.round((secs % 1) * 1000);
+                return h + ':' + m.toString().padStart(2,'0') + ':' +
+                       s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
             }
+            if (fmt === 'hmsf') {
+                const f = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
+                return h + ':' + m.toString().padStart(2,'0') + ':' +
+                       s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
+            }
+            if (fmt === 's') {
+                const ms = Math.round((secs % 1) * 1000);
+                return Math.floor(secs) + '.' + ms.toString().padStart(3,'0');
+            }
+            if (fmt === 'sf') {
+                const totalF = Math.floor(secs * fps + 0.01);
+                const ts = Math.floor(totalF / fps);
+                const f  = totalF % Math.round(fps);
+                return ts + ':' + f.toString().padStart(2,'0');
+            }
+            return secs.toFixed(3);
+        }
+
+        // Build the full range string (or single timecode if no loop points).
+        function _buildTimecopStringWith(fmt, sep) {
+            if (sep === undefined) sep = _prefs.load('timecopySep', ' \u2192 ');
+            const slot = currentAudioSource || assetOrder[currentAssetIndex];
+            const layer = getLayer(slot);
+            const media = (layer && layer.querySelector('video')) || getAllPlayableMedia()[0];
+            const fps = (media && videoFrameRates[media.src]) || 30;
+            const cur = (media && !isNaN(media.currentTime)) ? media.currentTime : 0;
+            const inT  = _loopInPoint  !== null ? _loopInPoint  : null;
+            const outT = _loopOutPoint !== null ? _loopOutPoint : null;
+            const f = t => _formatTcForCopy(t, fps, fmt);
+            if (inT !== null && outT !== null) return f(inT) + sep + f(outT);
+            if (inT  !== null) return f(inT)  + sep + f(cur);
+            if (outT !== null) return f(cur)   + sep + f(outT);
+            return f(cur);
+        }
+
+        function _buildTimecopString() {
+            return _buildTimecopStringWith(_prefs.load('timecopyFmt', 'hms'));
+        }
+
+        function _copyTimecodeRange() {
+            const str = _buildTimecopString();
+            const done = () => showToast('Copied: ' + str, 3000);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(str).then(done).catch(() => { _tcCopyFallback(str); done(); });
+            } else { _tcCopyFallback(str); done(); }
+        }
+        function _tcCopyFallback(str) {
+            const ta = document.createElement('textarea');
+            ta.value = str; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+
+        // ── Timecode format panel (Shift+C) ──────────────────────────────────
+
+        function toggleTimecopyPanel() {
+            const panel    = document.getElementById('timecopyPanel');
+            const backdrop = document.getElementById('timecopyBackdrop');
+            if (!panel) return;
+            _hideTcChooser();
+            const opening = !panel.classList.contains('open');
+            if (opening) _renderTimecopyPanel();
+            panel.classList.toggle('open', opening);
+            backdrop.classList.toggle('open', opening);
+        }
+
+        function _renderTimecopyPanel() {
+            const body = document.getElementById('timecopyPanelBody');
+            if (!body) return;
+            const fmt = _prefs.load('timecopyFmt', 'hms');
+            const sep = _prefs.load('timecopySep', ' \u2192 ');
+            const fmtOptions = [
+                { key: 'hms',  label: 'h:mm:ss.xxx', desc: 'milliseconds' },
+                { key: 'hmsf', label: 'h:mm:ss:ff',  desc: 'frames' },
+                { key: 's',    label: 'ss.xxx',       desc: 'seconds + ms' },
+                { key: 'sf',   label: 'ss:ff',        desc: 'seconds + frames' },
+            ];
+            const sepChips = [
+                { label: '\u2192', value: ' \u2192 ' },
+                { label: '\u2013', value: ' \u2013 ' },
+                { label: '-',      value: ' - ' },
+                { label: 'to',     value: ' to ' },
+                { label: ',',      value: ', ' },
+            ];
+            body.innerHTML = '';
+
+            // Format section
+            const fmtSec = document.createElement('div'); fmtSec.className = 'tc-section';
+            const fmtLbl = document.createElement('div'); fmtLbl.className = 'tc-section-label'; fmtLbl.textContent = 'Timecode format';
+            const fmtGrid = document.createElement('div'); fmtGrid.className = 'tc-fmt-grid';
+            fmtOptions.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'tc-fmt-btn' + (fmt === opt.key ? ' active' : '');
+                btn.innerHTML = '<strong>' + opt.label + '</strong><span>' + opt.desc + '</span>';
+                btn.addEventListener('click', () => {
+                    _prefs.save('timecopyFmt', opt.key);
+                    _refreshTimecodeDisplay();
+                    _renderTimecopyPanel();
+                });
+                fmtGrid.appendChild(btn);
+            });
+            fmtSec.appendChild(fmtLbl); fmtSec.appendChild(fmtGrid);
+            body.appendChild(fmtSec);
+
+            // Separator section
+            const sepSec = document.createElement('div'); sepSec.className = 'tc-section';
+            const sepLbl = document.createElement('div'); sepLbl.className = 'tc-section-label'; sepLbl.textContent = 'Separator';
+            const sepRow = document.createElement('div'); sepRow.className = 'tc-sep-row';
+            const input  = document.createElement('input');
+            input.type = 'text'; input.className = 'tc-sep-input';
+            input.value = sep; input.placeholder = 'Custom\u2026';
+            const chipBtns = [];
+            sepChips.forEach(chip => {
+                const btn = document.createElement('button');
+                btn.className = 'tc-chip' + (sep === chip.value ? ' active' : '');
+                btn.textContent = chip.label;
+                btn.addEventListener('click', () => {
+                    _prefs.save('timecopySep', chip.value);
+                    input.value = chip.value;
+                    chipBtns.forEach((b, i) => b.classList.toggle('active', sepChips[i].value === chip.value));
+                    _updateTcPreview(body);
+                });
+                chipBtns.push(btn);
+                sepRow.appendChild(btn);
+            });
+            sepRow.appendChild(input);
+            input.addEventListener('input', () => {
+                _prefs.save('timecopySep', input.value);
+                chipBtns.forEach((b, i) => b.classList.toggle('active', sepChips[i].value === input.value));
+                _updateTcPreview(body);
+            });
+            sepSec.appendChild(sepLbl); sepSec.appendChild(sepRow);
+            body.appendChild(sepSec);
+
+            // Preview section
+            const prevSec = document.createElement('div'); prevSec.className = 'tc-section';
+            const prevLbl = document.createElement('div'); prevLbl.className = 'tc-section-label'; prevLbl.textContent = 'Preview';
+            const prevVal = document.createElement('div'); prevVal.className = 'tc-preview-value';
+            prevVal.textContent = _buildTimecopString();
+            prevSec.appendChild(prevLbl); prevSec.appendChild(prevVal);
+            body.appendChild(prevSec);
+        }
+
+        function _updateTcPreview(body) {
+            const el = body && body.querySelector('.tc-preview-value');
+            if (el) el.textContent = _buildTimecopString();
+        }
+
+        function _refreshTimecodeDisplay() {
+            const activeLayer = document.querySelector('.asset-layer.active');
+            if (activeLayer) { const v = activeLayer.querySelector('video'); if (v) updateVideoProgress(v); }
+            if (_loopInPoint !== null) updateLoopMarkerUI();
+        }
+
+        // ── Timecode chooser popup (click timecode display) ──────────────────
+
+        let _tcChooserOpen = false;
+        function _showTcChooser(e) {
+            e && e.stopPropagation();
+            _hideTcChooser();
+            const el = document.getElementById('tcChooser');
+            if (!el) return;
+            const anchor = document.getElementById('videoTimecode');
+            const rect   = anchor ? anchor.getBoundingClientRect() : { left: 0, top: 0 };
+            const fmtOptions = [
+                { key: 'hms',  label: 'h:mm:ss.xxx' },
+                { key: 'hmsf', label: 'h:mm:ss:ff'  },
+                { key: 's',    label: 'ss.xxx'       },
+                { key: 'sf',   label: 'ss:ff'        },
+            ];
+            const curFmt = _prefs.load('timecopyFmt', 'hms');
+            const sep    = _prefs.load('timecopySep', ' \u2192 ');
+            const slot   = currentAudioSource || assetOrder[currentAssetIndex];
+            const layer  = getLayer(slot);
+            const media  = (layer && layer.querySelector('video')) || getAllPlayableMedia()[0];
+            const fps    = (media && videoFrameRates[media.src]) || 30;
+            el.innerHTML = '';
+            fmtOptions.forEach(opt => {
+                const row = document.createElement('div');
+                row.className = 'tc-chooser-row' + (opt.key === curFmt ? ' active' : '');
+                const fmtSpan = document.createElement('span'); fmtSpan.className = 'tc-chooser-fmt'; fmtSpan.textContent = opt.label;
+                const valSpan = document.createElement('span'); valSpan.className = 'tc-chooser-val';
+                valSpan.textContent = _buildTimecopStringWith(opt.key, sep);
+                const chk = document.createElement('span'); chk.className = 'tc-chooser-check'; chk.textContent = opt.key === curFmt ? '\u2713' : '';
+                row.appendChild(fmtSpan); row.appendChild(valSpan); row.appendChild(chk);
+                row.addEventListener('click', () => {
+                    _prefs.save('timecopyFmt', opt.key);
+                    _refreshTimecodeDisplay();
+                    _copyTimecodeRange();
+                    _hideTcChooser();
+                });
+                el.appendChild(row);
+            });
+            const hint = document.createElement('div'); hint.className = 'tc-chooser-hint';
+            hint.textContent = 'Click a format to select and copy \u2022 \u21e7C for separator';
+            el.appendChild(hint);
+            // Position above the anchor
+            el.style.left   = Math.max(4, rect.left) + 'px';
+            el.style.top    = '';
+            el.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+            el.classList.add('visible');
+            _tcChooserOpen = true;
+            // Dismiss on next outside click
+            setTimeout(() => document.addEventListener('click', _hideTcChooser, { once: true }), 0);
+        }
+
+        function _hideTcChooser() {
+            const el = document.getElementById('tcChooser');
+            if (el) el.classList.remove('visible');
+            _tcChooserOpen = false;
         }
 
         function updateLoopMarkerUI() {
@@ -5328,15 +5627,9 @@
             const maxDur = _audioMaxDuration || duration;
             if (_elProgressBar) updateProgressBarForLoop(currentTime, maxDur);
 
-            // Audio timecode: M:SS.cc (always show minutes for clarity)
-            const fmtTime = (t) => {
-                const m = Math.floor(t / 60);
-                const s = Math.floor(t % 60);
-                const cs = Math.floor((t % 1) * 100);
-                return `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
-            };
-            if (_elTimecode) _elTimecode.textContent = fmtTime(currentTime);
-            if (_elDuration) _elDuration.textContent = fmtTime(maxDur);
+            // Audio timecode — uses chosen format; fps=0 falls back from frame-based to ms-based
+            if (_elTimecode) _elTimecode.textContent = _formatTcForCopy(currentTime, 0);
+            if (_elDuration) _elDuration.textContent = _formatTcForCopy(maxDur, 0);
             const pc = document.getElementById('videoProgressContainer');
             if (pc) { pc.setAttribute('aria-valuemax', maxDur); pc.setAttribute('aria-valuenow', currentTime); }
             updateAllAudioSlotCursors(media);
@@ -6344,42 +6637,11 @@
             const duration = overrideDuration || _getEffectiveDuration(video);
             if (isNaN(duration) || duration === 0) return;
             getProgressEls();
-            const fps = videoFrameRates[video.src] || 30;
-            if (timecodeMode === 'frames') {
-                const totalFrames = Math.floor(duration * fps + 0.01);
-                const currentFrame = Math.min(Math.floor(currentTime * fps + 0.01), totalFrames - 1);
-                _elTimecode.textContent = `${currentFrame + 1}F`;
-                _elDuration.textContent = `${totalFrames}F`;
-            } else if (timecodeMode === 'seconds') {
-                // Centiseconds mode: S.cc / M:SS.cc
-                const fmtCs = (t, showMin) => {
-                    const m = Math.floor(t / 60);
-                    const s = Math.floor(t % 60);
-                    const cs = Math.floor((t % 1) * 100);
-                    return showMin ? `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
-                                   : `${s}.${cs.toString().padStart(2, '0')}`;
-                };
-                const showMin = duration >= 60;
-                const durStr = fmtCs(duration, showMin);
-                // At the end, display duration values directly to avoid floating-point mismatch
-                const atEnd = duration - currentTime < 0.5 / fps;
-                _elTimecode.textContent = atEnd ? durStr : fmtCs(Math.min(currentTime, duration), showMin);
-                _elDuration.textContent = durStr;
-            } else {
-                // Time mode: adaptive "SS:FF" or "M:SS:FF" (show minutes when duration >= 60s)
-                const fmtTc = (t, showMin) => {
-                    const m = Math.floor(t / 60);
-                    const s = Math.floor(t % 60);
-                    const f = Math.floor((t % 1) * fps + 0.01) % Math.round(fps);
-                    return showMin ? `${m}:${s.toString().padStart(2, '0')}:${f.toString().padStart(2, '0')}`
-                                   : `${s}:${f.toString().padStart(2, '0')}`;
-                };
-                const showMin = duration >= 60;
-                const durStr = fmtTc(duration, showMin);
-                const atEnd = duration - currentTime < 0.5 / fps;
-                _elTimecode.textContent = atEnd ? durStr : fmtTc(Math.min(currentTime, duration), showMin);
-                _elDuration.textContent = durStr;
-            }
+            const fps    = videoFrameRates[video.src] || 30;
+            const durStr = _formatTcForCopy(duration, fps);
+            const atEnd  = duration - currentTime < 0.5 / fps;
+            _elTimecode.textContent = atEnd ? durStr : _formatTcForCopy(Math.min(currentTime, duration), fps);
+            _elDuration.textContent = durStr;
         }
 
         function _getEffectiveDuration(video) {
@@ -6413,8 +6675,12 @@
         }
 
         function toggleTimecodeMode() {
-            timecodeMode = timecodeMode === 'time' ? 'seconds' : timecodeMode === 'seconds' ? 'frames' : 'time';
-            _prefs.save('timecodeMode', timecodeMode);
+            const order = ['hms', 'hmsf', 's', 'sf'];
+            const cur   = _prefs.load('timecopyFmt', 'hms');
+            const next  = order[(order.indexOf(cur) + 1) % order.length];
+            _prefs.save('timecopyFmt', next);
+            const fmtLabels = { hms: 'h:mm:ss.xxx', hmsf: 'h:mm:ss:ff', s: 'ss.xxx', sf: 'ss:ff' };
+            showToast('Timecode: ' + fmtLabels[next]);
             // Update display immediately
             const activeLayer = document.querySelector('.asset-layer.active');
             if (activeLayer) {
@@ -9598,6 +9864,10 @@
               fn: () => { if (hasVideos || hasAudios) setLoopPoint('in'); } },
             { id: 'loopOut', defaultKey: 'o', label: 'Loop out point', section: 'transport', paired: 'loopPoints',
               fn: () => { if (hasVideos || hasAudios) setLoopPoint('out'); } },
+            { id: 'copyTimecode', defaultKey: 'c', label: 'Copy timecode range', section: 'transport', paired: 'copyTc',
+              fn: () => { if (hasVideos || hasAudios) _copyTimecodeRange(); } },
+            { id: 'timecopyFormat', defaultKey: 'c', shift: true, label: 'Timecode copy format', section: 'transport', paired: 'copyTc',
+              fn: () => toggleTimecopyPanel() },
             { id: 'mute', defaultKey: 'm', label: 'Mute', section: 'transport',
               fn: () => toggleMute() },
 
@@ -10117,6 +10387,18 @@
             </ul>
         </div>
     </div>
+
+    <!-- Timecode copy format panel -->
+    <div class="tc-backdrop" id="timecopyBackdrop" onclick="toggleTimecopyPanel()"></div>
+    <div class="tc-panel" id="timecopyPanel">
+        <div class="tc-panel-header">
+            <span>Timecode Format</span>
+            <button onclick="toggleTimecopyPanel()">✕</button>
+        </div>
+        <div class="tc-panel-body" id="timecopyPanelBody"></div>
+    </div>
+    <!-- Timecode chooser popup (click timecode display) -->
+    <div id="tcChooser" class="tc-chooser"></div>
 
     <div class="shortcuts-backdrop" id="shortcutsBackdrop"></div>
     <div class="shortcuts-panel" id="shortcutsPanel">
