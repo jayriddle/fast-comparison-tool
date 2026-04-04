@@ -2312,7 +2312,7 @@
                         <div class="spectrogram-cursor" id="spectrogramCursor"></div>
                     </div>
                     <div class="spectrogram-toggles">
-                        <div class="spectrogram-scale-toggle" id="spectrogramPaletteToggle" onclick="cycleSpectrogramPalette()" title="Cycle color palette (Shift+C)">VIRIDIS</div>
+                        <div class="spectrogram-scale-toggle" id="spectrogramPaletteToggle" onclick="cycleSpectrogramPalette()" title="Cycle color palette">VIRIDIS</div>
                         <div class="spectrogram-scale-toggle" id="spectrogramScaleToggle" onclick="toggleSpectrogramScale()" title="Toggle linear/log frequency scale (Shift+W)">LIN</div>
                     </div>
                 </div>
@@ -9942,7 +9942,7 @@
               fn: () => { if (hasVideos || hasImages) toggleBwMode(); } },
             { id: 'spectroScale', defaultKey: 'w', shift: true, label: 'Linear / log frequency', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale(); } },
-            { id: 'spectroPalette', defaultKey: 'c', shift: true, label: 'Cycle color palette', section: 'analysis',
+            { id: 'spectroPalette', label: 'Cycle color palette', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette(); } },
 
             // ── Panels ──

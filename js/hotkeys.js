@@ -27,16 +27,18 @@ function _buildKeymap() {
         const key = hasCustom ? _customKeys[action.id] : action.defaultKey;
         const prefix = action.shift ? 'S+' : '';
         const mapKey = prefix + key;
-        if (hasCustom || !_keymap[mapKey]) {
-            _keymap[mapKey] = action.id;
-        } else {
-            // Default key is blocked by another action's custom mapping — record conflict
-            _keymapConflicts.push({
-                actionId:   action.id,
-                defaultKey: key,
-                shift:      !!action.shift,
-                blockedBy:  _keymap[mapKey],
-            });
+        if (key) {
+            if (hasCustom || !_keymap[mapKey]) {
+                _keymap[mapKey] = action.id;
+            } else {
+                // Default key is blocked by another action's custom mapping — record conflict
+                _keymapConflicts.push({
+                    actionId:   action.id,
+                    defaultKey: key,
+                    shift:      !!action.shift,
+                    blockedBy:  _keymap[mapKey],
+                });
+            }
         }
         // Also register altKey if present, not overridden, and slot unclaimed
         if (action.altKey && !hasCustom && !_keymap[prefix + action.altKey]) {
@@ -52,7 +54,7 @@ function _buildKeymap() {
 function _actionKey(actionId) {
     const action = _hotkeyActions.find(a => a.id === actionId);
     if (!action) return '';
-    return _customKeys[actionId] !== undefined ? _customKeys[actionId] : action.defaultKey;
+    return _customKeys[actionId] !== undefined ? _customKeys[actionId] : (action.defaultKey || '');
 }
 
 // Check if an action has been customised
@@ -317,16 +319,18 @@ function _buildSingleRow(action) {
 }
 
 function _buildKbd(action) {
-    const isBlocked = _keymapConflicts.some(c => c.actionId === action.id);
+    const isBlocked  = _keymapConflicts.some(c => c.actionId === action.id);
+    const hasNoKey   = !_isCustomised(action.id) && !action.defaultKey;
+    const isUnbound  = isBlocked || hasNoKey;
     const kbd = document.createElement('kbd');
     kbd.textContent = _reassigningActionId === action.id ? 'Press a key\u2026'
-                    : isBlocked                          ? '\u2014'
+                    : isUnbound                          ? '\u2014'
                     : _keyDisplay(_actionKey(action.id), action.shift);
     kbd.className = 'shortcut-kbd-clickable' +
                     (_reassigningActionId === action.id ? ' reassigning' : '') +
                     (_isCustomised(action.id) ? ' customised' : '') +
-                    (isBlocked ? ' unbound' : '');
-    kbd.title = isBlocked ? 'No key assigned \u2014 click to assign' : 'Click to reassign';
+                    (isUnbound ? ' unbound' : '');
+    kbd.title = isUnbound ? 'No key assigned \u2014 click to assign' : 'Click to reassign';
     kbd.dataset.actionId = action.id;
     kbd.addEventListener('click', _startReassign);
     return kbd;
