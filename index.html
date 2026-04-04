@@ -6811,8 +6811,9 @@
                     updateVideoProgress(video);
                 }
             }
-            // Update loop marker labels to match new mode
+            // Update loop marker labels and stack info strip to match new mode
             if (_loopInPoint !== null) updateLoopMarkerUI();
+            _updateStackInfoStrip();
         }
 
         function toggleQuickStart() {
@@ -7722,19 +7723,27 @@
             // Read from the hidden info bar spans — they're kept up to date by applyZoom()
             // and file-load handlers even though the bar itself isn't displayed in Stack mode.
             const bar = activeLayer.querySelector('.asset-info-bar');
-            // Always derive the slot label from slotLabel() — .asset-name can contain a filename
-            const rawName    = slotLabel(slot);
+            // .asset-name is set to md.name for single-asset loads and slotLabel() for multi — use it
+            const rawName    = (bar ? bar.querySelector('.asset-name')?.textContent : null) || slotLabel(slot);
             const zoom       = bar ? bar.querySelector('.asset-zoom')?.textContent       : '';
-            const duration   = bar ? bar.querySelector('.asset-duration')?.textContent   : '';
             const fps        = bar ? bar.querySelector('.asset-fps')?.textContent        : '';
             const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
             const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
-            // Name: always middle-truncate in case the slot label is a long IHWA filename
-            strip.querySelector('.sih-name').textContent = _midTrunc(rawName, 20) || '';
+            // Duration: compute fresh using the user's chosen format (not the hardcoded M:SS:FF string)
+            const media    = activeLayer.querySelector('video') || activeLayer.querySelector('audio');
+            const mediaFps = (media && media.tagName === 'VIDEO') ? (videoFrameRates[media.src] || 0) : 0;
+            const rawDur   = media && !isNaN(media.duration) && media.duration > 0 ? media.duration : 0;
+            const duration = rawDur > 0 ? _formatTcForCopy(rawDur, mediaFps) : '';
 
-            // Filename: only show when it adds info (suppress if the slot label already is a filename)
+            // Slot name: hide for single generic asset (no IHWA context)
+            const nameEl = strip.querySelector('.sih-name');
+            const showName = getLoadedSlotCount() > 1 || !!_ihwaSlotLabels;
+            nameEl.style.display = showName ? '' : 'none';
+            nameEl.textContent   = _midTrunc(rawName, 20) || '';
+
+            // Filename: suppress if the slot label is already a filename (contains '.')
             const fnEl = strip.querySelector('.sih-filename');
             const labelIsFilename = rawName.includes('.');
             fnEl.textContent = (!labelIsFilename && fullFilename) ? _midTrunc(fullFilename, 26) : '';
@@ -7743,7 +7752,7 @@
             zoomEl.textContent = zoom || '';
             zoomEl.style.display = zoom ? '' : 'none';
             const durEl = strip.querySelector('.sih-duration');
-            durEl.textContent = duration || '';
+            durEl.textContent = duration;
             durEl.style.display = duration ? '' : 'none';
             const fpsEl = strip.querySelector('.sih-fps');
             fpsEl.textContent = fps || '';
@@ -7758,7 +7767,7 @@
             const row = (lbl, val) => val ? lbl.padStart(W) + ' : ' + val : '';
             const tt = document.getElementById('sihTooltip');
             if (tt) tt.textContent = [
-                row('Slot', rawName),
+                row('Slot', showName ? rawName : ''),
                 row('File', fullFilename),
                 row('Zoom', zoom),
                 row('Size', res),
