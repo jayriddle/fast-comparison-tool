@@ -144,7 +144,7 @@ function _renderShortcutsList() {
     const oldReset = list.parentElement.querySelector('.shortcut-reset-all-row');
     if (oldReset) oldReset.remove();
 
-    // ── Conflict warnings (inserted before the column list, full width) ──
+    // ── Conflict warnings (full-width row inside the scrollable list) ──
     const oldConflicts = list.parentElement.querySelector('.shortcut-conflicts');
     if (oldConflicts) oldConflicts.remove();
     if (_keymapConflicts.length > 0) {
@@ -181,7 +181,7 @@ function _renderShortcutsList() {
             row.appendChild(btn);
             box.appendChild(row);
         });
-        list.parentElement.insertBefore(box, list);
+        list.appendChild(box);
     }
 
     const leftCol = document.createElement('div');
@@ -232,8 +232,11 @@ function _renderShortcutsList() {
     // "Escape" row in left column (non-reassignable, same section as panels)
     leftCol.appendChild(_buildFixedRow('<kbd>Esc</kbd>', 'Dismiss panel'));
 
-    list.appendChild(leftCol);
-    list.appendChild(rightCol);
+    const colsRow = document.createElement('div');
+    colsRow.className = 'shortcuts-cols';
+    colsRow.appendChild(leftCol);
+    colsRow.appendChild(rightCol);
+    list.appendChild(colsRow);
 
     // Reset All button (only show if any customised)
     if (Object.keys(_customKeys).length > 0) {
