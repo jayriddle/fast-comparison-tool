@@ -3612,6 +3612,11 @@
                 pct.textContent = p + '%';
                 fill.style.transition = '';
                 fill.style.width = p + '%';
+            } else if (state.phase === 'computing') {
+                label.textContent = slotName + ' — Computing waveform…';
+                pct.textContent = '';
+                fill.style.width = '100%';
+                fill.style.transition = 'none';
             } else if (state.phase === 'done') {
                 icon.classList.add('done');
                 fill.classList.add('done');
@@ -3883,19 +3888,17 @@
                 _ffmpegLoaded = false;
                 _ffmpegInstance = null;
 
-                _ffmpegTranscoding[slot] = { phase: 'done' };
+                // Transition immediately to computing phase — viz decode may take several seconds
+                _ffmpegTranscoding[slot] = { phase: 'computing' };
                 _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
 
-                setTimeout(() => {
-                    delete _ffmpegTranscoding[slot];
-                    _applyTranscodedFile(slot, outData, newFilename);
-                    const panel = document.getElementById('ffmpegPanel');
-                    if (panel && panel.classList.contains('open')) {
-                        Object.keys(_ffmpegCommands).length === 0
-                            ? toggleFfmpegPanel()
-                            : _renderFfmpegPanel();
-                    }
-                }, 1200);
+                _applyTranscodedFile(slot, outData, newFilename);
+                const panel = document.getElementById('ffmpegPanel');
+                if (panel && panel.classList.contains('open')) {
+                    Object.keys(_ffmpegCommands).length === 0
+                        ? toggleFfmpegPanel()
+                        : _renderFfmpegPanel();
+                }
             } catch (e) {
                 try { ff.FS('unlink', inputName);  } catch (_) {}
                 try { ff.FS('unlink', outputName); } catch (_) {}
@@ -4038,6 +4041,13 @@
         function _finalizeAudioViz(slot, audioBuffer) {
             waveformData[slot] = computeWaveformData(audioBuffer, 600);
             spectrogramData[slot] = computeSpectrogramData(audioBuffer);
+
+            // If this slot just finished a transcode, advance toast to 'done' now
+            if (_ffmpegTranscoding[slot] && _ffmpegTranscoding[slot].phase === 'computing') {
+                _ffmpegTranscoding[slot] = { phase: 'done' };
+                _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
+                setTimeout(() => { delete _ffmpegTranscoding[slot]; }, 3000);
+            }
             delete audioFileBuffers[slot];
 
             // Store AudioBuffer for scrub audio.
