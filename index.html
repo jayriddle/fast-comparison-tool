@@ -2583,7 +2583,8 @@
         // Shared timecode formatter. fmt: 'hms' | 'hmsf' | 's' | 'sf' | 'f'
         // Pass fmt explicitly to preview all options in the chooser.
         // Pass fps=0 for audio-only (frame-based formats fall back to ms-based).
-        function _formatTcForCopy(secs, fps, fmt) {
+        // Pass fullHours=true (clipboard copy path) to always emit HH:MM:SS.xxx.
+        function _formatTcForCopy(secs, fps, fmt, fullHours) {
             if (fmt === undefined) fmt = _prefs.load('timecopyFmt', 'hms');
             // Frame-based formats need fps — fall back for audio
             if (!fps && fmt === 'hmsf') fmt = 'hms';
@@ -2597,13 +2598,13 @@
             if (fmt === 'hms') {
                 const ms = Math.round((secs % 1) * 1000);
                 const ss = s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
-                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + ss;
+                if (h > 0 || fullHours) return h.toString().padStart(2,'0') + ':' + m.toString().padStart(2,'0') + ':' + ss;
                 return m.toString().padStart(2,'0') + ':' + ss;
             }
             if (fmt === 'hmsf') {
                 const f  = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
                 const sf = s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
-                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + sf;
+                if (h > 0 || fullHours) return h.toString().padStart(2,'0') + ':' + m.toString().padStart(2,'0') + ':' + sf;
                 return m.toString().padStart(2,'0') + ':' + sf;
             }
             if (fmt === 's') {
@@ -2676,7 +2677,7 @@
             const cur = (media && !isNaN(media.currentTime)) ? media.currentTime : 0;
             const inT  = _loopInPoint  !== null ? _loopInPoint  : null;
             const outT = _loopOutPoint !== null ? _loopOutPoint : null;
-            const f = t => _formatTcForCopy(t, fps, fmt);
+            const f = t => _formatTcForCopy(t, fps, fmt, true);
             if (inT !== null && outT !== null) return f(inT) + sep + f(outT);
             if (inT  !== null) return f(inT)  + sep + f(cur);
             if (outT !== null) return f(cur)   + sep + f(outT);
