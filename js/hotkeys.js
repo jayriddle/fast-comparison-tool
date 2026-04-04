@@ -125,7 +125,7 @@ const _pairedLabels = {
     zoomInOut:     'Zoom in / out',
     speed:         'Slower / Faster',
     loopPoints:    'Loop in / out point',
-    copyTc:        'Copy timecode / format',
+    copyTc:        'Timecode: Copy / Format',
 };
 
 // Which sections go in which column, with display headers

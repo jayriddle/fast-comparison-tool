@@ -191,8 +191,6 @@
         .loop-marker-label {
             position: absolute;
             bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
             font-size: 9px;
             color: #f0a030;
             white-space: nowrap;
@@ -200,6 +198,10 @@
             margin-bottom: 6px;
             font-variant-numeric: tabular-nums;
         }
+        /* In-point: right-align label to marker center so it extends left */
+        #loopInLabel  { right: 0; }
+        /* Out-point: left-align label to marker center so it extends right */
+        #loopOutLabel { left: 0; }
 
         .loop-region {
             position: absolute;
@@ -1097,7 +1099,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) scale(0.95);
-            max-height: 70vh;
+            max-height: 88vh;
             background: #1a1a1a;
             border: 1px solid #333;
             border-radius: 8px;
@@ -2034,7 +2036,7 @@
         .tc-section { margin-bottom: 20px; }
         .tc-section-label {
             font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
-            color: #555; margin-bottom: 8px;
+            color: #888; margin-bottom: 8px;
         }
         .tc-fmt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .tc-fmt-btn {
@@ -2045,8 +2047,8 @@
         .tc-fmt-btn:hover { background: #2a2a2a; border-color: #444; }
         .tc-fmt-btn.active { background: #1e3a2a; border-color: #3a6a4a; color: #6c9; }
         .tc-fmt-btn strong { display: block; font-size: 12px; font-family: monospace; }
-        .tc-fmt-btn span { display: block; font-size: 10px; color: #555; margin-top: 2px; }
-        .tc-fmt-btn.active span { color: #4a7a5a; }
+        .tc-fmt-btn span { display: block; font-size: 10px; color: #999; margin-top: 2px; }
+        .tc-fmt-btn.active span { color: #8fcca8; }
         .tc-sep-row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
         .tc-chip {
             background: #222; border: 1px solid #333; border-radius: 4px;
@@ -2592,13 +2594,17 @@
             const s = Math.floor(secs % 60);
             if (fmt === 'hms') {
                 const ms = Math.round((secs % 1) * 1000);
-                return h + ':' + m.toString().padStart(2,'0') + ':' +
-                       s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
+                const ss = s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
+                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + ss;
+                if (m > 0) return m + ':' + ss;
+                return s + '.' + ms.toString().padStart(3,'0');
             }
             if (fmt === 'hmsf') {
-                const f = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
-                return h + ':' + m.toString().padStart(2,'0') + ':' +
-                       s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
+                const f  = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
+                const sf = s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
+                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + sf;
+                if (m > 0) return m + ':' + sf;
+                return s + ':' + f.toString().padStart(2,'0');
             }
             if (fmt === 's') {
                 const ms = Math.round((secs % 1) * 1000);
@@ -3132,6 +3138,11 @@
         let splitStepZoom = 1.0; // multiplicative zoom for split modes (1.0 = no extra zoom)
         let _gridZoomWasCapped = false; // set by offset pre-pass; read by '1' key handler
         let timecodeMode = _prefs.load('timecodeMode', 'time'); // 'time', 'frames', or 'seconds'
+        // Migrate legacy timecodeMode pref → timecopyFmt (one-time, only if timecopyFmt not yet set)
+        if (!_prefs.load('timecopyFmt', null)) {
+            if (timecodeMode === 'frames')  _prefs.save('timecopyFmt', 'hmsf');
+            else if (timecodeMode === 'seconds') _prefs.save('timecopyFmt', 's');
+        }
         let _stackZoomMode = _prefs.load('stackZoomMode', 'fit') === 'balance' ? 'balance' : 'fit'; // 'fit' or 'balance'
         let _stackCanPan = false; // set by applyZoom(); true when any asset overflows viewport
         let videoFrameRates = {}; // Store framerate for each video
