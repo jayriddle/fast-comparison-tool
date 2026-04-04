@@ -142,7 +142,9 @@ function _renderShortcutsList() {
     const oldReset = list.parentElement.querySelector('.shortcut-reset-all-row');
     if (oldReset) oldReset.remove();
 
-    // ── Conflict warnings ─────────────────────────────────────────
+    // ── Conflict warnings (inserted before the column list, full width) ──
+    const oldConflicts = list.parentElement.querySelector('.shortcut-conflicts');
+    if (oldConflicts) oldConflicts.remove();
     if (_keymapConflicts.length > 0) {
         const box = document.createElement('div');
         box.className = 'shortcut-conflicts';
@@ -151,8 +153,8 @@ function _renderShortcutsList() {
         hdr.innerHTML = '&#9888; Key conflict' + (_keymapConflicts.length > 1 ? 's' : '');
         box.appendChild(hdr);
         _keymapConflicts.forEach(c => {
-            const blocker  = _hotkeyActions.find(a => a.id === c.blockedBy);
-            const unbound  = _hotkeyActions.find(a => a.id === c.actionId);
+            const blocker = _hotkeyActions.find(a => a.id === c.blockedBy);
+            const unbound = _hotkeyActions.find(a => a.id === c.actionId);
             if (!blocker || !unbound) return;
             const row = document.createElement('div');
             row.className = 'shortcut-conflict-row';
@@ -162,9 +164,9 @@ function _renderShortcutsList() {
             const desc = document.createElement('span');
             desc.className = 'shortcut-conflict-desc';
             desc.innerHTML =
-                '<strong>' + _keyDisplay(c.defaultKey, c.shift) + '</strong> ' +
-                'is your custom key for <strong>' + blocker.label + '</strong>. ' +
-                '<em>' + unbound.label + '</em> has no key assigned.';
+                '<strong>' + unbound.label + '</strong> has no key \u2014 ' +
+                '<kbd class="shortcut-conflict-key">' + _keyDisplay(c.defaultKey, c.shift) + '</kbd>' +
+                ' is taken by your custom <strong>' + blocker.label + '</strong> mapping.';
             const btn = document.createElement('button');
             btn.className = 'shortcut-conflict-assign';
             btn.textContent = 'Assign key';
@@ -177,7 +179,7 @@ function _renderShortcutsList() {
             row.appendChild(btn);
             box.appendChild(row);
         });
-        list.appendChild(box);
+        list.parentElement.insertBefore(box, list);
     }
 
     const leftCol = document.createElement('div');
