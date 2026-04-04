@@ -3749,6 +3749,7 @@
                     const ff = createFFmpeg({
                         corePath: _ffBase + 'ffmpeg-core.js',
                         wasmPath: _ffBase + 'ffmpeg-core.wasm',
+                        mainName: 'main',   // single-threaded core exports 'main', not 'proxy_main'
                         log: false
                     });
                     await ff.load();
