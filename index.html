@@ -2597,16 +2597,54 @@
                 const ms = Math.round((secs % 1) * 1000);
                 const ss = s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
                 if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + ss;
-                if (m > 0) return m + ':' + ss;
-                return s + '.' + ms.toString().padStart(3,'0');
+                return m.toString().padStart(2,'0') + ':' + ss;
             }
             if (fmt === 'hmsf') {
                 const f  = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
                 const sf = s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
                 if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + sf;
-                if (m > 0) return m + ':' + sf;
-                return s + ':' + f.toString().padStart(2,'0');
+                return m.toString().padStart(2,'0') + ':' + sf;
             }
+            if (fmt === 's') {
+                const ms = Math.round((secs % 1) * 1000);
+                return Math.floor(secs) + '.' + ms.toString().padStart(3,'0');
+            }
+            if (fmt === 'sf') {
+                const totalF = Math.floor(secs * fps + 0.01);
+                const ts = Math.floor(totalF / fps);
+                const f  = totalF % Math.round(fps);
+                return ts + ':' + f.toString().padStart(2,'0');
+            }
+            return secs.toFixed(3);
+        }
+
+        // Marker-label formatter: always keeps exactly one '0:' prefix before the first
+        // significant component. Only used for the floating in/out labels on the progress bar.
+        // Timeline display and copied values use _formatTcForCopy (full chosen format).
+        function _formatTcForMarker(secs, fps) {
+            let fmt = _prefs.load('timecopyFmt', 'hms');
+            if (!fps && fmt === 'hmsf') fmt = 'hms';
+            if (!fps && fmt === 'sf')   fmt = 's';
+            secs = Math.max(0, secs);
+            fps  = fps || 30;
+            const h = Math.floor(secs / 3600);
+            const m = Math.floor((secs % 3600) / 60);
+            const s = Math.floor(secs % 60);
+            if (fmt === 'hms') {
+                const ms = Math.round((secs % 1) * 1000);
+                const ss = s.toString().padStart(2,'0') + '.' + ms.toString().padStart(3,'0');
+                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + ss;
+                if (m > 0) return '0:' + m.toString().padStart(2,'0') + ':' + ss;
+                return '0:' + ss;
+            }
+            if (fmt === 'hmsf') {
+                const f  = Math.floor((secs % 1) * fps + 0.01) % Math.round(fps);
+                const sf = s.toString().padStart(2,'0') + ':' + f.toString().padStart(2,'0');
+                if (h > 0) return h + ':' + m.toString().padStart(2,'0') + ':' + sf;
+                if (m > 0) return '0:' + m.toString().padStart(2,'0') + ':' + sf;
+                return '0:' + sf;
+            }
+            // 's' and 'sf' are already compact — no prefix stripping needed
             if (fmt === 's') {
                 const ms = Math.round((secs % 1) * 1000);
                 return Math.floor(secs) + '.' + ms.toString().padStart(3,'0');
@@ -2847,17 +2885,18 @@
             const duration = activeMedia ? _getEffectiveDuration(activeMedia) : 1;
             const inLabel = document.getElementById('loopInLabel');
             const outLabel = document.getElementById('loopOutLabel');
+            const markerFps = (activeMedia && videoFrameRates[activeMedia.src]) || 0;
             if (_loopInPoint !== null) {
                 inMarker.style.display = 'block';
                 inMarker.style.left = (_loopInPoint / duration * 100) + '%';
-                if (inLabel) inLabel.textContent = formatLoopTime(_loopInPoint);
+                if (inLabel) inLabel.textContent = _formatTcForMarker(_loopInPoint, markerFps);
             } else {
                 inMarker.style.display = 'none';
             }
             if (_loopOutPoint !== null) {
                 outMarker.style.display = 'block';
                 outMarker.style.left = (_loopOutPoint / duration * 100) + '%';
-                if (outLabel) outLabel.textContent = formatLoopTime(_loopOutPoint);
+                if (outLabel) outLabel.textContent = _formatTcForMarker(_loopOutPoint, markerFps);
             } else {
                 outMarker.style.display = 'none';
             }
