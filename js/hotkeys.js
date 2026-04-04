@@ -18,11 +18,16 @@ function _keyDisplay(key, shift) {
 function _buildKeymap() {
     _keymap = {};
     for (const action of _hotkeyActions) {
-        const key = _customKeys[action.id] !== undefined ? _customKeys[action.id] : action.defaultKey;
+        const hasCustom = _customKeys[action.id] !== undefined;
+        const key = hasCustom ? _customKeys[action.id] : action.defaultKey;
         const prefix = action.shift ? 'S+' : '';
-        _keymap[prefix + key] = action.id;
-        // Also register altKey if present and not overridden
-        if (action.altKey && _customKeys[action.id] === undefined) {
+        const mapKey = prefix + key;
+        // Custom keys always win; default keys only claim an unclaimed slot
+        if (hasCustom || !_keymap[mapKey]) {
+            _keymap[mapKey] = action.id;
+        }
+        // Also register altKey if present, not overridden, and slot unclaimed
+        if (action.altKey && !hasCustom && !_keymap[prefix + action.altKey]) {
             _keymap[prefix + action.altKey] = action.id;
         }
     }

@@ -9868,6 +9868,8 @@
               fn: () => { if (hasVideos || hasAudios) _copyTimecodeRange(); } },
             { id: 'timecopyFormat', defaultKey: 'c', shift: true, label: 'Timecode copy format', section: 'transport', paired: 'copyTc',
               fn: () => toggleTimecopyPanel() },
+            { id: 'timecodeMode', defaultKey: 't', label: 'Cycle timecode format', section: 'transport',
+              fn: () => toggleTimecodeMode() },
             { id: 'mute', defaultKey: 'm', label: 'Mute', section: 'transport',
               fn: () => toggleMute() },
 
