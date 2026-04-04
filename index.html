@@ -198,10 +198,10 @@
             margin-bottom: 6px;
             font-variant-numeric: tabular-nums;
         }
-        /* In-point: right-align label to marker center so it extends left */
-        #loopInLabel  { right: 0; }
-        /* Out-point: left-align label to marker center so it extends right */
-        #loopOutLabel { left: 0; }
+        /* In-point: nudge right so label overlays the triangle */
+        #loopInLabel  { right: -5px; }
+        /* Out-point: nudge left so label overlays the triangle */
+        #loopOutLabel { left: -5px; }
 
         .loop-region {
             position: absolute;
