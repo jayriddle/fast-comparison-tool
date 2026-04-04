@@ -3856,6 +3856,8 @@
         let _ffmpegLoaded     = false;
         let _ffmpegLoadingPromise = null;
         let _ffmpegInstance   = null;
+        let _ffmpegBusy       = false;  // true while a transcode is in progress
+        let _ffmpegQueue      = [];     // slots waiting for the instance to free up
         const _FFMPEG_WASM_SIZE = 24 * 1024 * 1024;
 
         // Called when both decodeAudioData and WebCodecs have failed for a slot.
@@ -4013,7 +4015,11 @@
             icon.className  = 'xcode-toast-icon';
             fill.className  = 'xcode-toast-fill';
 
-            if (state.phase === 'download') {
+            if (state.phase === 'queued') {
+                label.textContent = slotName + ' — Queued…';
+                pct.textContent = '';
+                fill.style.width = '0%';
+            } else if (state.phase === 'download') {
                 label.textContent = slotName + ' — Downloading FFmpeg…';
                 const p = state.total > 0 ? Math.round((state.downloaded / state.total) * 100) : 0;
                 pct.textContent = p + '%';
@@ -4232,7 +4238,31 @@
             const info = _ffmpegCommands[slot];
             if (!info) return;
             const existing = _ffmpegTranscoding[slot];
-            if (existing && existing.phase !== 'error') return;
+            if (existing && existing.phase !== 'error' && existing.phase !== 'queued') return;
+
+            // Serialize: wasm is single-instance — queue if another transcode is running
+            if (_ffmpegBusy) {
+                if (!_ffmpegQueue.includes(slot)) {
+                    _ffmpegQueue.push(slot);
+                    _ffmpegTranscoding[slot] = { phase: 'queued' };
+                    _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
+                }
+                return;
+            }
+            _ffmpegBusy = true;
+            try {
+                await _transcodeSlotRun(slot);
+            } finally {
+                _ffmpegBusy = false;
+                if (_ffmpegQueue.length > 0) _transcodeSlot(_ffmpegQueue.shift());
+            }
+        }
+
+        async function _transcodeSlotRun(slot) {
+            const info = _ffmpegCommands[slot];
+            if (!info) return;
+            const existing = _ffmpegTranscoding[slot];
+            if (existing && existing.phase !== 'error' && existing.phase !== 'queued') return;
 
             const srcFile = audioFileBuffers[slot];
             if (!(srcFile instanceof File)) { showToast('Source file unavailable — reload and retry', true); return; }
