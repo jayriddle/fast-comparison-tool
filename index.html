@@ -10146,8 +10146,7 @@
                 _reassigningActionId = null;
                 _renderShortcutsList();
                 _trapFocus(panel);
-                const first = panel.querySelector('button, [tabindex]:not([tabindex="-1"]), kbd');
-                if (first) first.focus();
+                panel.focus();
             } else {
                 _releaseFocusTrap(panel);
                 if (_lastFocusBeforePanel) { _lastFocusBeforePanel.focus(); _lastFocusBeforePanel = null; }
@@ -10162,8 +10161,7 @@
             if (opening) {
                 _lastFocusBeforePanel = document.activeElement;
                 _trapFocus(panel);
-                const first = panel.querySelector('button, [tabindex]:not([tabindex="-1"]), a');
-                if (first) first.focus();
+                panel.focus();
             } else {
                 _releaseFocusTrap(panel);
                 if (_lastFocusBeforePanel) { _lastFocusBeforePanel.focus(); _lastFocusBeforePanel = null; }
@@ -10192,7 +10190,7 @@
     </div>
 
     <div class="manual-backdrop" id="manualBackdrop" onclick="toggleManualPanel()"></div>
-    <div class="manual-panel" id="manualPanel">
+    <div class="manual-panel" id="manualPanel" tabindex="-1">
         <div class="shortcuts-panel-header">
             <span>Manual</span>
             <button onclick="toggleManualPanel()">✕</button>
@@ -10466,7 +10464,7 @@
     <div id="tcChooser" class="tc-chooser"></div>
 
     <div class="shortcuts-backdrop" id="shortcutsBackdrop"></div>
-    <div class="shortcuts-panel" id="shortcutsPanel">
+    <div class="shortcuts-panel" id="shortcutsPanel" tabindex="-1">
         <div class="shortcuts-panel-header">
             <span>Hotkeys</span>
             <button onclick="toggleShortcutsPanel()">✕</button>
