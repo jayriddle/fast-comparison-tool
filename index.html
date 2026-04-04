@@ -2580,7 +2580,7 @@
 
         // ── Timecode copy format ─────────────────────────────────────────────
 
-        // Shared timecode formatter. fmt: 'hms' | 'hmsf' | 's' | 'sf'
+        // Shared timecode formatter. fmt: 'hms' | 'hmsf' | 's' | 'sf' | 'f'
         // Pass fmt explicitly to preview all options in the chooser.
         // Pass fps=0 for audio-only (frame-based formats fall back to ms-based).
         function _formatTcForCopy(secs, fps, fmt) {
@@ -2588,6 +2588,7 @@
             // Frame-based formats need fps — fall back for audio
             if (!fps && fmt === 'hmsf') fmt = 'hms';
             if (!fps && fmt === 'sf')   fmt = 's';
+            if (!fps && fmt === 'f')    fmt = 's';
             secs = Math.max(0, secs);
             fps  = fps || 30;
             const h = Math.floor(secs / 3600);
@@ -2615,6 +2616,9 @@
                 const f  = totalF % Math.round(fps);
                 return ts + ':' + f.toString().padStart(2,'0');
             }
+            if (fmt === 'f') {
+                return 'F' + (Math.floor(secs * fps + 0.01) + 1);
+            }
             return secs.toFixed(3);
         }
 
@@ -2625,6 +2629,7 @@
             let fmt = _prefs.load('timecopyFmt', 'hms');
             if (!fps && fmt === 'hmsf') fmt = 'hms';
             if (!fps && fmt === 'sf')   fmt = 's';
+            if (!fps && fmt === 'f')    fmt = 's';
             secs = Math.max(0, secs);
             fps  = fps || 30;
             const h = Math.floor(secs / 3600);
@@ -2644,7 +2649,7 @@
                 if (m > 0) return '0:' + m.toString().padStart(2,'0') + ':' + sf;
                 return '0:' + sf;
             }
-            // 's' and 'sf' are already compact — no prefix stripping needed
+            // 's', 'sf', 'f' are already compact — no prefix stripping needed
             if (fmt === 's') {
                 const ms = Math.round((secs % 1) * 1000);
                 return Math.floor(secs) + '.' + ms.toString().padStart(3,'0');
@@ -2654,6 +2659,9 @@
                 const ts = Math.floor(totalF / fps);
                 const f  = totalF % Math.round(fps);
                 return ts + ':' + f.toString().padStart(2,'0');
+            }
+            if (fmt === 'f') {
+                return 'F' + (Math.floor(secs * fps + 0.01) + 1);
             }
             return secs.toFixed(3);
         }
@@ -2716,6 +2724,7 @@
                 { key: 'hmsf', label: 'h:mm:ss:ff',  desc: 'frames' },
                 { key: 's',    label: 'ss.xxx',       desc: 'seconds + ms' },
                 { key: 'sf',   label: 'ss:ff',        desc: 'seconds + frames' },
+                { key: 'f',    label: 'F + integer',  desc: 'absolute frame #' },
             ];
             const sepChips = [
                 { label: '\u2192', value: ' \u2192 ' },
@@ -2809,6 +2818,7 @@
                 { key: 'hmsf', label: 'h:mm:ss:ff'  },
                 { key: 's',    label: 'ss.xxx'       },
                 { key: 'sf',   label: 'ss:ff'        },
+                { key: 'f',    label: 'F + integer'  },
             ];
             const curFmt = _prefs.load('timecopyFmt', 'hms');
             const sep    = _prefs.load('timecopySep', ' \u2192 ');
@@ -6772,11 +6782,11 @@
         }
 
         function toggleTimecodeMode() {
-            const order = ['hms', 'hmsf', 's', 'sf'];
+            const order = ['hms', 'hmsf', 's', 'sf', 'f'];
             const cur   = _prefs.load('timecopyFmt', 'hms');
             const next  = order[(order.indexOf(cur) + 1) % order.length];
             _prefs.save('timecopyFmt', next);
-            const fmtLabels = { hms: 'h:mm:ss.xxx', hmsf: 'h:mm:ss:ff', s: 'ss.xxx', sf: 'ss:ff' };
+            const fmtLabels = { hms: 'h:mm:ss.xxx', hmsf: 'h:mm:ss:ff', s: 'ss.xxx', sf: 'ss:ff', f: 'F + integer' };
             showToast('Timecode: ' + fmtLabels[next]);
             // Update display immediately
             const activeLayer = document.querySelector('.asset-layer.active');
