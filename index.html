@@ -953,7 +953,7 @@
             justify-content: center;
             gap: 10px;
             overflow: hidden;
-            pointer-events: none;
+            pointer-events: auto; /* enables title tooltip on hover */
         }
         /* Name and zoom never shrink — they're the primary identity */
         #stackInfoStrip .sih-name {
@@ -1010,15 +1010,14 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* Filename shrinks first and fastest */
+        /* Filename — adjacent to slot name, shrinks before metadata, JS middle-truncates */
         #stackInfoStrip .sih-filename {
-            flex: 0 3 auto;
+            flex: 0 2 auto;
             min-width: 0;
-            color: rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.5);
             font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .asset-info-bar .asset-filename {
@@ -2180,12 +2179,12 @@
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
             <div id="stackInfoStrip">
                 <span class="sih-name"></span>
+                <span class="sih-filename"></span>
                 <span class="sih-zoom"></span>
                 <span class="sih-duration"></span>
                 <span class="sih-fps"></span>
                 <span class="sih-resolution"></span>
                 <span class="sih-aspect"></span>
-                <span class="sih-filename"></span>
             </div>
             <div id="headerRight" style="display:none; align-items:center; gap:2px; margin-left:auto;">
             <!-- Mode strip: asset labels + grid sub-options -->
@@ -5780,19 +5779,24 @@
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
+        // Middle-truncate a filename to maxLen chars, preserving the extension.
+        function _midTrunc(str, maxLen) {
+            if (!str || str.length <= maxLen) return str;
+            const dotIdx = str.lastIndexOf('.');
+            const ext  = dotIdx >= 0 ? str.slice(dotIdx) : '';
+            const base = dotIdx >= 0 ? str.slice(0, dotIdx) : str;
+            const avail = maxLen - ext.length - 1; // -1 for '…'
+            if (avail < 2) return str.slice(0, maxLen - 1) + '…';
+            const head = Math.ceil(avail / 2);
+            const tail = Math.floor(avail / 2);
+            return base.slice(0, head) + '…' + base.slice(-tail) + ext;
+        }
+
         function setFilename(infoBar, name) {
             const el = infoBar.querySelector('.asset-filename');
             if (!el || !name) return;
-            // Show full name in title for hover; middle-truncate for display
             el.title = name;
-            if (name.length <= 30) { el.textContent = name; return; }
-            const dotIdx = name.lastIndexOf('.');
-            const ext = dotIdx >= 0 ? name.slice(dotIdx) : '';
-            const base = dotIdx >= 0 ? name.slice(0, dotIdx) : name;
-            const maxBase = 30 - ext.length - 1;
-            const head = Math.ceil(maxBase / 2);
-            const tail = Math.floor(maxBase / 2);
-            el.textContent = base.slice(0, head) + '…' + base.slice(-tail) + ext;
+            el.textContent = _midTrunc(name, 30);
         }
 
 
@@ -7705,9 +7709,13 @@
             const fps        = bar ? bar.querySelector('.asset-fps')?.textContent        : '';
             const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
             const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
-            const filename   = bar ? bar.querySelector('.asset-filename')?.textContent   : '';
+            // Use full filename from mediaData (not the pre-truncated info bar text)
+            const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
             strip.querySelector('.sih-name').textContent = name || '';
+            // Filename: middle-truncate for display, full name in tooltip
+            const fnEl = strip.querySelector('.sih-filename');
+            fnEl.textContent = _midTrunc(fullFilename, 26);
             const zoomEl = strip.querySelector('.sih-zoom');
             zoomEl.textContent = zoom || '';
             zoomEl.style.display = zoom ? '' : 'none';
@@ -7717,9 +7725,23 @@
             const fpsEl = strip.querySelector('.sih-fps');
             fpsEl.textContent = fps || '';
             fpsEl.style.display = fps ? '' : 'none';
-            strip.querySelector('.sih-resolution').textContent = resolution && resolution !== '-' ? resolution : '';
-            strip.querySelector('.sih-aspect').textContent = aspect && aspect !== '-' ? aspect : '';
-            strip.querySelector('.sih-filename').textContent = filename || '';
+            const res = resolution && resolution !== '-' ? resolution : '';
+            const ar  = aspect     && aspect     !== '-' ? aspect     : '';
+            strip.querySelector('.sih-resolution').textContent = res;
+            strip.querySelector('.sih-aspect').textContent = ar;
+
+            // Tooltip: right-aligned labels so colons line up (longest label = 4 chars)
+            const W = 4;
+            const row = (lbl, val) => val ? lbl.padStart(W) + ' : ' + val : '';
+            strip.title = [
+                row('Slot', name),
+                row('File', fullFilename),
+                row('Zoom', zoom),
+                row('Size', res),
+                row('AR',   ar),
+                row('FPS',  fps),
+                row('Dur.', duration),
+            ].filter(Boolean).join('\n');
 
             strip.style.display = 'flex';
         }
