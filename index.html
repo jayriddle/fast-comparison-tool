@@ -8480,17 +8480,23 @@
             const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
             if (dims.length === 0) return 'horizontal';
 
+            // Subtract the info bar height from each slot's usable video area.
+            // In cols mode one bar sits above each column's full height;
+            // in rows mode one bar sits above each row's H/n slice.
+            // Ignoring ibH makes rows look better than they really are for landscape content.
+            const sampleBar = document.querySelector('.asset-info-bar');
+            const ibH = sampleBar ? sampleBar.offsetHeight : 26;
+
             // Sum rendered area across all assets for each layout option.
             // Horizontal = n columns; Vertical = n rows.
             let horizArea = 0, vertArea = 0;
             for (const d of dims) {
-                const r = d.w / d.h; // asset aspect ratio
-                // Horizontal: each slot is (W/n) × H
-                const hSlotW = W / n, hSlotH = H;
+                // Horizontal: each slot is (W/n) × (H − ibH)
+                const hSlotW = W / n, hSlotH = Math.max(1, H - ibH);
                 const hScale = Math.min(hSlotW / d.w, hSlotH / d.h);
                 horizArea += d.w * hScale * d.h * hScale;
-                // Vertical: each slot is W × (H/n)
-                const vSlotW = W, vSlotH = H / n;
+                // Vertical: each slot is W × (H/n − ibH)
+                const vSlotW = W, vSlotH = Math.max(1, H / n - ibH);
                 const vScale = Math.min(vSlotW / d.w, vSlotH / d.h);
                 vertArea += d.w * vScale * d.h * vScale;
             }
