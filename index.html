@@ -8875,9 +8875,15 @@
                                 d.sharedZoom = d.rw / d.nw;
                             });
 
-                            // Set grid columns to match rendered widths
+                            // Set grid columns to match rendered widths.
+                            // Only write the template when every loaded slot was measured
+                            // successfully. If any slot was skipped (ch=0 / layout not yet
+                            // settled), leave the CSS 1fr 1fr 1fr template in place so the
+                            // retry pass sees equal-width cells and can measure all slots.
+                            // Writing a partial template (e.g. "638px 638px") collapses the
+                            // 3rd column to zero and breaks all subsequent retry passes.
                             const container = document.querySelector('.asset-container');
-                            if (container) {
+                            if (container && !anySkipped && loadedSlots.length === getLoadedSlotCount()) {
                                 container.style.gridTemplateColumns = loadedSlots.map(s =>
                                     Math.round(gridLayout[s].rw) + 'px'
                                 ).join(' ');
