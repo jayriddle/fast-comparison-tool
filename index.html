@@ -918,21 +918,16 @@
             font-weight: 700;
             color: #fff;
             background: rgba(255, 255, 255, 0.14);
-            border-radius: 10px;
+            border-radius: 5px;
             padding: 1px 8px;
             font-size: 12px;
             flex-shrink: 0;
             letter-spacing: 0.03em;
         }
-        /* Normal (dark info bar): opaque saturated pill, dark text for legibility */
-        #layerOriginal .asset-info-bar .asset-name { background: #35c46a; color: #092018; }
-        #layerEditA    .asset-info-bar .asset-name { background: #e0902c; color: #2a1500; }
-        #layerEditB    .asset-info-bar .asset-name { background: #9264d8; color: #150a28; }
-
-        /* Active-audio (neutral dark info bar): dark pill, bright per-slot text */
-        body.grid-mode #layerOriginal.active-audio .asset-info-bar .asset-name { background: #092018; color: #3ddc7e; }
-        body.grid-mode #layerEditA.active-audio    .asset-info-bar .asset-name { background: #2a1400; color: #ffac3c; }
-        body.grid-mode #layerEditB.active-audio    .asset-info-bar .asset-name { background: #150a28; color: #c090f8; }
+        /* Slot label: deep saturated fill, dark text — same in all states */
+        #layerOriginal .asset-info-bar .asset-name { background: #1a8844; color: #061610; }
+        #layerEditA    .asset-info-bar .asset-name { background: #be7210; color: #1c0e00; }
+        #layerEditB    .asset-info-bar .asset-name { background: #7a3ec8; color: #0e0422; }
 
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
@@ -1001,10 +996,10 @@
             white-space: nowrap;
             letter-spacing: 0.03em;
         }
-        /* Stack strip: bright saturated background, dark version of that color as text */
-        #stackInfoStrip.sih-slot-original .sih-name { background: #35c46a; color: #092018; }
-        #stackInfoStrip.sih-slot-editA    .sih-name { background: #e0902c; color: #2a1500; }
-        #stackInfoStrip.sih-slot-editB    .sih-name { background: #9264d8; color: #150a28; }
+        /* Same deep fills as Grid info bar — identical in all states */
+        #stackInfoStrip.sih-slot-original .sih-name { background: #1a8844; color: #061610; }
+        #stackInfoStrip.sih-slot-editA    .sih-name { background: #be7210; color: #1c0e00; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: #7a3ec8; color: #0e0422; }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1115,8 +1110,8 @@
         }
 
         body.grid-mode .asset-layer.active-audio .asset-info-bar {
-            background: rgba(50, 52, 60, 0.97);
-            color: #ccc;
+            background: rgba(68, 68, 72, 0.97);
+            color: #ddd;
         }
 
         /* Per-slot active-audio pill colors are set above via #layerX.active-audio selectors */
