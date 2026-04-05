@@ -896,9 +896,18 @@
         }
 
         .asset-info-bar .asset-name {
-            font-weight: bold;
-            color: #ffffff;
+            font-weight: 700;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            padding: 1px 8px;
+            font-size: 11px;
+            flex-shrink: 0;
+            letter-spacing: 0.03em;
         }
+        #layerOriginal .asset-info-bar .asset-name { background: rgba(90, 200, 130, 0.22); color: #6dd;   }
+        #layerEditA    .asset-info-bar .asset-name { background: rgba(240, 160,  50, 0.22); color: #f0a030; }
+        #layerEditB    .asset-info-bar .asset-name { background: rgba(80,  155, 220, 0.22); color: #7ab8e8; }
 
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
@@ -953,31 +962,54 @@
             justify-content: center;
             gap: 10px;
             overflow: hidden;
-            pointer-events: auto; /* enables title tooltip on hover */
+            pointer-events: auto; /* enables hover tooltip */
         }
-        /* Name: JS always supplies a short/truncated string so flex: 0 0 auto is safe */
+        /* Slot name — colored pill, matches Grid mode asset-name pills */
         #stackInfoStrip .sih-name {
             flex: 0 0 auto;
-            font-weight: 600;
-            color: #2d7cff;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 11px;
+            color: #fff;
+            background: rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 2px 9px;
             white-space: nowrap;
-            overflow: hidden;
+            letter-spacing: 0.03em;
         }
+        /* Per-slot name pill colors — same palette as Grid info bar */
+        #stackInfoStrip.sih-slot-original .sih-name { background: rgba(90,200,130,0.22); color: #6dd; }
+        #stackInfoStrip.sih-slot-editA    .sih-name { background: rgba(240,160,50,0.22);  color: #f0a030; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: rgba(80,155,220,0.22);  color: #7ab8e8; }
+        /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
-            background: rgba(255,255,255,0.18);
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-size: 13px;
-            color: #fff;
+            background: rgba(255,255,255,0.15);
+            padding: 2px 7px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.85);
             white-space: nowrap;
         }
-        /* Duration and FPS — important video metadata, shrink before resolution */
+        /* Separator dots between logical groups */
+        #stackInfoStrip .sih-sep {
+            flex: 0 0 auto;
+            color: rgba(255,255,255,0.18);
+            font-size: 11px;
+            user-select: none;
+        }
+        /* Time group (duration + fps) and Spatial group (resolution + aspect) */
+        #stackInfoStrip .sih-group-time,
+        #stackInfoStrip .sih-group-spatial {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+            overflow: hidden;
+        }
         #stackInfoStrip .sih-duration {
             flex: 0 1 auto;
             min-width: 0;
-            color: rgba(255,255,255,0.75);
+            color: rgba(255,255,255,0.82);
             font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
@@ -986,68 +1018,51 @@
         #stackInfoStrip .sih-fps {
             flex: 0 1 auto;
             min-width: 0;
-            color: rgba(255,255,255,0.42);
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        /* Resolution and aspect ratio shrink together (same priority) */
-        #stackInfoStrip .sih-aspect {
-            flex: 0 2 auto;
-            min-width: 0;
-            color: rgba(255,255,255,0.42);
-            font-size: 13px;
+            color: rgba(255,255,255,0.38);
+            font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         #stackInfoStrip .sih-resolution {
-            flex: 0 2 auto;
+            flex: 0 1 auto;
             min-width: 0;
-            color: rgba(255,255,255,0.42);
-            font-size: 13px;
+            color: rgba(255,255,255,0.48);
+            font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* Filename — adjacent to slot name, shrinks before metadata, JS middle-truncates */
-        #stackInfoStrip .sih-filename {
-            flex: 0 2 auto;
+        #stackInfoStrip .sih-aspect {
+            flex: 0 1 auto;
             min-width: 0;
-            color: rgba(255,255,255,0.5);
-            font-size: 13px;
+            color: rgba(255,255,255,0.3);
+            font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
         }
 
+        /* Hover tooltip — matches UI font, two-column label/value layout */
         #sihTooltip {
             position: fixed;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+            background: #1c1c1e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px 14px;
             font-size: 12px;
             color: #ccc;
-            white-space: pre;
             z-index: 9999;
             pointer-events: none;
             display: none;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-            line-height: 1.6;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            line-height: 1.7;
         }
+        #sihTooltip .sih-tr { display: flex; gap: 14px; }
+        #sihTooltip .sih-td-lbl { color: rgba(255,255,255,0.35); min-width: 54px; text-align: right; flex-shrink: 0; }
+        #sihTooltip .sih-td-val { color: rgba(255,255,255,0.82); }
 
-        .asset-info-bar .asset-filename {
-            margin-left: auto;
-            color: #666;
-            white-space: nowrap;
-        }
-
-        body.grid-mode .asset-layer.active-audio .asset-info-bar .asset-filename,
-        body:not(.grid-mode) .asset-layer.active .asset-info-bar .asset-filename {
-            color: rgba(255, 255, 255, 0.5);
-        }
+        .asset-info-bar .asset-filename { display: none; }
 
 
         /* Active asset indicator - brighter info bar in overlay mode */
@@ -2115,7 +2130,7 @@
         .tc-chooser-check { font-size: 10px; color: #6c9; min-width: 12px; }
         .tc-chooser-hint {
             border-top: 1px solid #252525; padding: 6px 14px;
-            font-size: 10px; color: #3a3a3a;
+            font-size: 10px; color: #666;
         }
 
         .audio-viz-slot-canvas {
@@ -2197,12 +2212,17 @@
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
             <div id="stackInfoStrip" onmouseenter="_sihTipShow(event)" onmousemove="_sihTipMove(event)" onmouseleave="_sihTipHide()">
                 <span class="sih-name"></span>
-                <span class="sih-filename"></span>
                 <span class="sih-zoom"></span>
-                <span class="sih-duration"></span>
-                <span class="sih-fps"></span>
-                <span class="sih-resolution"></span>
-                <span class="sih-aspect"></span>
+                <span class="sih-sep sih-sep-spatial" aria-hidden="true">·</span>
+                <span class="sih-group-spatial">
+                    <span class="sih-resolution"></span>
+                    <span class="sih-aspect"></span>
+                </span>
+                <span class="sih-sep sih-sep-time" aria-hidden="true">·</span>
+                <span class="sih-group-time">
+                    <span class="sih-duration"></span>
+                    <span class="sih-fps"></span>
+                </span>
             </div>
             <div id="sihTooltip"></div>
             <div id="headerRight" style="display:none; align-items:center; gap:2px; margin-left:auto;">
@@ -2378,7 +2398,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8.6';
+        const APP_VERSION = '3.8.7';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2816,8 +2836,15 @@
 
         function _refreshTimecodeDisplay() {
             const activeLayer = document.querySelector('.asset-layer.active');
-            if (activeLayer) { const v = activeLayer.querySelector('video'); if (v) updateVideoProgress(v); }
+            if (activeLayer) {
+                const v = activeLayer.querySelector('video');
+                const a = activeLayer.querySelector('audio');
+                if (v) updateVideoProgress(v);
+                else if (a) updateAudioProgress(a);
+            }
             if (_loopInPoint !== null) updateLoopMarkerUI();
+            _updateStackInfoStrip();
+            _updateGridInfoBarDurations();
         }
 
         // ── Timecode chooser popup (click timecode display) ──────────────────
@@ -2855,13 +2882,12 @@
                 row.addEventListener('click', () => {
                     _prefs.save('timecopyFmt', opt.key);
                     _refreshTimecodeDisplay();
-                    _copyTimecodeRange();
                     _hideTcChooser();
                 });
                 el.appendChild(row);
             });
             const hint = document.createElement('div'); hint.className = 'tc-chooser-hint';
-            hint.textContent = 'Click a format to select and copy \u2022 \u21e7C for separator';
+            hint.textContent = 'Click a format to select \u2022 C to copy \u2022 \u21e7C for separator';
             el.appendChild(hint);
             // Position above the anchor
             el.style.left   = Math.max(4, rect.left) + 'px';
@@ -3983,6 +4009,16 @@
         let _xcodeToastTimer = null;
         function _updateTranscodeToast(slot) {
             const state = _ffmpegTranscoding[slot];
+
+            // Don't let a lower-priority phase overwrite an actively-running one.
+            // transcode/computing/init/download all outrank queued.
+            const PRIORITY = { transcode: 5, computing: 4, init: 3, download: 2, queued: 1, error: 0 };
+            const myP = state ? (PRIORITY[state.phase] ?? 0) : 0;
+            for (const [s, st] of Object.entries(_ffmpegTranscoding)) {
+                if (s === slot) continue;
+                if ((PRIORITY[st.phase] ?? 0) > myP) return;
+            }
+
             let el = document.getElementById('xcodeToast');
             if (!el) {
                 el = document.createElement('div');
@@ -4226,7 +4262,8 @@
             delete _opusSyncPending[slot];
             delete _opusSyncSlots[slot];
             _opusSyncActive = Object.keys(_opusSyncSlots).length > 0;
-            if (video) video.muted = false;
+            // Re-apply audio routing — don't blindly unmute; the slot may not be the active source
+            if (video) video.muted = isMuted || (slot !== currentAudioSource) || !!audioMuteStates[slot];
             _stopOpusSyncAudio(slot);
 
             decodeAndComputeAudioViz(slot, newFile);
@@ -4244,6 +4281,8 @@
             if (_ffmpegBusy) {
                 if (!_ffmpegQueue.includes(slot)) {
                     _ffmpegQueue.push(slot);
+                    // Keep queue in assetOrder priority (original → editA → editB)
+                    _ffmpegQueue.sort((a, b) => assetOrder.indexOf(a) - assetOrder.indexOf(b));
                     _ffmpegTranscoding[slot] = { phase: 'queued' };
                     _updateTranscodeDOM(slot); _updateTranscodeToast(slot);
                 }
@@ -5842,10 +5881,11 @@
         }
 
         function setFilename(infoBar, name) {
+            if (!name) return;
+            // Filename is hidden from the bar; store it on the bar itself for native tooltip
+            infoBar.title = name;
             const el = infoBar.querySelector('.asset-filename');
-            if (!el || !name) return;
-            el.title = name;
-            el.textContent = _midTrunc(name, 30);
+            if (el) { el.title = name; el.textContent = name; }
         }
 
 
@@ -6433,19 +6473,23 @@
 
         function updateDurationDisplay(slot, duration, fps) {
             if (!duration) return;
-            const minutes = Math.floor(duration / 60);
-            const seconds = Math.floor(duration % 60);
-            let durationStr;
-            if (fps) {
-                // Video: M:SS:FF (always show minutes for clarity)
-                const frames = Math.floor((duration % 1) * fps);
-                durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
-            } else {
-                // Audio: M:SS.cc (always show minutes for clarity)
-                const cs = Math.floor((duration % 1) * 100);
-                durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
-            }
+            const durationStr = _formatTcForCopy(duration, fps || null);
             updateAssetInfoBar(slot, { duration: durationStr });
+        }
+
+        // Refresh all Grid-mode info bar durations after the user cycles timecode format
+        function _updateGridInfoBarDurations() {
+            for (const slot of assetOrder) {
+                if (!mediaData[slot]) continue;
+                const layer = getLayer(slot);
+                if (!layer) continue;
+                const durEl = layer.querySelector('.asset-info-bar .asset-duration');
+                if (!durEl) continue;
+                const media = layer.querySelector('video, audio');
+                if (!media || !media.duration) continue;
+                const fps = videoFrameRates[media.src] || null;
+                durEl.textContent = _formatTcForCopy(media.duration, fps);
+            }
         }
 
         function updateAssetInfoBar(slot, data) {
@@ -6833,17 +6877,18 @@
             _prefs.save('timecopyFmt', next);
             const fmtLabels = { hms: 'h:mm:ss.xxx', hmsf: 'h:mm:ss:ff', s: 'ss.xxx', sf: 'ss:ff', f: 'F + integer' };
             showToast('Timecode: ' + fmtLabels[next]);
-            // Update display immediately
+            // Update bottom bar display immediately for whichever media type is active
             const activeLayer = document.querySelector('.asset-layer.active');
             if (activeLayer) {
                 const video = activeLayer.querySelector('video');
-                if (video) {
-                    updateVideoProgress(video);
-                }
+                const audio = activeLayer.querySelector('audio');
+                if (video) updateVideoProgress(video);
+                else if (audio) updateAudioProgress(audio);
             }
-            // Update loop marker labels and stack info strip to match new mode
+            // Update loop marker labels, stack info strip, and grid bars to match new mode
             if (_loopInPoint !== null) updateLoopMarkerUI();
             _updateStackInfoStrip();
+            _updateGridInfoBarDurations();
         }
 
         function toggleQuickStart() {
@@ -7767,44 +7812,61 @@
             const rawDur   = media && !isNaN(media.duration) && media.duration > 0 ? media.duration : 0;
             const duration = rawDur > 0 ? _formatTcForCopy(rawDur, mediaFps) : '';
 
-            // Slot name: hide for single generic asset (no IHWA context)
+            // Slot-color class on strip root (drives CSS-colored name pill)
+            strip.className = slot ? 'sih-slot-' + slot : '';
+
+            // Slot name pill: hide for single generic asset (no IHWA context)
             const nameEl = strip.querySelector('.sih-name');
             const showName = getLoadedSlotCount() > 1 || !!_ihwaSlotLabels;
             nameEl.style.display = showName ? '' : 'none';
-            nameEl.textContent   = _midTrunc(rawName, 20) || '';
+            nameEl.textContent   = rawName || '';
 
-            // Filename: suppress if the slot label is already a filename (contains '.')
-            const fnEl = strip.querySelector('.sih-filename');
-            const labelIsFilename = rawName.includes('.');
-            fnEl.textContent = (!labelIsFilename && fullFilename) ? _midTrunc(fullFilename, 26) : '';
-
+            // Zoom pill
             const zoomEl = strip.querySelector('.sih-zoom');
             zoomEl.textContent = zoom || '';
             zoomEl.style.display = zoom ? '' : 'none';
+
+            // Time group (duration + fps)
             const durEl = strip.querySelector('.sih-duration');
             durEl.textContent = duration;
             durEl.style.display = duration ? '' : 'none';
             const fpsEl = strip.querySelector('.sih-fps');
             fpsEl.textContent = fps || '';
             fpsEl.style.display = fps ? '' : 'none';
+            const hasTime = !!(duration || fps);
+            strip.querySelector('.sih-group-time').style.display = hasTime ? 'flex' : 'none';
+
+            // Spatial group (resolution + aspect)
             const res = resolution && resolution !== '-' ? resolution : '';
             const ar  = aspect     && aspect     !== '-' ? aspect     : '';
             strip.querySelector('.sih-resolution').textContent = res;
-            strip.querySelector('.sih-aspect').textContent = ar;
+            strip.querySelector('.sih-aspect').textContent     = ar;
+            const hasSpatial = !!(res || ar);
+            strip.querySelector('.sih-group-spatial').style.display = hasSpatial ? 'flex' : 'none';
 
-            // Custom monospace tooltip — padStart alignment works because font is monospace
-            const W = 5;
-            const row = (lbl, val) => val ? lbl.padStart(W) + ' : ' + val : '';
+            // Separator dots — shown only when there's content on both sides
+            // Order is now: name · zoom · [spatial] · [time]
+            const hasLeft = showName || !!zoom;
+            const sepSpatial = strip.querySelector('.sih-sep-spatial');
+            const sepTime    = strip.querySelector('.sih-sep-time');
+            if (sepSpatial) sepSpatial.style.display = (hasSpatial && hasLeft)                       ? '' : 'none';
+            if (sepTime)    sepTime.style.display    = (hasTime    && (hasLeft || hasSpatial))        ? '' : 'none';
+
+            // Hover tooltip — UI font, two-column label/value rows
+            const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const tipRow = (lbl, val) => val
+                ? `<div class="sih-tr"><span class="sih-td-lbl">${_esc(lbl)}</span><span class="sih-td-val">${_esc(val)}</span></div>`
+                : '';
             const tt = document.getElementById('sihTooltip');
-            if (tt) tt.textContent = [
-                row('Slot', showName ? rawName : ''),
-                row('File', fullFilename),
-                row('Zoom', zoom),
-                row('Size', res),
-                row('  AR', ar),
-                row(' FPS', fps),
-                row('Dur.', duration),
-            ].filter(Boolean).join('\n');
+            if (tt) tt.innerHTML = [
+                tipRow('Slot',     showName ? rawName : ''),
+                tipRow('File',     fullFilename),
+                tipRow('Zoom',     zoom),
+                tipRow('Size',     res),
+                tipRow('AR',       ar),
+                tipRow('FPS',      fps),
+                tipRow('Duration', duration),
+            ].filter(Boolean).join('');
 
             strip.style.display = 'flex';
         }
@@ -7812,7 +7874,7 @@
         // ── Stack info strip custom tooltip ───────────────────────────────────────
         function _sihTipShow(e) {
             const tt = document.getElementById('sihTooltip');
-            if (!tt || !tt.textContent.trim()) return;
+            if (!tt || !tt.innerHTML.trim()) return;
             tt.style.display = 'block';
             _sihTipMove(e);
         }
@@ -8379,11 +8441,10 @@
             const isVideo = !!(mediaData.editA?.type === 'video' || mediaData.editB?.type === 'video');
             const hasOriginal = !!mediaData.original;
 
-            // 2-asset: no original slot, use generic type labels
+            // 2-asset: no original slot — A / B labels (symmetric peers)
             if (!hasOriginal) {
-                if (isAudio) return slot === 'editA' ? 'Audio A' : 'Audio B';
-                if (isVideo) return slot === 'editA' ? 'Video A' : 'Video B';
-                return slot === 'editA' ? 'Image A' : 'Image B';
+                if (isAudio) return slot === 'editA' ? 'A' : 'B';
+                return slot === 'editA' ? 'A' : 'B';
             }
 
             // 3-asset: use task type if available, otherwise infer from media type
@@ -8401,13 +8462,10 @@
                 return slot === 'original' ? 'Source Video' : slot === 'editA' ? 'Video Edit A' : 'Video Edit B';
             }
             if (tt === 'audio' || isAudio) {
-                return slot === 'original' ? 'Ground-Truth Audio' : slot === 'editA' ? 'Audio A' : 'Audio B';
+                return slot === 'original' ? 'GT' : slot === 'editA' ? 'A' : 'B';
             }
-            // Fallback: infer from loaded media type
-            if (isVideo) {
-                return slot === 'original' ? 'Source Video' : slot === 'editA' ? 'Video A' : 'Video B';
-            }
-            return slot === 'original' ? 'Source' : slot === 'editA' ? 'Image Edit A' : 'Image Edit B';
+            // Fallback: infer from loaded media type — Ref/A/B for video and image
+            return slot === 'original' ? 'Ref' : slot === 'editA' ? 'A' : 'B';
         }
 
         // Pick horizontal vs vertical layout based on which gives larger rendered images
@@ -8439,7 +8497,31 @@
 
             return vertArea > horizArea ? 'vertical' : 'horizontal';
         }
-        
+
+        // Re-evaluate horizontal vs vertical axis after the audio viz panel expands/collapses.
+        // Only swaps the CSS class — never changes gridInlineMode or the Inline/Offset mode.
+        function _reevalGridAxis() {
+            if (!isGridMode || hasAudios) return;
+            const n = getLoadedSlotCount();
+            if (n < 2) return;
+            const isTrip = isTripartiteMode();
+            if (isTrip && gridInlineMode) {
+                // Switch between inline-rows and inline-cols as needed
+                const best = pickBestGridLayout(3);
+                const want = best === 'vertical' ? 'inline-rows' : 'inline-cols';
+                const have = document.body.classList.contains('inline-rows') ? 'inline-rows' : 'inline-cols';
+                if (want !== have) {
+                    document.body.classList.remove('inline-cols', 'inline-rows');
+                    document.body.classList.add(want);
+                    requestAnimationFrame(() => requestAnimationFrame(() => positionLabelsToMedia(10)));
+                }
+            } else if (!isTrip && n === 2) {
+                // Switch between horizontal and vertical for 2-asset layouts
+                const best = pickBestGridLayout(2);
+                if (best !== layoutMode) setViewMode(best);
+            }
+        }
+
         // Format zoom level as percentage for info bar display
         function formatZoom(ratio) { return Math.round(ratio * 100) + '%'; }
 
@@ -9831,6 +9913,8 @@
                             if (wb) wb.classList.add('active');
                             _ensureAudioVizDecoded();
                             needsRelayout = true;
+                            // Re-evaluate grid axis after the panel finishes expanding
+                            setTimeout(_reevalGridAxis, 320);
                         }
                         if (needsRelayout) animateRelayout(350);
                     } catch (_) {}
