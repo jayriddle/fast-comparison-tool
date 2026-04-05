@@ -925,14 +925,14 @@
             letter-spacing: 0.03em;
         }
         /* Normal (dark info bar): opaque saturated pill, dark text for legibility */
-        #layerOriginal .asset-info-bar .asset-name { background: #3dbf72; color: #0a2218; }
+        #layerOriginal .asset-info-bar .asset-name { background: #35c46a; color: #092018; }
         #layerEditA    .asset-info-bar .asset-name { background: #e0902c; color: #2a1500; }
-        #layerEditB    .asset-info-bar .asset-name { background: #3d96d8; color: #071624; }
+        #layerEditB    .asset-info-bar .asset-name { background: #9264d8; color: #150a28; }
 
-        /* Active-audio (bright teal info bar): dark pill, bright per-slot text */
-        body.grid-mode #layerOriginal.active-audio .asset-info-bar .asset-name { background: #0a2218; color: #4dda7e; }
+        /* Active-audio (neutral dark info bar): dark pill, bright per-slot text */
+        body.grid-mode #layerOriginal.active-audio .asset-info-bar .asset-name { background: #092018; color: #3ddc7e; }
         body.grid-mode #layerEditA.active-audio    .asset-info-bar .asset-name { background: #2a1400; color: #ffac3c; }
-        body.grid-mode #layerEditB.active-audio    .asset-info-bar .asset-name { background: #071624; color: #5ab8f5; }
+        body.grid-mode #layerEditB.active-audio    .asset-info-bar .asset-name { background: #150a28; color: #c090f8; }
 
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
@@ -1002,9 +1002,9 @@
             letter-spacing: 0.03em;
         }
         /* Stack strip always shows the active slot → dark pill, bright per-slot text */
-        #stackInfoStrip.sih-slot-original .sih-name { background: #0a2218; color: #4dda7e; }
+        #stackInfoStrip.sih-slot-original .sih-name { background: #092018; color: #3ddc7e; }
         #stackInfoStrip.sih-slot-editA    .sih-name { background: #2a1400; color: #ffac3c; }
-        #stackInfoStrip.sih-slot-editB    .sih-name { background: #071624; color: #5ab8f5; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: #150a28; color: #c090f8; }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1109,14 +1109,14 @@
             left: 0;
             right: 0;
             bottom: 0;
-            border: 1px solid rgba(0, 180, 220, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             pointer-events: none;
             z-index: 5;
         }
 
         body.grid-mode .asset-layer.active-audio .asset-info-bar {
-            background: rgba(0, 140, 190, 0.85);
-            color: #fff;
+            background: rgba(50, 52, 60, 0.97);
+            color: #ccc;
         }
 
         /* Per-slot active-audio pill colors are set above via #layerX.active-audio selectors */
