@@ -924,9 +924,15 @@
             flex-shrink: 0;
             letter-spacing: 0.03em;
         }
-        #layerOriginal .asset-info-bar .asset-name { background: rgba(90, 200, 130, 0.22); color: #6dd;   }
-        #layerEditA    .asset-info-bar .asset-name { background: rgba(240, 160,  50, 0.22); color: #f0a030; }
-        #layerEditB    .asset-info-bar .asset-name { background: rgba(80,  155, 220, 0.22); color: #7ab8e8; }
+        /* Normal (dark info bar): opaque saturated pill, dark text for legibility */
+        #layerOriginal .asset-info-bar .asset-name { background: #3dbf72; color: #0a2218; }
+        #layerEditA    .asset-info-bar .asset-name { background: #e0902c; color: #2a1500; }
+        #layerEditB    .asset-info-bar .asset-name { background: #3d96d8; color: #071624; }
+
+        /* Active-audio (bright teal info bar): dark pill, bright per-slot text */
+        body.grid-mode #layerOriginal.active-audio .asset-info-bar .asset-name { background: #0a2218; color: #4dda7e; }
+        body.grid-mode #layerEditA.active-audio    .asset-info-bar .asset-name { background: #2a1400; color: #ffac3c; }
+        body.grid-mode #layerEditB.active-audio    .asset-info-bar .asset-name { background: #071624; color: #5ab8f5; }
 
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
@@ -995,10 +1001,10 @@
             white-space: nowrap;
             letter-spacing: 0.03em;
         }
-        /* Per-slot name pill colors — same palette as Grid info bar */
-        #stackInfoStrip.sih-slot-original .sih-name { background: rgba(90,200,130,0.22); color: #6dd; }
-        #stackInfoStrip.sih-slot-editA    .sih-name { background: rgba(240,160,50,0.22);  color: #f0a030; }
-        #stackInfoStrip.sih-slot-editB    .sih-name { background: rgba(80,155,220,0.22);  color: #7ab8e8; }
+        /* Stack strip always shows the active slot → dark pill, bright per-slot text */
+        #stackInfoStrip.sih-slot-original .sih-name { background: #0a2218; color: #4dda7e; }
+        #stackInfoStrip.sih-slot-editA    .sih-name { background: #2a1400; color: #ffac3c; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: #071624; color: #5ab8f5; }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1113,9 +1119,7 @@
             color: #fff;
         }
 
-        body.grid-mode .asset-layer.active-audio .asset-info-bar .asset-name {
-            color: #ffffff;
-        }
+        /* Per-slot active-audio pill colors are set above via #layerX.active-audio selectors */
 
         .asset-layer img,
         .asset-layer video {
