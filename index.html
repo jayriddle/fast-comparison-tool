@@ -927,7 +927,7 @@
         /* Slot label: deep saturated fill, dark text — same in all states */
         #layerOriginal .asset-info-bar .asset-name { background: #1a8844; color: #061610; }
         #layerEditA    .asset-info-bar .asset-name { background: #be7210; color: #1c0e00; }
-        #layerEditB    .asset-info-bar .asset-name { background: #7a3ec8; color: #0e0422; }
+        #layerEditB    .asset-info-bar .asset-name { background: #b0308a; color: #220018; }
 
         .asset-info-bar .asset-zoom {
             background: rgba(255, 255, 255, 0.22);
@@ -999,7 +999,7 @@
         /* Same deep fills as Grid info bar — identical in all states */
         #stackInfoStrip.sih-slot-original .sih-name { background: #1a8844; color: #061610; }
         #stackInfoStrip.sih-slot-editA    .sih-name { background: #be7210; color: #1c0e00; }
-        #stackInfoStrip.sih-slot-editB    .sih-name { background: #7a3ec8; color: #0e0422; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: #b0308a; color: #220018; }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1723,10 +1723,14 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
             display: none;
             overflow: hidden;
+            /* clip-path clips hardware-composited video layers (overflow:hidden alone doesn't) */
+            clip-path: circle(50%);
             transform: translate(-50%, -50%);
         }
         .pixel-magnifier.active { display: block; }
         .pixel-magnifier canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+        /* Clone video inside loupe: absolute-positioned by JS; pixelated scaling */
+        .pixel-magnifier video { image-rendering: pixelated; image-rendering: crisp-edges; }
 
         .zoom-indicator {
             display: none; /* removed — split-zoom-indicator on the image is sufficient */
@@ -1889,7 +1893,8 @@
         .fp-progress-fill { height: 100%; background: #3a6a3a; border-radius: 2px;
             width: 0; transition: width 0.3s ease; }
         .fp-progress-fill.p-init { background: #555; }
-        .fp-progress-fill.p-transcode { background: #5cb85c; }
+        .fp-progress-fill.p-transcode { background: #5cb85c; animation: _warpd-transcode-pulse 1.4s ease-in-out infinite; }
+        @keyframes _warpd-transcode-pulse { 0%,100%{opacity:.45} 50%{opacity:1} }
         .fp-progress-fill.p-done { background: #5cb85c; width: 100% !important; }
         .fp-progress-fill.p-error { background: #e05050; }
         .fp-progress-status { font-size: 11px; color: #666; }
@@ -2416,7 +2421,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.8.7';
+        const APP_VERSION = '3.9';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3043,6 +3048,8 @@
         let _lastMouseEvent = null; // cached for magnifier refresh on layer switch
 
         const _magnifierEls = ['pixelMagnifier', 'pixelMagnifier1', 'pixelMagnifier2'];
+        // Per-loupe state: { clone: HTMLVideoElement, overlay: HTMLCanvasElement }
+        const _magState = {};
 
         function resizeMagnifier(delta) {
             magnifierSize = Math.max(magnifierSize_MIN, Math.min(magnifierSize + delta, magnifierSize_MAX));
@@ -3051,8 +3058,8 @@
                 if (!el) return;
                 el.style.width = magnifierSize + 'px';
                 el.style.height = magnifierSize + 'px';
-                const canvas = el.querySelector('canvas');
-                if (canvas) { canvas.width = magnifierSize; canvas.height = magnifierSize; }
+                // Resize all canvases (main + overlay)
+                el.querySelectorAll('canvas').forEach(c => { c.width = magnifierSize; c.height = magnifierSize; });
             });
             _prefs.save('magnifierSize', magnifierSize);
             if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
@@ -3094,27 +3101,7 @@
         // Draw a magnified region of `media` onto a magnifier canvas element.
         // relX/relY are 0..1 normalized coords within the media.
         // screenScale is screen px per native px for computing zoom.
-        function drawMagnifierCanvas(magEl, media, relX, relY, screenScale, screenX, screenY) {
-            const natW = media.naturalWidth || media.videoWidth;
-            const natH = media.naturalHeight || media.videoHeight;
-            if (!natW || !natH) { magEl.classList.remove('active'); return; }
-
-            magEl.classList.add('active');
-
-            const nativeX = relX * natW;
-            const nativeY = relY * natH;
-
-            const effectiveScale = screenScale;
-            const srcW = magnifierSize / (magnifierZoom * effectiveScale);
-            const srcX = nativeX - srcW / 2;
-            const srcY = nativeY - srcW / 2;
-
-            const canvas = magEl.querySelector('canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, magnifierSize, magnifierSize);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(media, srcX, srcY, srcW, srcW, 0, 0, magnifierSize, magnifierSize);
-
+        function _drawMagnifierOverlay(ctx, label) {
             // Crosshair
             const cx = magnifierSize / 2;
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
@@ -3130,9 +3117,7 @@
             ctx.moveTo(0, cx); ctx.lineTo(magnifierSize, cx);
             ctx.stroke();
             ctx.setLineDash([]);
-
             // Zoom label
-            const label = magnifierZoom + '×';
             ctx.font = 'bold 11px monospace';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'bottom';
@@ -3140,10 +3125,123 @@
             ctx.fillRect(magnifierSize - ctx.measureText(label).width - 8, magnifierSize - 16, ctx.measureText(label).width + 6, 14);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillText(label, magnifierSize - 4, magnifierSize - 3);
+        }
 
-            // Position
+        function drawMagnifierCanvas(magEl, media, relX, relY, screenScale, screenX, screenY) {
+            const natW = media.naturalWidth || media.videoWidth;
+            const natH = media.naturalHeight || media.videoHeight;
+            if (!natW || !natH) { magEl.classList.remove('active'); return; }
+
+            magEl.classList.add('active');
+
+            const nativeX = relX * natW;
+            const nativeY = relY * natH;
+            const effectiveScale = screenScale;
+            const srcW = magnifierSize / (magnifierZoom * effectiveScale);
+            const srcX = nativeX - srcW / 2;
+            const srcY = nativeY - srcW / 2;
+            const label = magnifierZoom + '×';
+            const id = magEl.id;
+
+            if (media instanceof HTMLVideoElement) {
+                // For video: use a CSS-positioned clone of the video element so the
+                // hardware compositor's color management (BT.709→P3 on macOS) is
+                // preserved. drawImage(video, canvas) captures pre-compositor raw
+                // values and always appears darker on P3 displays.
+                if (!_magState[id]) _magState[id] = {};
+                const state = _magState[id];
+
+                // Hide the static canvas
+                const mainCanvas = magEl.querySelector('canvas:not(.mag-overlay)');
+                if (mainCanvas) mainCanvas.style.display = 'none';
+
+                // Get or create the clone video
+                let clone = state.clone;
+                if (!clone || clone._cloneSrc !== media.src) {
+                    if (clone) { clone.pause(); clone.remove(); }
+                    clone = document.createElement('video');
+                    clone.muted = true;
+                    clone.playsInline = true;
+                    clone.style.cssText = 'position:absolute;pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;';
+                    clone._cloneSrc = media.src;
+                    state.clone = clone;
+                    magEl.insertBefore(clone, magEl.firstChild);
+                    // Set src after attaching listeners so loadedmetadata is never missed
+                    clone.addEventListener('loadedmetadata', function onMeta() {
+                        clone.removeEventListener('loadedmetadata', onMeta);
+                        if (media.paused || media.ended) {
+                            clone.currentTime = media.currentTime;
+                        } else {
+                            clone.play().catch(() => {});
+                        }
+                        // Redraw once the frame is available
+                        if (_lastMouseEvent) updateMagnifier(_lastMouseEvent);
+                    });
+                    clone.src = media.src;
+                } else {
+                    clone.style.display = ''; // restore if hidden by image path
+                    // Sync playback state; don't seek while playing (avoid continuous seek stutter)
+                    if (media.paused || media.ended) {
+                        if (!clone.paused) clone.pause();
+                        if (Math.abs(clone.currentTime - media.currentTime) > 0.001)
+                            clone.currentTime = media.currentTime;
+                    } else if (clone.paused) {
+                        clone.currentTime = media.currentTime;
+                        clone.play().catch(() => {});
+                    }
+                }
+
+                // Scale clone to full zoom size; translate so cursor point is centered
+                const cw = natW * effectiveScale * magnifierZoom;
+                const ch = natH * effectiveScale * magnifierZoom;
+                clone.style.width  = cw + 'px';
+                clone.style.height = ch + 'px';
+                clone.style.left   = (magnifierSize / 2 - nativeX * effectiveScale * magnifierZoom) + 'px';
+                clone.style.top    = (magnifierSize / 2 - nativeY * effectiveScale * magnifierZoom) + 'px';
+
+                // Overlay canvas: crosshair + label only (transparent background)
+                let ov = state.overlay;
+                if (!ov) {
+                    ov = document.createElement('canvas');
+                    ov.className = 'mag-overlay';
+                    ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+                    state.overlay = ov;
+                    magEl.appendChild(ov);
+                } else {
+                    ov.style.display = ''; // restore if hidden by image path
+                }
+                ov.width = magnifierSize; ov.height = magnifierSize;
+                const oCtx = ov.getContext('2d');
+                oCtx.clearRect(0, 0, magnifierSize, magnifierSize);
+                _drawMagnifierOverlay(oCtx, label);
+
+            } else {
+                // For images and audio-viz canvases: use drawImage to a P3 canvas so
+                // ICC-profile colour management is applied correctly.
+                // Hide any video clone for this loupe
+                const state = _magState[id];
+                if (state && state.clone) { state.clone.pause(); state.clone.style.display = 'none'; }
+                if (state && state.overlay) state.overlay.style.display = 'none';
+
+                let canvas = magEl.querySelector('canvas:not(.mag-overlay)');
+                if (canvas) canvas.style.display = '';
+                if (!canvas || canvas._magCS !== 'display-p3') {
+                    const nc = document.createElement('canvas');
+                    nc.width = magnifierSize; nc.height = magnifierSize;
+                    nc._magCS = 'display-p3';
+                    if (canvas) canvas.replaceWith(nc); else magEl.prepend(nc);
+                    canvas = nc;
+                }
+                const ctx = canvas.getContext('2d', { colorSpace: 'display-p3' });
+                ctx.clearRect(0, 0, magnifierSize, magnifierSize);
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(media, srcX, srcY, srcW, srcW, 0, 0, magnifierSize, magnifierSize);
+                _drawMagnifierOverlay(ctx, label);
+            }
+
+            // Position the loupe at the cursor
             magEl.style.left = screenX + 'px';
-            magEl.style.top = screenY + 'px';
+            magEl.style.top  = screenY + 'px';
         }
 
         function updateMagnifier(e) {
@@ -3335,6 +3433,10 @@
         // Debounced positionLabelsToMedia — collapses rapid per-asset load events into one call
         // so normalization always runs after all loaded slots have reported their dimensions.
         let _positionDebounceTimer = null;
+        // Set to true by positionLabelsToMedia after its first clean (non-skipped) run.
+        // startFadeIn waits for this before revealing layers so the fade-in never shows
+        // the pre-JS full-cell wrapper size (which would look oversized on portrait assets).
+        let _layoutReady = false;
         function positionLabelsToMediaDebounced() {
             clearTimeout(_positionDebounceTimer);
             _positionDebounceTimer = setTimeout(positionLabelsToMedia, 150);
@@ -4036,7 +4138,7 @@
 
             // Don't let a lower-priority phase overwrite an actively-running one.
             // transcode/computing/init/download all outrank queued.
-            const PRIORITY = { transcode: 5, computing: 4, init: 3, download: 2, queued: 1, error: 0 };
+            const PRIORITY = { transcode: 3, computing: 3, init: 3, download: 2, queued: 1, error: 0 };
             const myP = state ? (PRIORITY[state.phase] ?? 0) : 0;
             for (const [s, st] of Object.entries(_ffmpegTranscoding)) {
                 if (s === slot) continue;
@@ -4078,33 +4180,30 @@
             if (state.phase === 'queued') {
                 label.textContent = slotName + ' — Queued…';
                 pct.textContent = '';
+                fill.style.animation = '';
                 fill.style.width = '0%';
             } else if (state.phase === 'download') {
                 label.textContent = slotName + ' — Downloading FFmpeg…';
                 const p = state.total > 0 ? Math.round((state.downloaded / state.total) * 100) : 0;
                 pct.textContent = p + '%';
+                fill.style.animation = '';
                 fill.style.width = p + '%';
-            } else if (state.phase === 'init') {
-                label.textContent = slotName + ' — Loading engine…';
+            } else if (state.phase === 'init' || state.phase === 'transcode' || state.phase === 'computing') {
+                // Collapse all working phases into one message with a pulsing bar.
+                // The individual phases (engine load / transcode / waveform decode) are
+                // real distinct work, but on fast machines they fly by too quickly to read.
+                // A single "Processing audio…" state is honest and never confusing.
+                label.textContent = slotName + ' — Processing audio…';
                 pct.textContent = '';
-                fill.style.width = '100%';
                 fill.style.transition = 'none';
-            } else if (state.phase === 'transcode') {
-                label.textContent = slotName + ' — Transcoding audio…';
-                const p = Math.round((state.pct || 0) * 100);
-                pct.textContent = p + '%';
-                fill.style.transition = '';
-                fill.style.width = p + '%';
-            } else if (state.phase === 'computing') {
-                label.textContent = slotName + ' — Computing waveform…';
-                pct.textContent = '';
                 fill.style.width = '100%';
-                fill.style.transition = 'none';
+                fill.style.animation = '_warpd-transcode-pulse 1.4s ease-in-out infinite';
             } else if (state.phase === 'done') {
                 icon.classList.add('done');
                 fill.classList.add('done');
                 label.textContent = slotName + ' — Audio transcoded';
                 pct.textContent = '';
+                fill.style.animation = '';
                 fill.style.width = '100%';
                 _xcodeToastTimer = setTimeout(() => el.classList.remove('visible'), 2500);
             } else if (state.phase === 'error') {
@@ -4160,12 +4259,13 @@
                 if (statusEl) { setPC(statusEl,'p-init');      statusEl.textContent = 'Loading engine…'; }
             } else if (phase === 'transcode') {
                 if (btn) { btn.disabled = true; btn.textContent = 'Transcoding…'; }
-                const p = Math.max(0, Math.min(99, Math.round((pct || 0) * 100)));
+                // Single-threaded wasm blocks the main thread for the entire transcode,
+                // so progress callbacks can never trigger a repaint mid-run. Show a
+                // full-width pulsing bar (CSS-animated at compositor level) instead of
+                // a percentage that would always appear frozen at 0% then jump to done.
                 if (phaseEl)  { setPC(phaseEl, 'p-transcode'); phaseEl.textContent  = 'Transcoding'; }
-                if (fillEl)   { setPC(fillEl,  'p-transcode'); fillEl.style.width   = p + '%'; }
-                let s = p + '%';
-                if (eta > 0) s += '  ·  ' + _formatEta(eta) + ' remaining';
-                if (statusEl) { setPC(statusEl,'p-transcode'); statusEl.textContent = s; }
+                if (fillEl)   { setPC(fillEl,  'p-transcode'); fillEl.style.width   = '100%'; }
+                if (statusEl) { setPC(statusEl,'p-transcode'); statusEl.textContent = 'Audio re-encoding…'; }
             } else if (phase === 'done') {
                 if (btn) { btn.disabled = true; btn.textContent = '✓ Done'; }
                 if (phaseEl)  { setPC(phaseEl, 'p-done'); phaseEl.textContent  = 'Done'; }
@@ -4387,6 +4487,22 @@
             try {
                 const { fetchFile } = window.FFmpeg;
                 ff.FS('writeFile', inputName, await fetchFile(srcFile));
+                // Wait for the browser to paint the "Transcoding audio…" toast before
+                // ff.run() blocks the main thread.
+                //
+                // Why not setTimeout(0)? It fires as the NEXT TASK (~1 ms), before
+                // Chrome's render opportunity (~16 ms). The compositor never sees the
+                // 'transcode' DOM update, so the pulsing animation never starts.
+                //
+                // Why not plain rAF? `await new Promise(r => rAF(r))` resolves the
+                // Promise as a microtask *inside* the rAF callback — before layout/paint.
+                // ff.run() would still start before the frame is rendered.
+                //
+                // rAF → setTimeout is the "post-paint" pattern: rAF fires, browser
+                // completes layout + paint + composite for that frame, THEN the setTimeout
+                // fires in the next task cycle. The compositor is showing the pulsing
+                // "Transcoding audio…" bar before ff.run() takes over the main thread.
+                await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
                 // Match the CLI command exactly — no extra flags
                 await ff.run('-i', inputName, '-c:v', 'copy', '-c:a', 'aac', outputName);
                 const outData = ff.FS('readFile', outputName);
@@ -6377,7 +6493,15 @@
             video.volume = _prefs.load('volume', 100) / 100;
 
             video.addEventListener('loadedmetadata', function() {
-                if (mediaData[slot]) { mediaData[slot].w = video.videoWidth; mediaData[slot].h = video.videoHeight; }
+                if (mediaData[slot]) {
+                    mediaData[slot].w = video.videoWidth;
+                    mediaData[slot].h = video.videoHeight;
+                    // videoWidth=0 means the browser parsed the container but has no
+                    // valid video dimensions (audio-only or unsupported codec).
+                    // Mark as failed so checkAllLoaded doesn't wait for dimensions
+                    // that will never arrive from this source.
+                    if (!video.videoWidth) mediaData[slot]._videoLoadFailed = true;
+                }
                 updateResolutionDisplay(slot, video.videoWidth, video.videoHeight);
                 updateDurationDisplay(slot, video.duration);
                 const pc = document.getElementById('videoProgressContainer');
@@ -6385,6 +6509,19 @@
                 setupVideoHandlers(video, slot);
                 checkAllLoaded();
                 positionLabelsToMediaDebounced();
+                // Re-evaluate rows/cols once all assets have reported dimensions.
+                if (isGridMode && gridInlineMode && isTripartiteMode()) {
+                    const allDims = Object.values(mediaData).filter(m => m && m.w && m.h);
+                    if (allDims.length >= getLoadedSlotCount()) _swapGridSubLayout();
+                }
+            });
+
+            // If the browser can't load the file at all (unsupported container/codec),
+            // mark the slot so checkAllLoaded() doesn't block on videoWidth > 0 forever.
+            // The transcoded version will provide proper dimensions once ready.
+            video.addEventListener('error', function() {
+                if (mediaData[slot]) mediaData[slot]._videoLoadFailed = true;
+                checkAllLoaded();
             });
 
             mediaContainer.appendChild(video);
@@ -6439,6 +6576,13 @@
                 // always has valid naturalWidth/naturalHeight.
                 checkAllLoaded();
                 positionLabelsToMediaDebounced();
+                // Re-evaluate rows/cols once all assets have reported dimensions.
+                // The initial pickBestGridLayout call may have run with incomplete dims;
+                // this corrects the layout once the full picture is available.
+                if (isGridMode && gridInlineMode && isTripartiteMode()) {
+                    const allDims = Object.values(mediaData).filter(m => m && m.w && m.h);
+                    if (allDims.length >= getLoadedSlotCount()) _swapGridSubLayout();
+                }
             });
             img.onerror = function() {
                 showLoadToast(`Failed to load ${file.name}`, true, 5000);
@@ -8503,6 +8647,7 @@
 
             const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
             if (dims.length === 0) return 'horizontal';
+            if (dims.length < n) return 'horizontal'; // not all assets have reported dimensions yet; defer
 
             // Subtract the info bar height from each slot's usable video area.
             // In cols mode one bar sits above each column's full height;
@@ -9095,6 +9240,12 @@
                     _gridZoomWasCapped = projW > avW || projMaxH > availH;
 
                     const perSlot = {};
+                    // Write all widths first, then read offsetWidth in a separate pass.
+                    // If reads are interleaved with writes, the intermediate flex state
+                    // (e.g. editA at 742px, editB still at CSS 50% = 622px) overflows the
+                    // container and flex-shrink distorts the first-read offsetWidth.
+                    // Committing all widths before the first read gives the browser a single
+                    // settled layout (total ≤ container) and every offsetWidth comes back correct.
                     loadedSlots.forEach(s => {
                         const m = measured.data[s];
                         const r = ratios[s];
@@ -9102,7 +9253,10 @@
                         const rh = Math.round(Math.sqrt(targetArea / r));
                         perSlot[s] = { rw, rh };
                         if (m.layer) m.layer.style.width = rw + 'px';
-                        measured.data[s].cw = m.layer ? m.layer.offsetWidth : rw;
+                    });
+                    loadedSlots.forEach(s => {
+                        const m = measured.data[s];
+                        measured.data[s].cw = m.layer ? m.layer.offsetWidth : perSlot[s].rw;
                     });
 
                     // Group centering
@@ -9244,6 +9398,12 @@
             // Cap retries to avoid infinite loops if a container is permanently zero.
             if (anySkipped && retriesLeft > 0) {
                 requestAnimationFrame(() => positionLabelsToMedia(retriesLeft - 1));
+            } else {
+                // All slots positioned — safe for startFadeIn to reveal layers.
+                // Guard against stale debounced calls that run after clearAllMedia()
+                // with zero loaded slots: an empty run has anySkipped=false but hasn't
+                // actually committed any layout, so it must not mark layout as ready.
+                if (getLoadedSlotCount() > 0) _layoutReady = true;
             }
         }
 
@@ -9416,9 +9576,8 @@
 
                 };
 
-                // Tripartite: grid cell sizes only stabilise after a layout pass,
-                // so run applyLayout in rAF N, then positionLabelsToMedia in rAF N+1.
-                // Other modes: a single rAF suffices since there is no grid to settle.
+                // Grid cell sizes only stabilise after a layout pass, so run applyLayout
+                // in rAF N and positionLabelsToMedia in rAF N+1 for all grid modes.
                 if (targetMode === 'offset') {
                     requestAnimationFrame(() => {
                         applyLayout();
@@ -9429,7 +9588,7 @@
                 } else {
                     requestAnimationFrame(() => {
                         applyLayout();
-                            positionLabelsToMedia();
+                        requestAnimationFrame(() => positionLabelsToMedia());
                     });
                 }
             }
@@ -9733,8 +9892,12 @@
             // Wait until all loaded video slots have non-zero videoWidth — the browser
             // may not have painted dimensions yet even though loadedmetadata has fired.
             // Defer with rAF until ready rather than laying out against zero dimensions.
+            // Exception: slots where the browser failed to load the file at all
+            // (_videoLoadFailed=true) will never have valid videoWidth from the original
+            // file; skip the check so transcoding can proceed without blocking activation.
             const allDimensionsReady = assetOrder.every(s => {
                 if (!mediaData[s] || mediaData[s].type !== 'video') return true;
+                if (mediaData[s]._videoLoadFailed) return true;
                 const layer = getLayer(s);
                 const v = layer ? layer.querySelector('video') : null;
                 return v && v.videoWidth > 0;
@@ -9759,6 +9922,7 @@
             // Need at least 1 file loaded
             if (loadedCount >= 1) {
                 viewActivating = true; // prevent re-entry from subsequent img.load events
+                _layoutReady = false;  // will be set true by positionLabelsToMedia after first clean run
                 
                 // Hide quick start or changelog popup if showing
                 document.getElementById('quickStartPopup').classList.remove('show');
@@ -9884,8 +10048,17 @@
                     // Eagerly decode audio for all slots so scrub snippet audio works
                     // without requiring the user to open the waveform panel first.
                     _ensureAudioVizDecoded();
-                    // Double-rAF ensures opacity:0 is painted before adding the transition.
-                    requestAnimationFrame(() => requestAnimationFrame(() => {
+                    // Wait for positionLabelsToMedia to commit wrapper dimensions before
+                    // revealing layers. Without this guard a race between startFadeIn's
+                    // rAF chain and the layout rAF chain can make layers briefly visible
+                    // while wrappers are still at their CSS-default full-cell size
+                    // (causing the asset to look oversized before settling).
+                    // Deadline: if _layoutReady is still false after 800 ms (e.g. because
+                    // a single-threaded wasm transcode blocked all rAFs during that window),
+                    // proceed with the fade-in anyway rather than staying hidden indefinitely.
+                    const _fadeInDeadline = Date.now() + 800;
+                    function doFadeIn() {
+                        if (!_layoutReady && Date.now() < _fadeInDeadline) { requestAnimationFrame(doFadeIn); return; }
                         loadedLayers.forEach(layer => {
                             layer.style.transition = 'opacity 0.2s ease';
                         });
@@ -9902,22 +10075,38 @@
                             });
                             _forceVideoRepaint();
                         }, loadedLayers.length * 60 + 250);
-                    }));
+                    }
+                    // Double-rAF ensures opacity:0 is painted before adding the transition,
+                    // then doFadeIn waits until _layoutReady if positionLabelsToMedia
+                    // hasn't finished yet.
+                    requestAnimationFrame(() => requestAnimationFrame(doFadeIn));
                 }
 
                 if (videoEls.length === 0) {
                     startFadeIn();
                 } else {
                     let remaining = videoEls.length;
+                    function _onVideoFrameReady() {
+                        if (--remaining === 0) startFadeIn();
+                    }
                     videoEls.forEach(v => {
-                        // Seek to 0 to force a frame render on a paused video
                         v.currentTime = 0;
-                        v.requestVideoFrameCallback(() => {
-                            if (--remaining === 0) startFadeIn();
-                        });
+                        // Use readyState check first (frame already decoded), then
+                        // loadeddata as the async path. loadeddata fires as soon as the
+                        // first frame is decoded and available — well before any ffmpeg
+                        // wasm transcode can block the main thread. The previous
+                        // requestVideoFrameCallback approach required a compositing pass,
+                        // which never fires while the main thread is blocked by wasm.
+                        if (v.readyState >= 2) {
+                            _onVideoFrameReady();
+                        } else {
+                            v.addEventListener('loadeddata', _onVideoFrameReady, { once: true });
+                        }
                     });
-                    // Safety timeout — don't wait forever
-                    setTimeout(() => { if (remaining > 0) { remaining = 0; startFadeIn(); } }, 2000);
+                    // Safety timeout — fires well before ffmpeg wasm blocks the main thread.
+                    // Guard with viewActivating so a stale timeout from a previous load
+                    // batch doesn't call startFadeIn() after the user has already reloaded.
+                    setTimeout(() => { if (remaining > 0 && viewActivating) { remaining = 0; startFadeIn(); } }, 500);
                 }
 
                 // Show video controls if any videos or audio
@@ -10709,6 +10898,12 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.9</h3>
+            <ul>
+                <li><strong>Timecode</strong> — click the timecode display or press <kbd>⇧C</kbd> to choose a format (SMPTE, frames, seconds, F+N), <kbd>C</kbd> to copy.</li>
+                <li><strong>Asset metadata redesign</strong> — Simplified naming. Ref/A/B slots now feature colored badges (green / amber / magenta) for faster recognition.</li>
+                <li><strong>Bug fixes</strong> — layout, magnifier, and transcoding audio.</li>
+            </ul>
             <h3>v3.8.6</h3>
             <ul>
                 <li><strong>Automatic audio transcoding</strong> — files with unsupported audio codecs (EAC-3, AC-3, etc.) are automatically transcoded to AAC in-browser using ffmpeg.wasm. A progress toast shows each phase: downloading, transcoding, and computing the waveform.</li>
