@@ -10014,8 +10014,15 @@
                     document.querySelector('#layerEditA .asset-name').textContent = slotLabel('editA');
                     document.querySelector('#layerEditB .asset-name').textContent = slotLabel('editB');
 
-                    // Pick layout that gives largest images for the current viewport
+                    // Pick layout that gives largest images for the current viewport.
+                    // container.offsetWidth may be 0 on this tick (comparisonView.active was
+                    // just added synchronously and the browser hasn't reflowed yet), so
+                    // re-evaluate in rAF once layout dimensions are correct.
                     setViewMode(pickBestGridLayout(2));
+                    requestAnimationFrame(() => {
+                        const best = pickBestGridLayout(2);
+                        if (best !== layoutMode) setViewMode(best);
+                    });
                 } else if (loadedCount === 3) {
                     document.querySelector('#layerOriginal .asset-name').textContent = slotLabel('original');
                     document.querySelector('#layerEditA .asset-name').textContent = slotLabel('editA');
@@ -10028,6 +10035,13 @@
                     }
                     // else: gridInlineMode already holds the restored preference from startup
                     setViewMode('offset');
+                } else if (loadedCount === 2) {
+                    // Ref+A or Ref+B: pick layout by aspect ratio, same as A+B case
+                    setViewMode(pickBestGridLayout(2));
+                    requestAnimationFrame(() => {
+                        const best = pickBestGridLayout(2);
+                        if (best !== layoutMode) setViewMode(best);
+                    });
                 } else {
                     setViewMode('horizontal');
                 }
@@ -10652,6 +10666,8 @@
             get panOffsetY() { return panOffsetY; },
             get splitZoomLevel() { return splitZoomLevel; },
             get splitStepZoom() { return splitStepZoom; },
+            get magnifierLinked() { return magnifierLinked; },
+            get videoScopesVisible() { return videoScopesVisible; },
         };
 
     </script>
