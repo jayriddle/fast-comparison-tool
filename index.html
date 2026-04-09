@@ -8641,8 +8641,10 @@
         // n = number of assets (2 or 3). Returns 'horizontal' or 'vertical'.
         function pickBestGridLayout(n) {
             const container = document.querySelector('.asset-container');
-            const W = container ? container.offsetWidth : window.innerWidth;
-            const H = container ? container.offsetHeight : window.innerHeight;
+            // Fall back to window dimensions if the container hasn't been laid out yet
+            // (offsetWidth/offsetHeight return 0 when the parent was recently display:none).
+            const W = (container && container.offsetWidth) || window.innerWidth;
+            const H = (container && container.offsetHeight) || window.innerHeight;
             if (!W || !H) return 'horizontal';
 
             const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
