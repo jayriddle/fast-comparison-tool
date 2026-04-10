@@ -39,3 +39,7 @@ A/B comparison tool for images, video, and audio. Hosted on GitHub Pages.
 - Use `_prefixed` names for module-level private state (e.g., `_frameStepping`, `_audioSlotVizData`)
 - Debounced layout functions use the pattern `functionNameDebounced` wrapping `functionName`
 - `APP_VERSION` in `index.html` and `CACHE_NAME` in `sw.js` must be kept in sync on version bumps
+
+## Additional Resources
+- See `memory.md` for detailed memory management patterns, buffer caching strategies, audio downsampling, typed array usage, and GC avoidance techniques (critical for scopes, audio viz, and large media handling).
+- `FEATURES.md`, `MANUAL.md`, and `README.md` provide user-facing documentation.

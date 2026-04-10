@@ -8439,6 +8439,12 @@
             document.body.classList.remove('magnifier-active');
             const specPanel = document.getElementById('spectrogramPanel');
             if (specPanel) { specPanel.classList.remove('active'); specPanel.classList.remove('expanded'); }
+            // Reset W-panel playhead cursors to position 0 so they don't show a stale
+            // position from the previous task when the panel auto-reopens on the next load.
+            ['spectrogramCursor', 'waveformCursor'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.left = '0';
+            });
             // videoScopesVisible persists across loads (saved in localStorage)
             const scaleBtn = document.getElementById('spectrogramScaleToggle');
             if (scaleBtn) scaleBtn.textContent = 'LIN';
@@ -10159,6 +10165,13 @@
                             const wb = document.getElementById('waveformToggleBtn');
                             if (wb) wb.classList.add('active');
                             _ensureAudioVizDecoded();
+                            // Reposition playhead cursors at t=0 for the fresh load.
+                            // currentTime is already 0 (set in startFadeIn); calling
+                            // updateSpectrogramCursor here snapshots that correctly.
+                            const _avSlot = currentAudioSource || assetOrder[currentAssetIndex];
+                            const _avLayer = getLayer(_avSlot);
+                            const _avPrimary = _avLayer ? _avLayer.querySelector('video') : null;
+                            if (_avPrimary) requestAnimationFrame(() => updateSpectrogramCursor(_avPrimary));
                             needsRelayout = true;
                             // Re-evaluate grid axis after the panel finishes expanding
                             setTimeout(_reevalGridAxis, 320);
@@ -10667,12 +10680,20 @@
             get fitZoom() { return fitZoom; },
             get currentAssetIndex() { return currentAssetIndex; },
             get isGridMode() { return isGridMode; },
+            get layoutMode() { return layoutMode; },
             get panOffsetX() { return panOffsetX; },
             get panOffsetY() { return panOffsetY; },
             get splitZoomLevel() { return splitZoomLevel; },
             get splitStepZoom() { return splitStepZoom; },
             get magnifierLinked() { return magnifierLinked; },
             get videoScopesVisible() { return videoScopesVisible; },
+            get diffMode() { return _diffMode; },
+            get audioVizVisible() { return audioVizVisible; },
+            get hasVideos() { return hasVideos; },
+            get hasAudios() { return hasAudios; },
+            get hasImages() { return hasImages; },
+            get gridInlineMode() { return gridInlineMode; },
+            get viewActivating() { return viewActivating; },
         };
 
     </script>
