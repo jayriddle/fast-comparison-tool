@@ -139,9 +139,20 @@ async function loadImages(page: Page, fileNames: string[]) {
 async function loadAndEnterStack(page: Page, fileNames: string[]) {
   await loadImages(page, fileNames);
   await page.keyboard.press('s');
+  // Wait for:
+  //   1. Stack mode active (!isGridMode)
+  //   2. zoomLevel and fitZoom to be numbers
+  //   3. zoomLevel === fitZoom — ensures the double-rAF resetFitZoom() fired by
+  //      setViewMode('overlay') has completed and zoom is stable before any test
+  //      reads initialZoom (avoids flaky +/- zoom tests).
   await page.waitForFunction(() => {
     const api = (window as any).__testAPI;
-    return typeof api?.zoomLevel === 'number' && typeof api?.fitZoom === 'number';
+    return (
+      !api?.isGridMode &&
+      typeof api?.zoomLevel === 'number' &&
+      typeof api?.fitZoom === 'number' &&
+      Math.abs(api.zoomLevel - api.fitZoom) < 0.001
+    );
   }, {}, { timeout: 5000 });
 }
 

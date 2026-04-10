@@ -9588,8 +9588,10 @@
 
                 // Grid cell sizes only stabilise after a layout pass, so run applyLayout
                 // in rAF N and positionLabelsToMedia in rAF N+1 for all grid modes.
+                // Guard: bail out if the user switched to Stack before this rAF fires.
                 if (targetMode === 'offset') {
                     requestAnimationFrame(() => {
+                        if (!isGridMode) return;
                         applyLayout();
                         requestAnimationFrame(() => {
                                     positionLabelsToMedia(10);
@@ -9597,6 +9599,7 @@
                     });
                 } else {
                     requestAnimationFrame(() => {
+                        if (!isGridMode) return;
                         applyLayout();
                         requestAnimationFrame(() => positionLabelsToMedia());
                     });
@@ -10031,7 +10034,9 @@
                     setViewMode(pickBestGridLayout(2));
                     requestAnimationFrame(() => {
                         const best = pickBestGridLayout(2);
-                        if (best !== layoutMode) setViewMode(best);
+                        // Guard: only re-evaluate if still in Grid mode. If the user switched
+                        // to Stack between checkAllLoaded() and this rAF, don't override them.
+                        if (isGridMode && best !== layoutMode) setViewMode(best);
                     });
                 } else if (loadedCount === 3) {
                     document.querySelector('#layerOriginal .asset-name').textContent = slotLabel('original');
@@ -10050,7 +10055,9 @@
                     setViewMode(pickBestGridLayout(2));
                     requestAnimationFrame(() => {
                         const best = pickBestGridLayout(2);
-                        if (best !== layoutMode) setViewMode(best);
+                        // Guard: only re-evaluate if still in Grid mode. If the user switched
+                        // to Stack between checkAllLoaded() and this rAF, don't override them.
+                        if (isGridMode && best !== layoutMode) setViewMode(best);
                     });
                 } else {
                     setViewMode('horizontal');
