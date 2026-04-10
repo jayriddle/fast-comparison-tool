@@ -210,10 +210,8 @@ test.describe('File Loading & Slot Assignment', () => {
     await expect(page.locator('#layerOriginal .asset-name')).toContainText(/GT|Ref|SOURCE/i);
   });
 
-  test('shows warning toast for timestamp collision', async ({ page }) => {
-    // Test would require fixtures with near-identical timestamps
-    // (omitted for now — can be added with custom fixtures)
-    test.skip(true, 'Requires custom fixtures with identical timestamps');
+  test('shows warning toast for timestamp collision', async () => {
+    test.skip(true, 'Needs fixtures with near-identical lastModified timestamps');
   });
 
   test('rejects 4+ files with warning toast', async ({ page }) => {
@@ -231,9 +229,8 @@ test.describe('File Loading & Slot Assignment', () => {
     await expect(toast).toHaveClass(/warning/);
   });
 
-  test('rejects mixed media types with warning toast', async ({ page }) => {
-    // Audio + image should be rejected per current code
-    test.skip(true, 'Requires audio fixture — add later');
+  test('rejects mixed media types with warning toast', async () => {
+    test.skip(true, 'Needs a synthetic audio fixture (WAV/MP3)');
   });
 });
 
@@ -285,12 +282,15 @@ test.describe('Audio Visualization', () => {
   test('Shift+W toggles linear/log frequency scale', async ({ page }) => {
     await page.goto('/');
     await loadImages(page, ['red.png', 'green.png']);
-    await page.keyboard.press('w'); // Enable audio viz first
-    await page.keyboard.press('Shift+w');
-    // Verify scale change (indirect via API or visual change — extend __testAPI if needed)
-    const api = await page.evaluate(() => (window as any).__testAPI);
-    // Test would verify spectrogram scale state if exposed
-    test.skip(true, 'Requires __testAPI exposure for spectrogramLogScale');
+    // Shift+W calls toggleSpectrogramScale() — guarded by (hasVideos && audioVizVisible) || hasAudios.
+    // Invoke directly to bypass the guard (same pattern as palette cycling test).
+    const before = await getVar(page, 'spectrogramLogScale');
+    await page.evaluate(() => (window as any).toggleSpectrogramScale?.());
+    const after = await getVar(page, 'spectrogramLogScale');
+    expect(after).toBe(!before);
+    // Toggle back
+    await page.evaluate(() => (window as any).toggleSpectrogramScale?.());
+    expect(await getVar(page, 'spectrogramLogScale')).toBe(before);
   });
 
   test('palette cycling changes spectrogram color scheme', async ({ page }) => {
@@ -604,23 +604,15 @@ test.describe('Timecode Format', () => {
   test('T key cycles timecode display format', async ({ page }) => {
     await page.goto('/');
     await loadImages(page, ['red.png', 'green.png']);
-    // Timecode display exists (bottom bar)
-    const tc = page.locator('#videoTimecode');
-    await expect(tc).toBeAttached();
-    // T key cycles formats — pressing T twice should produce a different label
-    // (first press changes format, may or may not change the displayed text for t=0)
-    // The timecopyFmt label in the TC chooser button is a more reliable proxy
-    const fmtBtn = page.locator('#timecopyFmt');
-    if (await fmtBtn.isVisible()) {
-      const before = await fmtBtn.textContent();
-      await page.keyboard.press('t');
-      const after = await fmtBtn.textContent();
-      expect(after).not.toBe(before);
-    } else {
-      // If button not exposed, just verify T key doesn't throw
-      await page.keyboard.press('t');
-      expect(await getVar(page, 'isGridMode')).toBeDefined(); // page still functional
-    }
+    // timecopyFmt is persisted in localStorage via _prefs — __testAPI exposes it directly.
+    // T cycles through ['hms','hmsf','s','sf','f']; default is 'hms' on fresh page.
+    const before = await getVar(page, 'timecopyFmt');
+    await page.keyboard.press('t');
+    const after = await getVar(page, 'timecopyFmt');
+    expect(after).not.toBe(before);
+    // Cycle through all 5 formats and land back on the start
+    for (let i = 0; i < 4; i++) await page.keyboard.press('t');
+    expect(await getVar(page, 'timecopyFmt')).toBe(before);
   });
 });
 
