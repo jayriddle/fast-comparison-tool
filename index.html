@@ -8901,11 +8901,13 @@
                 if (controls) controls.style.bottom = '';
             }
 
-            // Clear any inline width overrides from a previous optimal 2-asset horizontal split
-            // so they don't persist into vertical-stack or other layout modes.
-            if (!document.body.classList.contains('side-by-side')) {
-                slots.forEach(slot => { const l = getLayer(slot); if (l) l.style.width = ''; });
-            }
+            // Always clear stale inline width/height overrides before measuring.
+            // A previous tripartite layout (inline-cols/rows/offset) may have set explicit
+            // px values that corrupt cw/ch when switching to a 2-asset layout.
+            slots.forEach(slot => {
+                const l = getLayer(slot);
+                if (l) { l.style.width = ''; l.style.height = ''; l.style.marginTop = ''; }
+            });
 
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
             // center the group. Clear those overrides first so offsetHeight reads CSS values.
