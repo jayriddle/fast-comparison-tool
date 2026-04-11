@@ -2631,7 +2631,7 @@
 
             document.body.classList.remove(...splitModeClasses);
             document.body.classList.add('grid-mode');
-            if (container) container.style.gridTemplateColumns = '';
+            if (container) container.style.gridTemplateColumns = ''; container.style.gridTemplateRows = '';
 
             if (nowVisible.length >= 3) {
                 const best = pickBestGridLayout(3);
@@ -8908,6 +8908,14 @@
                 const l = getLayer(slot);
                 if (l) { l.style.width = ''; l.style.height = ''; l.style.marginTop = ''; }
             });
+            // Always clear gridTemplateRows before measuring so cells revert to CSS-driven
+            // dimensions (1fr 1fr for offset, etc.). In offset mode it will be re-set after
+            // computing content heights. Without this, stale px values from a previous
+            // positionLabelsToMedia call corrupt the ch measurements and cause drift/overlap.
+            {
+                const _ac = document.querySelector('.asset-container');
+                if (_ac) _ac.style.gridTemplateRows = '';
+            }
 
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
             // center the group. Clear those overrides first so offsetHeight reads CSS values.
@@ -9041,55 +9049,139 @@
                     _gridZoomWasCapped = false;
                 }
 
-                // Apply shared dimension: same width (portrait) or same height (landscape).
-                // Then apply the effective zoom so +/- and 1 keys scale all three assets together.
-                // useEqualAreaCols and useBalanceRows both compute rw/rh in their own passes below.
+                // Apply rendered dimensions per slot.
+                // useEqualAreaCols and useBalanceRows (inline modes) compute rw/rh in passes below.
+                // L-shaped offset uses equal-area so each asset gets the same rendered area
+                // regardless of orientation — no shared-width/height constraint.
                 slots.forEach(slot => {
                     const d = gridLayout[slot];
                     if (!d) return;
-                    if (useEqualAreaCols || useBalanceRows) {
-                        // Placeholder — overridden in equal-area / balance pass below
-                        d.rw = d.fitW;
-                        d.rh = d.fitH;
-                        d.sharedZoom = d.rw / d.nw;
-                    } else if (widthConstrained) {
-                        // Portrait: share width, height follows aspect ratio
-                        d.rw = Math.round(minW * offsetEffectiveZoom);
-                        d.rh = Math.round(minW * offsetEffectiveZoom * d.nh / d.nw);
-                        d.sharedZoom = d.rw / d.nw;
-                    } else {
-                        // Landscape: share height, width follows aspect ratio
-                        d.rh = Math.round(minH * offsetEffectiveZoom);
-                        d.rw = Math.round(minH * offsetEffectiveZoom * d.nw / d.nh);
-                        d.sharedZoom = d.rh / d.nh;
-                    }
+                    // Placeholder — overridden by equal-area passes below
+                    d.rw = d.fitW;
+                    d.rh = d.fitH;
+                    d.sharedZoom = d.rw / d.nw;
                 });
 
-                // In L-shaped mode, ensure Edit A and Edit B have identical rendered
-                // width so they align visually. Different native aspect ratios or
-                // rounding can cause slight differences — use the minimum of the two.
-                if (!isEqualLayout && gridLayout['editA'] && gridLayout['editB']) {
-                    const a = gridLayout['editA'];
-                    const b = gridLayout['editB'];
-                    const sharedW = Math.min(a.rw, b.rw);
-                    a.rw = sharedW;
-                    b.rw = sharedW;
+                // L-shaped offset equal-area pass.
+                // A and B share the right column, so their height constraint is a GROUP:
+                //   rh_a + rh_b ≤ total right column height (not per-cell 50% each).
+                // After computing sizes, grid-template-rows is updated to match content heights
+                // so the CSS grid cells reflect actual rendered sizes rather than 50/50.
+                if (!isEqualLayout) {
+                    const loadedSlots = slots.filter(s => gridLayout[s]);
+                    if (loadedSlots.length > 0) {
+                        const ratios = {};
+                        loadedSlots.forEach(s => { const d = gridLayout[s]; ratios[s] = d.nw / d.nh; });
+
+                        const dRef = gridLayout['original'];
+                        const dA   = gridLayout['editA'];
+                        const dB   = gridLayout['editB'];
+
+                        // --- Compute fitArea using group constraint for A+B ---
+                        let fitArea = Infinity;
+
+                        // Ref: constrained by its full-height column
+                        if (dRef) fitArea = Math.min(fitArea, dRef.fitW * dRef.fitH);
+
+                        // A+B group: constrained by right column width and COMBINED height
+                        if (dA && dB) {
+                            const rightW  = dA.cw;
+                            // Total available height for both images stacked (subtract both info bars + 1px gap)
+                            const rightH  = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 1;
+                            const rA = ratios['editA'], rB = ratios['editB'];
+                            // Width constraint: each rw ≤ rightW → A ≤ rightW²/r for each
+                            const aFromW  = Math.min(rightW * rightW / rA, rightW * rightW / rB);
+                            // Height group constraint: rh_a + rh_b ≤ rightH
+                            //   √A·(1/√rA + 1/√rB) ≤ rightH  →  A ≤ (rightH / (1/√rA + 1/√rB))²
+                            const sumInvSqrtR = 1 / Math.sqrt(rA) + 1 / Math.sqrt(rB);
+                            const aFromH  = Math.pow(rightH / sumInvSqrtR, 2);
+                            fitArea = Math.min(fitArea, Math.min(aFromW, aFromH));
+                        } else {
+                            // Only one of A/B present — fall back to per-cell max area
+                            ['editA', 'editB'].forEach(s => {
+                                if (gridLayout[s]) fitArea = Math.min(fitArea, gridLayout[s].fitW * gridLayout[s].fitH);
+                            });
+                        }
+                        if (!isFinite(fitArea) || fitArea <= 0) fitArea = 1;
+
+                        let linearZoom = splitStepZoom;
+                        if (splitZoomLevel === 1) {
+                            const minNative = loadedSlots.reduce((mn, s) => {
+                                const d = gridLayout[s];
+                                const baseW = Math.sqrt(fitArea * ratios[s]);
+                                return baseW > 0 ? Math.min(mn, d.nw / baseW) : mn;
+                            }, Infinity);
+                            if (isFinite(minNative)) linearZoom = minNative * splitStepZoom;
+                        }
+                        let targetArea = fitArea * linearZoom * linearZoom;
+
+                        // Clamp: Ref must fit in its cell; A+B must fit as a group
+                        let clamped = false;
+                        if (splitZoomLevel !== 1) {
+                            if (dRef) {
+                                if (Math.sqrt(targetArea * ratios['original']) > dRef.cw ||
+                                    Math.sqrt(targetArea / ratios['original']) > dRef.ch - dRef.ibH) clamped = true;
+                            }
+                            if (dA && dB) {
+                                const sumRh = Math.sqrt(targetArea / ratios['editA']) + Math.sqrt(targetArea / ratios['editB']);
+                                const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 1;
+                                if (Math.sqrt(targetArea * ratios['editA']) > dA.cw ||
+                                    Math.sqrt(targetArea * ratios['editB']) > dB.cw ||
+                                    sumRh > rightH) clamped = true;
+                            }
+                            if (clamped) { targetArea = fitArea; if (splitStepZoom > 1) splitStepZoom = 1; }
+                        }
+                        _gridZoomWasCapped = clamped;
+
+                        loadedSlots.forEach(s => {
+                            const d = gridLayout[s];
+                            d.rw = Math.round(Math.sqrt(targetArea * ratios[s]));
+                            d.rh = Math.round(Math.sqrt(targetArea / ratios[s]));
+                            d.sharedZoom = d.rw / d.nw;
+                        });
+
+                        // Update grid-template-rows so each cell is sized to its content.
+                        // This breaks the 50/50 constraint and lets A+B use the full column height.
+                        // Ref spans both rows so its cell height = rowA + rowB + 1px gap.
+                        // Also update dA.ch / dB.ch so the positioning pass below uses the
+                        // correct cell heights — otherwise centering is computed against the
+                        // stale ch (viewport/2) and the wrapper overflows into the adjacent cell.
+                        if (dA && dB) {
+                            const offsetContainer = document.querySelector('.asset-container');
+                            const rowA = dA.ibH + dA.rh;
+                            const rowB = dB.ibH + dB.rh;
+                            if (offsetContainer) offsetContainer.style.gridTemplateRows = `${rowA}px ${rowB}px`;
+                            dA.ch = rowA;
+                            dB.ch = rowB;
+                            if (dRef) dRef.ch = rowA + rowB + 1;
+                        }
+                    }
                 }
 
                 // L-shaped offset: compute per-slot positions using the shared-dimension
                 // rw/rh already computed above. All assets share the same rendered width
                 // (portrait) or height (landscape), so they appear the same visual size.
                 if (!isEqualLayout) {
+                    // When A and B have different orientations their heights diverge at the
+                    // shared render width, so flush-bottom/flush-top leaves a gap between them.
+                    // Fall back to per-cell centering for both in that case.
+                    const dA = gridLayout['editA'], dB = gridLayout['editB'];
+                    const abMixedOrient = dA && dB &&
+                        (dA.nw < dA.nh) !== (dB.nw < dB.nh);
+
                     slots.forEach(s => {
                         const d = gridLayout[s];
                         if (!d) return;
-                        // Vertical positioning: Original centered, EditA flush bottom, EditB flush top
+                        // Vertical positioning
                         if (s === 'original') {
                             d._ty = Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2));
+                        } else if (abMixedOrient) {
+                            // Mixed A/B orientation: center each in its own cell
+                            d._ty = Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2));
                         } else if (s === 'editA') {
-                            d._ty = Math.max(d.ibH || 0, Math.round(d.ch - d.rh));
+                            d._ty = Math.max(d.ibH || 0, Math.round(d.ch - d.rh)); // flush bottom
                         } else {
-                            d._ty = d.ibH || 0;
+                            d._ty = d.ibH || 0; // flush top
                         }
                         // Horizontal: Original flush right, A/B flush left. 4px gap from cell edge.
                         if (s === 'original') {
@@ -9676,7 +9768,7 @@
 
                     // Clear any inline grid-template-columns override from mixed orientations
                     const container = document.querySelector('.asset-container');
-                    if (container) container.style.gridTemplateColumns = '';
+                    if (container) container.style.gridTemplateColumns = ''; container.style.gridTemplateRows = '';
 
                     document.querySelectorAll('.asset-layer').forEach(layer => {
                         const hasMedia = layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
@@ -9767,7 +9859,7 @@
             // Swap body classes
             document.body.classList.remove('offset', 'inline-cols', 'inline-rows');
             const container = document.querySelector('.asset-container');
-            if (container) container.style.gridTemplateColumns = '';
+            if (container) container.style.gridTemplateColumns = ''; container.style.gridTemplateRows = '';
             if (gridInlineMode) {
                 const best = pickBestGridLayout(3);
                 document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
@@ -9871,12 +9963,6 @@
                     btn.onclick = () => {
                         if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
                         if (gridInlineMode === opt.is3Col) return; // already active
-                        const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
-                        const land3 = dims3.filter(m => m.w >= m.h).length;
-                        if (!opt.is3Col && land3 > 0 && land3 < dims3.length) {
-                            showToast('Offset layout unavailable for mixed orientations');
-                            return;
-                        }
                         gridInlineMode = opt.is3Col;
                         localStorage.setItem('gridInlineMode', gridInlineMode);
                         splitStepZoom = 1.0;
@@ -10410,9 +10496,6 @@
                   if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
                   const isAnyTripartiteNow = isTripartiteMode();
                   if (isGridMode && isAnyTripartiteNow) {
-                      const dims3 = Object.values(mediaData).filter(m => m && m.w && m.h);
-                      const land3 = dims3.filter(m => m.w >= m.h).length;
-                      if (land3 > 0 && land3 < dims3.length) { showToast('Offset layout unavailable for mixed orientations'); return; }
                       gridInlineMode = !gridInlineMode;
                       localStorage.setItem('gridInlineMode', gridInlineMode);
                       splitStepZoom = 1.0;
