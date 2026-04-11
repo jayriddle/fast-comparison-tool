@@ -901,10 +901,10 @@
             align-items: center;
             gap: 10px;
             padding: 4px 12px;
-            background: rgba(0, 0, 0, 0.9);
+            background: #2a2a2a;
             z-index: 10;
             font-size: 12px;
-            color: #777;
+            color: #bbb;
             border-radius: 3px 3px 0 0;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 1px 0 0 rgba(255, 255, 255, 0.12), inset -1px 0 0 rgba(255, 255, 255, 0.12);
             pointer-events: none;
@@ -923,17 +923,21 @@
             letter-spacing: 0.03em;
         }
         /* Slot label: deep saturated fill, dark text — same in all states */
-        #layerOriginal .asset-info-bar .asset-name { background: #1a8844; color: #061610; }
-        #layerEditA    .asset-info-bar .asset-name { background: #be7210; color: #1c0e00; }
-        #layerEditB    .asset-info-bar .asset-name { background: #b0308a; color: #220018; }
+        #layerOriginal .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: #22c060; }
+        #layerEditA    .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: #e08810; }
+        #layerEditB    .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: #d035a8; }
+
+        #layerOriginal.active-audio .asset-info-bar .asset-name { background: #22c060; color: #061610; }
+        #layerEditA.active-audio    .asset-info-bar .asset-name { background: #e08810; color: #1c0e00; }
+        #layerEditB.active-audio    .asset-info-bar .asset-name { background: #d035a8; color: #220018; }
 
         .asset-info-bar .asset-zoom {
-            background: rgba(255, 255, 255, 0.22);
+            background: rgba(0, 0, 0, 0.5);
             padding: 1px 6px;
             border-radius: 8px;
             font-size: 11px;
             font-weight: 600;
-            color: #fff;
+            color: #aaa;
         }
         .asset-info-bar .asset-zoom:empty { display: none; }
 
@@ -995,9 +999,9 @@
             letter-spacing: 0.03em;
         }
         /* Same deep fills as Grid info bar — identical in all states */
-        #stackInfoStrip.sih-slot-original .sih-name { background: #1a8844; color: #061610; }
-        #stackInfoStrip.sih-slot-editA    .sih-name { background: #be7210; color: #1c0e00; }
-        #stackInfoStrip.sih-slot-editB    .sih-name { background: #b0308a; color: #220018; }
+        #stackInfoStrip.sih-slot-original .sih-name { background: #22c060; color: #061610; }
+        #stackInfoStrip.sih-slot-editA    .sih-name { background: #e08810; color: #1c0e00; }
+        #stackInfoStrip.sih-slot-editB    .sih-name { background: #d035a8; color: #220018; }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
             flex: 0 0 auto;
@@ -1084,9 +1088,16 @@
 
 
         /* Active asset indicator - brighter info bar in overlay mode */
+        #layerOriginal .asset-info-bar { background: #1a3224; }
+        #layerEditA    .asset-info-bar { background: #392c1a; }
+        #layerEditB    .asset-info-bar { background: #392234; }
+
+        #layerOriginal.active-audio .asset-info-bar { background: #1e7e44; }
+        #layerEditA.active-audio    .asset-info-bar { background: #915c14; }
+        #layerEditB.active-audio    .asset-info-bar { background: #872a6f; }
+
         body:not(.grid-mode) .asset-layer.active .asset-info-bar {
             display: flex;
-            background: rgba(60, 60, 60, 0.95);
             color: #e0e0e0;
         }
 
