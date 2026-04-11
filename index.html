@@ -933,9 +933,9 @@
         .hidden-slot-pill {
             display: inline-flex; align-items: center;
             padding: 1px 8px; border-radius: 5px;
-            font-size: 11px; font-weight: 700;
+            font-size: 13px; font-weight: 700;
             cursor: pointer; opacity: 0.45;
-            letter-spacing: 0.04em; user-select: none;
+            letter-spacing: 0.05em; user-select: none;
             transition: opacity 0.15s;
         }
         .hidden-slot-pill:hover { opacity: 0.8; }
@@ -963,7 +963,7 @@
 
         #stackZoomPill {
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             color: #ccc;
             background: rgba(255,255,255,0.08);
             border: 1px solid rgba(255,255,255,0.14);
@@ -2637,10 +2637,14 @@
                 const best = pickBestGridLayout(3);
                 document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
                 layoutMode = best === 'vertical' ? 'inline-rows' : 'inline-cols';
-            } else {
+            } else if (nowVisible.length === 2) {
                 const best = pickBestGridLayout(2);
                 document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                document.body.classList.add('two-asset');
                 layoutMode = best === 'vertical' ? 'vertical' : 'horizontal';
+            } else if (nowVisible.length === 1) {
+                document.body.classList.add('side-by-side', 'single-asset');
+                layoutMode = 'horizontal';
             }
 
             // Re-hide hidden slots (body class changes may have been undone)
@@ -9722,8 +9726,8 @@
                     }
                     // Re-hide any slots the user has toggled off
                     _hiddenSlots.forEach(s => { const l = getLayer(s); if (l) l.style.display = 'none'; });
-                    document.body.classList.toggle('two-asset', loadedSlotCount === 2);
-                    document.body.classList.toggle('single-asset', loadedSlotCount === 1);
+                    document.body.classList.toggle('two-asset', visibleSlotCount === 2);
+                    document.body.classList.toggle('single-asset', visibleSlotCount === 1);
 
 
                 };
