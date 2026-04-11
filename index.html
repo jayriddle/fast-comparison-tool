@@ -570,8 +570,8 @@
             animation: logo-pulse 3s ease-in-out infinite;
         }
         @keyframes logo-pulse {
-            0%, 100% { filter: brightness(0.35); transform: scale(1); }
-            50% { filter: brightness(1); transform: scale(1.05); }
+            0%, 100% { filter: brightness(0.2) sepia(1) hue-rotate(185deg) saturate(8); transform: scale(1); }
+            50% { filter: brightness(1) sepia(0) hue-rotate(0deg) saturate(1); transform: scale(1.05); }
         }
         /* Loading state: bigger logo, hide drop text, show status */
         .landing-cta.loading .landing-logo {
