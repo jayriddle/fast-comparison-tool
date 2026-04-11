@@ -921,7 +921,27 @@
             font-size: 12px;
             flex-shrink: 0;
             letter-spacing: 0.03em;
+            cursor: pointer;
+            pointer-events: auto;
+            user-select: none;
         }
+        .asset-info-bar .asset-name:hover { opacity: 0.75; }
+
+        /* Ghost pills shown in header when a slot is hidden */
+        #hiddenSlotPills { display: none; align-items: center; gap: 4px; }
+        #hiddenSlotPills.has-hidden { display: flex; }
+        .hidden-slot-pill {
+            display: inline-flex; align-items: center;
+            padding: 1px 8px; border-radius: 5px;
+            font-size: 11px; font-weight: 700;
+            cursor: pointer; opacity: 0.45;
+            letter-spacing: 0.04em; user-select: none;
+            transition: opacity 0.15s;
+        }
+        .hidden-slot-pill:hover { opacity: 0.8; }
+        .hidden-slot-pill.slot-original { background: #22c060; color: #061610; }
+        .hidden-slot-pill.slot-editA    { background: #e08810; color: #1c0e00; }
+        .hidden-slot-pill.slot-editB    { background: #d035a8; color: #220018; }
         /* Slot label: deep saturated fill, dark text — same in all states */
         #layerOriginal .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: #22c060; }
         #layerEditA    .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: #e08810; }
@@ -2240,6 +2260,7 @@
                 <button class="analysis-btn" onclick="resetAll()" style="display: none;" id="resetBtn" title="Reset"></button>
                 <button class="analysis-btn" onclick="pullFromIHWA(); this.blur();" id="ihwaPullBtn" title="Pull Assets" style="display:none;"></button>
                 <button class="analysis-btn" onclick="toggleQuickStart()" title="Help (?)" id="helpBtn"></button>
+                <div id="hiddenSlotPills"></div>
             </div>
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
             <div id="stackInfoStrip" onmouseenter="_sihTipShow(event)" onmousemove="_sihTipMove(event)" onmouseleave="_sihTipHide()">
@@ -2545,6 +2566,70 @@
 
         function getLoadedSlotCount() {
             return Object.values(mediaData).filter(m => m !== null).length;
+        }
+
+        const _hiddenSlots = new Set();
+
+        function getVisibleSlots() {
+            return assetOrder.filter(s => mediaData[s] && !_hiddenSlots.has(s));
+        }
+
+        function _updateHiddenSlotPills() {
+            const container = document.getElementById('hiddenSlotPills');
+            if (!container) return;
+            container.innerHTML = '';
+            _hiddenSlots.forEach(slot => {
+                const label = slotLabel(slot);
+                const pill = document.createElement('span');
+                pill.className = `hidden-slot-pill slot-${slot}`;
+                pill.textContent = label;
+                pill.title = `Show ${label}`;
+                pill.onclick = () => toggleSlotVisibility(slot);
+                container.appendChild(pill);
+            });
+            container.classList.toggle('has-hidden', _hiddenSlots.size > 0);
+        }
+
+        function toggleSlotVisibility(slot) {
+            if (!mediaData[slot]) return;
+            const visible = getVisibleSlots();
+            if (!_hiddenSlots.has(slot) && visible.length <= 1) return; // can't hide last slot
+
+            if (_hiddenSlots.has(slot)) {
+                _hiddenSlots.delete(slot);
+                const layer = getLayer(slot);
+                if (layer) layer.style.display = '';
+            } else {
+                _hiddenSlots.add(slot);
+                const layer = getLayer(slot);
+                if (layer) layer.style.display = 'none';
+            }
+
+            _updateHiddenSlotPills();
+
+            if (!isGridMode) return;
+
+            const nowVisible = getVisibleSlots();
+            const container = document.querySelector('.asset-container');
+
+            document.body.classList.remove(...splitModeClasses);
+            document.body.classList.add('grid-mode');
+            if (container) container.style.gridTemplateColumns = '';
+
+            if (nowVisible.length >= 3) {
+                const best = pickBestGridLayout(3);
+                document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
+                layoutMode = best === 'vertical' ? 'inline-rows' : 'inline-cols';
+            } else {
+                const best = pickBestGridLayout(2);
+                document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                layoutMode = best === 'vertical' ? 'vertical' : 'horizontal';
+            }
+
+            // Re-hide hidden slots (body class changes may have been undone)
+            _hiddenSlots.forEach(s => { const l = getLayer(s); if (l) l.style.display = 'none'; });
+
+            requestAnimationFrame(() => requestAnimationFrame(() => positionLabelsToMedia(10)));
         }
 
         function clearVideoWrapperStyles(vw) {
@@ -6383,7 +6468,10 @@
                 infoBar.className = 'asset-info-bar';
             }
             infoBar.innerHTML = template;
-            infoBar.querySelector('.asset-name').textContent = slotLabel(slot);
+            const nameEl = infoBar.querySelector('.asset-name');
+            nameEl.textContent = slotLabel(slot);
+            nameEl.dataset.slot = slot;
+            nameEl.onclick = (e) => { e.stopPropagation(); toggleSlotVisibility(slot); };
             if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
             return infoBar;
         }
@@ -8368,6 +8456,9 @@
             mediaData.original = null;
             mediaData.editA = null;
             mediaData.editB = null;
+            _hiddenSlots.clear();
+            assetOrder.forEach(s => { const l = getLayer(s); if (l) l.style.display = ''; });
+            _updateHiddenSlotPills();
             currentAssetIndex = 0;
             expectedFileCount = 0;
             hasVideos = false;
@@ -8664,7 +8755,7 @@
             const H = (container && container.offsetHeight) || window.innerHeight;
             if (!W || !H) return 'horizontal';
 
-            const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
+            const dims = assetOrder.filter(s => mediaData[s] && mediaData[s].w && mediaData[s].h && !_hiddenSlots.has(s)).map(s => mediaData[s]);
             if (dims.length === 0) return 'horizontal';
             if (dims.length < n) return 'horizontal'; // not all assets have reported dimensions yet; defer
 
@@ -8777,7 +8868,7 @@
             // positionLabelsToMedia only handles split modes (side-by-side, vertical-stack, offset).
             if (!isGridMode) return;
 
-            const slots = assetOrder;
+            const slots = getVisibleSlots();
             const isVertical = document.body.classList.contains('vertical-stack');
             const isTripartite = isTripartiteMode();
             const isEqualLayout = document.body.classList.contains('inline-cols') ||
@@ -9560,19 +9651,31 @@
                         layer.style.marginTop = '';
                     });
 
+                    const visibleSlotCount = getVisibleSlots().length;
                     if (targetMode === 'vertical') {
-                        document.body.classList.add('vertical-stack');
+                        document.body.classList.add(visibleSlotCount <= 2 ? 'side-by-side' : 'vertical-stack');
                     } else if (targetMode === 'offset') {
-                        const dims = Object.values(mediaData).filter(m => m && m.w && m.h);
-                        const landscapes = dims.filter(m => m.w >= m.h).length;
-                        const mixedOr = landscapes > 0 && landscapes < dims.length;
-
-                        if (mixedOr || gridInlineMode) {
-                            // Pick rows vs columns based on which gives larger images
+                        if (visibleSlotCount <= 2) {
+                            const best = pickBestGridLayout(2);
+                            document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                        } else {
+                            const dims = Object.values(mediaData).filter(m => m && m.w && m.h && !_hiddenSlots.has(Object.keys(mediaData).find(k => mediaData[k] === m)));
+                            const landscapes = dims.filter(m => m.w >= m.h).length;
+                            const mixedOr = landscapes > 0 && landscapes < dims.length;
+                            if (mixedOr || gridInlineMode) {
+                                const best = pickBestGridLayout(3);
+                                document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
+                            } else {
+                                document.body.classList.add('offset');
+                            }
+                        }
+                    } else if (targetMode === 'horizontal' || targetMode === 'inline-cols' || targetMode === 'inline-rows') {
+                        if (visibleSlotCount <= 2) {
+                            const best = pickBestGridLayout(2);
+                            document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                        } else {
                             const best = pickBestGridLayout(3);
                             document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
-                        } else {
-                            document.body.classList.add('offset');
                         }
                     } else {
                         document.body.classList.add('side-by-side');
@@ -9589,6 +9692,8 @@
                             layer.style.display = '';
                         });
                     }
+                    // Re-hide any slots the user has toggled off
+                    _hiddenSlots.forEach(s => { const l = getLayer(s); if (l) l.style.display = 'none'; });
                     document.body.classList.toggle('two-asset', loadedSlotCount === 2);
                     document.body.classList.toggle('single-asset', loadedSlotCount === 1);
 
@@ -10367,8 +10472,8 @@
                   }
                   let ni = (currentAssetIndex - 1 + assetOrder.length) % assetOrder.length;
                   let a = 0;
-                  while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni - 1 + assetOrder.length) % assetOrder.length; a++; }
-                  if (mediaData[assetOrder[ni]]) switchToAsset(ni);
+                  while ((!mediaData[assetOrder[ni]] || _hiddenSlots.has(assetOrder[ni])) && a < assetOrder.length) { ni = (ni - 1 + assetOrder.length) % assetOrder.length; a++; }
+                  if (mediaData[assetOrder[ni]] && !_hiddenSlots.has(assetOrder[ni])) switchToAsset(ni);
               } },
             { id: 'nextAsset', defaultKey: 'ArrowRight', altKey: 'ArrowDown', label: 'Next asset', section: 'transport',
               fn: () => {
@@ -10383,8 +10488,8 @@
                   }
                   let ni = (currentAssetIndex + 1) % assetOrder.length;
                   let a = 0;
-                  while (!mediaData[assetOrder[ni]] && a < assetOrder.length) { ni = (ni + 1) % assetOrder.length; a++; }
-                  if (mediaData[assetOrder[ni]]) switchToAsset(ni);
+                  while ((!mediaData[assetOrder[ni]] || _hiddenSlots.has(assetOrder[ni])) && a < assetOrder.length) { ni = (ni + 1) % assetOrder.length; a++; }
+                  if (mediaData[assetOrder[ni]] && !_hiddenSlots.has(assetOrder[ni])) switchToAsset(ni);
               } },
             { id: 'playPause', defaultKey: ' ', label: 'Play / Pause', section: 'transport', global: true,
               fn: () => togglePlayPause() },
