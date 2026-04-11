@@ -55,9 +55,7 @@
         }
         function rebuildVignette() {
             vignette = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)*0.6);
-            vignette.addColorStop(0, 'rgba(0,0,0,0.3)');
-            vignette.addColorStop(0.2, 'rgba(0,0,0,0.08)');
-            vignette.addColorStop(0.4, 'rgba(0,0,0,0)');
+            vignette.addColorStop(0, 'rgba(0,0,0,0)');
             vignette.addColorStop(1, 'rgba(0,0,0,0)');
         }
         function draw() {
@@ -72,10 +70,14 @@
             ctx.beginPath();
             ctx.roundRect(0, 0, w, h, RADIUS);
             ctx.clip();
+            const cx = w/2, cy = h/2, maxR = Math.sqrt(cx*cx + cy*cy);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, w, h);
-
-            const cx = w/2, cy = h/2, maxR = Math.sqrt(cx*cx + cy*cy);
+            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.5);
+            glow.addColorStop(0, 'rgba(0,0,0,0.2)');
+            glow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, w, h);
             for (let i = 0; i < stars.length; i++) {
                 const s = stars[i];
                 s.depth += s.speed * speedMult;
@@ -86,15 +88,13 @@
                 const trail = s.depth * s.speed * speedMult * maxR * 4;
                 const x0 = cx + Math.cos(s.angle) * Math.max(0, r - trail);
                 const y0 = cy + Math.sin(s.angle) * Math.max(0, r - trail);
-                const alpha = s.brightness * Math.min(1, s.depth * 2.5) * (0.3 + s.depth * 0.7);
+                const alpha = s.brightness * (0.3 + s.depth * 0.7);
                 const thickness = 0.3 + s.depth * 2;
                 ctx.strokeStyle = 'hsla(' + s.hue + ',70%,' + (70 + s.depth * 30) + '%,' + alpha + ')';
                 ctx.lineWidth = thickness;
                 ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x, y); ctx.stroke();
-                if (s.depth > 0.6) {
-                    ctx.fillStyle = 'hsla(' + s.hue + ',40%,95%,' + (alpha * 0.8) + ')';
-                    ctx.beginPath(); ctx.arc(x, y, thickness * 0.6, 0, Math.PI * 2); ctx.fill();
-                }
+                ctx.fillStyle = 'hsla(' + s.hue + ',40%,95%,' + (alpha * 0.8) + ')';
+                ctx.beginPath(); ctx.arc(x, y, Math.max(1, thickness * 0.6), 0, Math.PI * 2); ctx.fill();
             }
             ctx.fillStyle = vignette;
             ctx.fillRect(0, 0, w, h);
@@ -178,8 +178,8 @@
         function initStars() { stars=[]; for(let i=0;i<STAR_COUNT;i++) stars.push(spawnStar(false)); }
         function rebuildVignette() {
             vignette=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)*0.6);
-            vignette.addColorStop(0,'rgba(0,0,0,0.3)'); vignette.addColorStop(0.2,'rgba(0,0,0,0.08)');
-            vignette.addColorStop(0.4,'rgba(0,0,0,0)'); vignette.addColorStop(1,'rgba(0,0,0,0)');
+            vignette.addColorStop(0,'rgba(0,0,0,0)');
+            vignette.addColorStop(1,'rgba(0,0,0,0)');
         }
         function resize() {
             const rect=canvas.parentElement.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
@@ -192,19 +192,22 @@
             if(Math.abs(diff)>0.02) speedMult+=diff*(diff>0?0.08:0.12); else speedMult=speedTarget;
             ctx.clearRect(0,0,w,h); ctx.save();
             ctx.beginPath(); ctx.roundRect(0,0,w,h,RADIUS); ctx.clip();
-            ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
             const cx=w/2,cy=h/2,maxR=Math.sqrt(cx*cx+cy*cy);
+            ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+            const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,maxR*0.35);
+            glow.addColorStop(0,'rgba(180,200,255,0.18)'); glow.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=glow; ctx.fillRect(0,0,w,h);
             for(let i=0;i<stars.length;i++){
                 const s=stars[i]; s.depth+=s.speed*speedMult;
                 if(s.depth>1){stars[i]=spawnStar(true);continue;}
                 const r=s.depth*maxR,x=cx+Math.cos(s.angle)*r,y=cy+Math.sin(s.angle)*r;
                 const trail=s.depth*s.speed*speedMult*maxR*4;
                 const x0=cx+Math.cos(s.angle)*Math.max(0,r-trail),y0=cy+Math.sin(s.angle)*Math.max(0,r-trail);
-                const alpha=s.brightness*Math.min(1,s.depth*2.5)*(0.3+s.depth*0.7),thickness=0.3+s.depth*2;
+                const alpha=s.brightness*(0.3+s.depth*0.7),thickness=0.3+s.depth*2;
                 ctx.strokeStyle='hsla('+s.hue+',70%,'+(70+s.depth*30)+'%,'+alpha+')';
                 ctx.lineWidth=thickness; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x,y); ctx.stroke();
-                if(s.depth>0.6){ctx.fillStyle='hsla('+s.hue+',40%,95%,'+(alpha*0.8)+')';
-                ctx.beginPath();ctx.arc(x,y,thickness*0.6,0,Math.PI*2);ctx.fill();}
+                ctx.fillStyle='hsla('+s.hue+',40%,95%,'+(alpha*0.8)+')';
+                ctx.beginPath();ctx.arc(x,y,Math.max(1,thickness*0.6),0,Math.PI*2);ctx.fill();
             }
             ctx.fillStyle=vignette; ctx.fillRect(0,0,w,h); ctx.restore();
             animId=requestAnimationFrame(draw);
