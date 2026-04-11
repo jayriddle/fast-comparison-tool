@@ -2451,7 +2451,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.9.1';
+        const APP_VERSION = '3.10';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2588,6 +2588,18 @@
                 container.appendChild(pill);
             });
             container.classList.toggle('has-hidden', _hiddenSlots.size > 0);
+            // Update info bar pills: disable cursor when hiding would leave 0 visible slots
+            const visibleCount = getVisibleSlots().length;
+            assetOrder.forEach(slot => {
+                const layer = getLayer(slot);
+                if (!layer) return;
+                const nameEl = layer.querySelector('.asset-info-bar .asset-name');
+                if (!nameEl) return;
+                const isOnlyVisible = !_hiddenSlots.has(slot) && visibleCount <= 1;
+                nameEl.style.cursor = isOnlyVisible ? 'default' : 'pointer';
+                nameEl.style.pointerEvents = isOnlyVisible ? 'none' : 'auto';
+                nameEl.title = _hiddenSlots.has(slot) ? '' : isOnlyVisible ? '' : `Hide ${slotLabel(slot)}`;
+            });
         }
 
         function toggleSlotVisibility(slot) {
@@ -2603,6 +2615,11 @@
                 _hiddenSlots.add(slot);
                 const layer = getLayer(slot);
                 if (layer) layer.style.display = 'none';
+                // If this was the active audio source, switch to a visible slot
+                if (currentAudioSource === slot) {
+                    const next = getVisibleSlots()[0];
+                    if (next) selectAudioSource(next);
+                }
             }
 
             _updateHiddenSlotPills();
@@ -6471,6 +6488,7 @@
             const nameEl = infoBar.querySelector('.asset-name');
             nameEl.textContent = slotLabel(slot);
             nameEl.dataset.slot = slot;
+            nameEl.title = `Hide ${slotLabel(slot)}`;
             nameEl.onclick = (e) => { e.stopPropagation(); toggleSlotVisibility(slot); };
             if (mediaData[slot] && mediaData[slot].name) setFilename(infoBar, mediaData[slot].name);
             return infoBar;
@@ -9607,6 +9625,16 @@
                         // Remove active-audio class when leaving split view
                         layer.classList.remove('active-audio');
                     });
+                    // If current slot is hidden, advance to nearest visible slot
+                    if (_hiddenSlots.has(assetOrder[currentAssetIndex])) {
+                        for (let i = 1; i < assetOrder.length; i++) {
+                            const ni = (currentAssetIndex + i) % assetOrder.length;
+                            if (mediaData[assetOrder[ni]] && !_hiddenSlots.has(assetOrder[ni])) {
+                                currentAssetIndex = ni;
+                                break;
+                            }
+                        }
+                    }
                     switchToAsset(currentAssetIndex);
                     // Two rAFs ensure CSS class changes reflow before applyZoom reads viewport.
                     // resetFitZoom() computes fitZoom then snaps zoomLevel to it, same as pressing 0.
@@ -10360,12 +10388,12 @@
               fn: () => { if (!isGridMode) _toggleStackZoomMode(); } },
             { id: 'gridMode', defaultKey: 'g', label: 'Grid mode', section: 'view',
               fn: () => {
-                  const allThreeLoaded = getLoadedSlotCount() === 3;
+                  const allThreeVisible = getVisibleSlots().length === 3;
                   if (hasAudios) {
                       if (!isGridMode) {
-                          if (allThreeLoaded) { gridInlineMode = true; setViewMode('offset'); } else setViewMode('vertical');
+                          if (allThreeVisible) { gridInlineMode = true; setViewMode('offset'); } else setViewMode('vertical');
                       } else { setViewMode('overlay'); }
-                  } else if (allThreeLoaded) {
+                  } else if (allThreeVisible) {
                       if (!isGridMode) setViewMode('offset'); else setViewMode('overlay');
                   } else {
                       if (!isGridMode) setViewMode(layoutMode); else setViewMode('overlay');
@@ -10385,6 +10413,12 @@
                       _swapGridSubLayout();
                   }
               } },
+            { id: 'hideRef',  defaultKey: '1', shift: true, label: 'Toggle slot 1 visibility',  section: 'view',
+              fn: () => { if (isGridMode && mediaData.original) toggleSlotVisibility('original'); } },
+            { id: 'hideA',    defaultKey: '2', shift: true, label: 'Toggle slot 2 visibility',    section: 'view',
+              fn: () => { if (isGridMode && mediaData.editA)    toggleSlotVisibility('editA');    } },
+            { id: 'hideB',    defaultKey: '3', shift: true, label: 'Toggle slot 3 visibility',    section: 'view',
+              fn: () => { if (isGridMode && mediaData.editB)    toggleSlotVisibility('editB');    } },
             { id: 'fullscreen', defaultKey: 'f', label: 'Browser fullscreen', section: 'view', global: true,
               fn: () => {
                   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
@@ -10662,8 +10696,10 @@
 
             // Look up the action for this key
             // Try shift-prefixed first, then unprefixed (for keys like ? that are Shift+/ but not flagged as shift actions)
+            // For Shift+digit, e.key is the symbol (!@#...) not the digit — also try the physical key from e.code
+            const _shiftDigit = e.shiftKey && e.code && e.code.startsWith('Digit') ? e.code.slice(5) : null;
             const actionId = e.shiftKey
-                ? (_keymap['S+' + e.key] || _keymap['S+' + e.key.toLowerCase()] || _keymap[e.key] || _keymap[e.key.toLowerCase()])
+                ? (_keymap['S+' + e.key] || _keymap['S+' + e.key.toLowerCase()] || (_shiftDigit && _keymap['S+' + _shiftDigit]) || _keymap[e.key] || _keymap[e.key.toLowerCase()])
                 : (_keymap[e.key] || _keymap[e.key.toLowerCase()]);
             if (!actionId) return;
 
@@ -11063,6 +11099,12 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10</h3>
+            <ul>
+                <li><strong>Hide slots in Grid mode</strong> — click any slot label to hide that slot and give more space to the others. A ghost pill appears in the header to restore it. <kbd>⇧1</kbd> / <kbd>⇧2</kbd> / <kbd>⇧3</kbd> toggles slots from the keyboard.</li>
+                <li><strong>Info bar redesign</strong> — slot colors dim when inactive and light up for the active asset, making it immediately clear which slot has focus.</li>
+                <li><strong>Darker UI</strong> — reduced background brightness throughout for better contrast against media content.</li>
+            </ul>
             <h3>v3.9.1</h3>
             <ul>
                 <li><strong>Timecode</strong> — click the timecode display or press <kbd>⇧C</kbd> to choose a format (SMPTE, frames, seconds, F+N), <kbd>C</kbd> to copy.</li>
