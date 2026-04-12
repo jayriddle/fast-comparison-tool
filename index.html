@@ -9055,83 +9055,60 @@
 
                 // Apply rendered dimensions per slot.
                 // useEqualAreaCols and useBalanceRows (inline modes) compute rw/rh in passes below.
-                // L-shaped offset uses equal-area so each asset gets the same rendered area
-                // regardless of orientation — no shared-width/height constraint.
-                slots.forEach(slot => {
-                    const d = gridLayout[slot];
-                    if (!d) return;
-                    // Placeholder — overridden by equal-area passes below
-                    d.rw = d.fitW;
-                    d.rh = d.fitH;
-                    d.sharedZoom = d.rw / d.nw;
-                });
-
-                // L-shaped offset equal-area pass.
-                // A and B share the right column, so their height constraint is a GROUP:
-                //   rh_a + rh_b ≤ total right column height (not per-cell 50% each).
-                // After computing sizes, grid-template-rows is updated to match content heights
-                // so the CSS grid cells reflect actual rendered sizes rather than 50/50.
+                // L-shaped offset: equal-area sizing + positioning in one pass.
+                // A+B share the right column — height constraint is a GROUP so they can
+                // use the full column height rather than being capped at 50% each.
+                // grid-template-rows/columns are updated to content sizes after rendering
+                // so the CSS grid reflects actual heights rather than the initial 1fr/1fr.
                 if (!isEqualLayout) {
                     const loadedSlots = slots.filter(s => gridLayout[s]);
                     if (loadedSlots.length > 0) {
                         const ratios = {};
-                        loadedSlots.forEach(s => { const d = gridLayout[s]; ratios[s] = d.nw / d.nh; });
+                        loadedSlots.forEach(s => { ratios[s] = gridLayout[s].nw / gridLayout[s].nh; });
 
                         const dRef = gridLayout['original'];
                         const dA   = gridLayout['editA'];
                         const dB   = gridLayout['editB'];
 
-                        // --- Compute fitArea using group constraint for A+B ---
-                        let fitArea = Infinity;
+                        // fitArea: smallest per-slot max area across all constraints
+                        let fitArea = dRef ? dRef.fitW * dRef.fitH : Infinity;
 
-                        // Ref: constrained by its full-height column
-                        if (dRef) fitArea = Math.min(fitArea, dRef.fitW * dRef.fitH);
-
-                        // A+B group: constrained by right column width and COMBINED height
                         if (dA && dB) {
-                            const rightW  = dA.cw;
-                            // Total available height for both images stacked (subtract both info bars + 8px row-gap)
-                            const rightH  = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4;
+                            const rightW = dA.cw;
+                            const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4; // combined minus row-gap
                             const rA = ratios['editA'], rB = ratios['editB'];
-                            // Width constraint: each rw ≤ rightW → A ≤ rightW²/r for each
-                            const aFromW  = Math.min(rightW * rightW / rA, rightW * rightW / rB);
-                            // Height group constraint: rh_a + rh_b ≤ rightH
-                            //   √A·(1/√rA + 1/√rB) ≤ rightH  →  A ≤ (rightH / (1/√rA + 1/√rB))²
+                            // Width: rw ≤ rightW → A ≤ rightW²/max(rA,rB)
+                            const aFromW = rightW * rightW / Math.max(rA, rB);
+                            // Height group: √A·(1/√rA + 1/√rB) ≤ rightH
                             const sumInvSqrtR = 1 / Math.sqrt(rA) + 1 / Math.sqrt(rB);
-                            const aFromH  = Math.pow(rightH / sumInvSqrtR, 2);
-                            fitArea = Math.min(fitArea, Math.min(aFromW, aFromH));
+                            const aFromH = (rightH / sumInvSqrtR) ** 2;
+                            fitArea = Math.min(fitArea, aFromW, aFromH);
                         } else {
-                            // Only one of A/B present — fall back to per-cell max area
-                            ['editA', 'editB'].forEach(s => {
-                                if (gridLayout[s]) fitArea = Math.min(fitArea, gridLayout[s].fitW * gridLayout[s].fitH);
-                            });
+                            if (dA) fitArea = Math.min(fitArea, dA.fitW * dA.fitH);
+                            if (dB) fitArea = Math.min(fitArea, dB.fitW * dB.fitH);
                         }
                         if (!isFinite(fitArea) || fitArea <= 0) fitArea = 1;
 
                         let linearZoom = splitStepZoom;
                         if (splitZoomLevel === 1) {
                             const minNative = loadedSlots.reduce((mn, s) => {
-                                const d = gridLayout[s];
                                 const baseW = Math.sqrt(fitArea * ratios[s]);
-                                return baseW > 0 ? Math.min(mn, d.nw / baseW) : mn;
+                                return baseW > 0 ? Math.min(mn, gridLayout[s].nw / baseW) : mn;
                             }, Infinity);
                             if (isFinite(minNative)) linearZoom = minNative * splitStepZoom;
                         }
                         let targetArea = fitArea * linearZoom * linearZoom;
 
-                        // Clamp: Ref must fit in its cell; A+B must fit as a group
+                        // Clamp to fit constraints
                         let clamped = false;
                         if (splitZoomLevel !== 1) {
-                            if (dRef) {
-                                if (Math.sqrt(targetArea * ratios['original']) > dRef.cw ||
-                                    Math.sqrt(targetArea / ratios['original']) > dRef.ch - dRef.ibH) clamped = true;
-                            }
+                            if (dRef && (Math.sqrt(targetArea * ratios['original']) > dRef.cw ||
+                                        Math.sqrt(targetArea / ratios['original']) > dRef.ch - dRef.ibH)) clamped = true;
                             if (dA && dB) {
-                                const sumRh = Math.sqrt(targetArea / ratios['editA']) + Math.sqrt(targetArea / ratios['editB']);
                                 const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4;
                                 if (Math.sqrt(targetArea * ratios['editA']) > dA.cw ||
                                     Math.sqrt(targetArea * ratios['editB']) > dB.cw ||
-                                    sumRh > rightH) clamped = true;
+                                    Math.sqrt(targetArea / ratios['editA']) + Math.sqrt(targetArea / ratios['editB']) > rightH) clamped = true;
                             }
                             if (clamped) { targetArea = fitArea; if (splitStepZoom > 1) splitStepZoom = 1; }
                         }
@@ -9144,68 +9121,39 @@
                             d.sharedZoom = d.rw / d.nw;
                         });
 
-                        // Update grid-template-rows so each cell is sized to its content.
-                        // This breaks the 50/50 constraint and lets A+B use the full column height.
-                        // Ref spans both rows so its cell height = rowA + rowB + 1px gap.
-                        // Also update dA.ch / dB.ch so the positioning pass below uses the
-                        // correct cell heights — otherwise centering is computed against the
-                        // stale ch (viewport/2) and the wrapper overflows into the adjacent cell.
+                        // Update grid cells to content sizes and center the group in the viewport.
+                        // dA/dB/dRef cw+ch are updated so the positioning pass below uses the
+                        // new dimensions rather than the stale measured values.
                         if (dA && dB) {
-                            const offsetContainer = document.querySelector('.asset-container');
                             const rowA = dA.ibH + dA.rh;
                             const rowB = dB.ibH + dB.rh;
-                            // Right column width = max rendered width of A/B + 8px margin (4px each side)
                             const maxRwAB = Math.max(dA.rw, dB.rw);
+                            const offsetContainer = document.querySelector('.asset-container');
                             if (offsetContainer) {
-                                offsetContainer.style.gridTemplateRows = `${rowA}px ${rowB}px`;
-                                // Both columns sized to content so justify/alignContent can center the group
+                                offsetContainer.style.gridTemplateRows    = `${rowA}px ${rowB}px`;
                                 if (dRef) offsetContainer.style.gridTemplateColumns = `${dRef.rw + 4}px ${maxRwAB + 4}px`;
                                 offsetContainer.style.justifyContent = 'center';
-                                offsetContainer.style.alignContent  = 'center';
+                                offsetContainer.style.alignContent   = 'center';
                             }
-                            // Update cw/ch so positioning pass uses the new column/row dimensions
                             dA.ch = rowA; dA.cw = maxRwAB + 4;
                             dB.ch = rowB; dB.cw = maxRwAB + 4;
-                            if (dRef) {
-                                dRef.ch = rowA + rowB + 4; // 4px row-gap
-                                dRef.cw = dRef.rw + 4;
-                            }
+                            if (dRef) { dRef.ch = rowA + rowB + 4; dRef.cw = dRef.rw + 4; }
                         }
+
+                        // Positioning: Ref centered vertically in its span; A/B flush to top of
+                        // their cells (cells are sized to content so no centering is needed).
+                        slots.forEach(s => {
+                            const d = gridLayout[s];
+                            if (!d) return;
+                            d._ty = s === 'original'
+                                ? Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2))
+                                : d.ibH || 0;
+                            // Ref flush-right in left column, A/B flush-left in right column (2px each = 4px gap)
+                            d._tx = s === 'original'
+                                ? Math.max(0, Math.round(d.cw - d.rw) - 2)
+                                : Math.min(2, Math.round(d.cw - d.rw));
+                        });
                     }
-                }
-
-                // L-shaped offset: compute per-slot positions using the shared-dimension
-                // rw/rh already computed above. All assets share the same rendered width
-                // (portrait) or height (landscape), so they appear the same visual size.
-                if (!isEqualLayout) {
-                    // When A and B have different orientations their heights diverge at the
-                    // shared render width, so flush-bottom/flush-top leaves a gap between them.
-                    // Fall back to per-cell centering for both in that case.
-                    const dA = gridLayout['editA'], dB = gridLayout['editB'];
-                    const abMixedOrient = dA && dB &&
-                        (dA.nw < dA.nh) !== (dB.nw < dB.nh);
-
-                    slots.forEach(s => {
-                        const d = gridLayout[s];
-                        if (!d) return;
-                        // Vertical positioning
-                        if (s === 'original') {
-                            d._ty = Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2));
-                        } else if (abMixedOrient) {
-                            // Mixed A/B orientation: center each in its own cell
-                            d._ty = Math.max(d.ibH || 0, Math.round((d.ch - d.rh) / 2));
-                        } else if (s === 'editA') {
-                            d._ty = Math.max(d.ibH || 0, Math.round(d.ch - d.rh)); // flush bottom
-                        } else {
-                            d._ty = d.ibH || 0; // flush top
-                        }
-                        // Horizontal: Original flush right, A/B flush left. 2px gap from cell edge (4px total).
-                        if (s === 'original') {
-                            d._tx = Math.max(0, Math.round(d.cw - d.rw) - 2);
-                        } else {
-                            d._tx = Math.min(2, Math.round(d.cw - d.rw));
-                        }
-                    });
                 }
 
                 // Group-centering for equal layouts: cluster images together and center
