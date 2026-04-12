@@ -8911,14 +8911,12 @@
             // Always clear gridTemplateRows/Columns before measuring so cells revert to
             // CSS-driven dimensions. Offset mode re-sets both after computing content sizes.
             // Without this, stale px values corrupt ch/cw measurements on repeated calls.
-            {
-                const _ac = document.querySelector('.asset-container');
-                if (_ac) {
-                    _ac.style.gridTemplateRows = '';
-                    _ac.style.gridTemplateColumns = '';
-                    _ac.style.justifyContent = '';
-                    _ac.style.alignContent = '';
-                }
+            const ac = document.querySelector('.asset-container');
+            if (ac) {
+                ac.style.gridTemplateRows = '';
+                ac.style.gridTemplateColumns = '';
+                ac.style.justifyContent = '';
+                ac.style.alignContent = '';
             }
 
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
@@ -8928,8 +8926,7 @@
                     const layer = getLayer(slot);
                     if (layer) { layer.style.height = ''; layer.style.marginTop = ''; }
                 });
-                const container = document.querySelector('.asset-container');
-                if (container) container.style.paddingTop = '';
+                if (ac) ac.style.paddingTop = '';
             }
 
             // Unified measurement pass — reads all DOM dimensions once
@@ -9069,14 +9066,16 @@
                         const dRef = gridLayout['original'];
                         const dA   = gridLayout['editA'];
                         const dB   = gridLayout['editB'];
+                        // Hoist right-column geometry so both fitArea and clamping blocks share values.
+                        const rA     = dA ? ratios['editA'] : 1;
+                        const rB     = dB ? ratios['editB'] : 1;
+                        const rightW = dA ? dA.cw : 0;
+                        const rightH = dA && dB ? (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4 : 0;
 
                         // fitArea: smallest per-slot max area across all constraints
                         let fitArea = dRef ? dRef.fitW * dRef.fitH : Infinity;
 
                         if (dA && dB) {
-                            const rightW = dA.cw;
-                            const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4; // combined minus row-gap
-                            const rA = ratios['editA'], rB = ratios['editB'];
                             // Width: rw ≤ rightW → A ≤ rightW²/max(rA,rB)
                             const aFromW = rightW * rightW / Math.max(rA, rB);
                             // Height group: √A·(1/√rA + 1/√rB) ≤ rightH
@@ -9105,10 +9104,9 @@
                             if (dRef && (Math.sqrt(targetArea * ratios['original']) > dRef.cw ||
                                         Math.sqrt(targetArea / ratios['original']) > dRef.ch - dRef.ibH)) clamped = true;
                             if (dA && dB) {
-                                const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4;
-                                if (Math.sqrt(targetArea * ratios['editA']) > dA.cw ||
-                                    Math.sqrt(targetArea * ratios['editB']) > dB.cw ||
-                                    Math.sqrt(targetArea / ratios['editA']) + Math.sqrt(targetArea / ratios['editB']) > rightH) clamped = true;
+                                if (Math.sqrt(targetArea * rA) > dA.cw ||
+                                    Math.sqrt(targetArea * rB) > dB.cw ||
+                                    Math.sqrt(targetArea / rA) + Math.sqrt(targetArea / rB) > rightH) clamped = true;
                             }
                             if (clamped) { targetArea = fitArea; if (splitStepZoom > 1) splitStepZoom = 1; }
                         }
@@ -9128,12 +9126,11 @@
                             const rowA = dA.ibH + dA.rh;
                             const rowB = dB.ibH + dB.rh;
                             const maxRwAB = Math.max(dA.rw, dB.rw);
-                            const offsetContainer = document.querySelector('.asset-container');
-                            if (offsetContainer) {
-                                offsetContainer.style.gridTemplateRows    = `${rowA}px ${rowB}px`;
-                                if (dRef) offsetContainer.style.gridTemplateColumns = `${dRef.rw + 4}px ${maxRwAB + 4}px`;
-                                offsetContainer.style.justifyContent = 'center';
-                                offsetContainer.style.alignContent   = 'center';
+                            if (ac) {
+                                ac.style.gridTemplateRows    = `${rowA}px ${rowB}px`;
+                                if (dRef) ac.style.gridTemplateColumns = `${dRef.rw + 4}px ${maxRwAB + 4}px`;
+                                ac.style.justifyContent = 'center';
+                                ac.style.alignContent   = 'center';
                             }
                             dA.ch = rowA; dA.cw = maxRwAB + 4;
                             dB.ch = rowB; dB.cw = maxRwAB + 4;
