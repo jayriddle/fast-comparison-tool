@@ -773,7 +773,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
-            row-gap: 1px;
+            row-gap: 4px;
             height: 100%;
             overflow: hidden;
             align-items: stretch;
@@ -8908,13 +8908,17 @@
                 const l = getLayer(slot);
                 if (l) { l.style.width = ''; l.style.height = ''; l.style.marginTop = ''; }
             });
-            // Always clear gridTemplateRows before measuring so cells revert to CSS-driven
-            // dimensions (1fr 1fr for offset, etc.). In offset mode it will be re-set after
-            // computing content heights. Without this, stale px values from a previous
-            // positionLabelsToMedia call corrupt the ch measurements and cause drift/overlap.
+            // Always clear gridTemplateRows/Columns before measuring so cells revert to
+            // CSS-driven dimensions. Offset mode re-sets both after computing content sizes.
+            // Without this, stale px values corrupt ch/cw measurements on repeated calls.
             {
                 const _ac = document.querySelector('.asset-container');
-                if (_ac) _ac.style.gridTemplateRows = '';
+                if (_ac) {
+                    _ac.style.gridTemplateRows = '';
+                    _ac.style.gridTemplateColumns = '';
+                    _ac.style.justifyContent = '';
+                    _ac.style.alignContent = '';
+                }
             }
 
             // In vertical-stack 100%-cap mode we shrink each layer to its video height and
@@ -9086,8 +9090,8 @@
                         // A+B group: constrained by right column width and COMBINED height
                         if (dA && dB) {
                             const rightW  = dA.cw;
-                            // Total available height for both images stacked (subtract both info bars + 1px gap)
-                            const rightH  = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 1;
+                            // Total available height for both images stacked (subtract both info bars + 8px row-gap)
+                            const rightH  = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4;
                             const rA = ratios['editA'], rB = ratios['editB'];
                             // Width constraint: each rw ≤ rightW → A ≤ rightW²/r for each
                             const aFromW  = Math.min(rightW * rightW / rA, rightW * rightW / rB);
@@ -9124,7 +9128,7 @@
                             }
                             if (dA && dB) {
                                 const sumRh = Math.sqrt(targetArea / ratios['editA']) + Math.sqrt(targetArea / ratios['editB']);
-                                const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 1;
+                                const rightH = (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4;
                                 if (Math.sqrt(targetArea * ratios['editA']) > dA.cw ||
                                     Math.sqrt(targetArea * ratios['editB']) > dB.cw ||
                                     sumRh > rightH) clamped = true;
@@ -9150,10 +9154,22 @@
                             const offsetContainer = document.querySelector('.asset-container');
                             const rowA = dA.ibH + dA.rh;
                             const rowB = dB.ibH + dB.rh;
-                            if (offsetContainer) offsetContainer.style.gridTemplateRows = `${rowA}px ${rowB}px`;
-                            dA.ch = rowA;
-                            dB.ch = rowB;
-                            if (dRef) dRef.ch = rowA + rowB + 1;
+                            // Right column width = max rendered width of A/B + 8px margin (4px each side)
+                            const maxRwAB = Math.max(dA.rw, dB.rw);
+                            if (offsetContainer) {
+                                offsetContainer.style.gridTemplateRows = `${rowA}px ${rowB}px`;
+                                // Both columns sized to content so justify/alignContent can center the group
+                                if (dRef) offsetContainer.style.gridTemplateColumns = `${dRef.rw + 4}px ${maxRwAB + 4}px`;
+                                offsetContainer.style.justifyContent = 'center';
+                                offsetContainer.style.alignContent  = 'center';
+                            }
+                            // Update cw/ch so positioning pass uses the new column/row dimensions
+                            dA.ch = rowA; dA.cw = maxRwAB + 4;
+                            dB.ch = rowB; dB.cw = maxRwAB + 4;
+                            if (dRef) {
+                                dRef.ch = rowA + rowB + 4; // 4px row-gap
+                                dRef.cw = dRef.rw + 4;
+                            }
                         }
                     }
                 }
@@ -9183,11 +9199,11 @@
                         } else {
                             d._ty = d.ibH || 0; // flush top
                         }
-                        // Horizontal: Original flush right, A/B flush left. 4px gap from cell edge.
+                        // Horizontal: Original flush right, A/B flush left. 2px gap from cell edge (4px total).
                         if (s === 'original') {
-                            d._tx = Math.max(0, Math.round(d.cw - d.rw) - 4);
+                            d._tx = Math.max(0, Math.round(d.cw - d.rw) - 2);
                         } else {
-                            d._tx = Math.min(4, Math.round(d.cw - d.rw));
+                            d._tx = Math.min(2, Math.round(d.cw - d.rw));
                         }
                     });
                 }
