@@ -6578,16 +6578,21 @@
             layer.appendChild(mediaContainer);
             layer.style.opacity = '0';
 
-            // Decode audio for viz — ArrayBuffer only needed for this; the blob URL above
-            // already handles playback, so the ArrayBuffer is freed after decode.
+            // Decode audio for viz — use FileReader to avoid hanging in environments
+            // (e.g. Playwright's virtual file system) where Blob.arrayBuffer() and
+            // fetch(blobUrl) may not resolve. FileReader's event-based API is reliable.
             updateLoadingStatus('Decoding audio…');
-            file.arrayBuffer().then(arrayBuffer => {
+            const _reader = new FileReader();
+            _reader.onload = () => {
+                const arrayBuffer = _reader.result;
                 audioFileBuffers[slot] = arrayBuffer;
                 decodeAndComputeAudioSlotViz(slot, arrayBuffer);
-            }).catch(() => {
+            };
+            _reader.onerror = () => {
                 showLoadToast(`Failed to read ${file.name}`, true, 5000);
                 checkAllLoaded();
-            });
+            };
+            _reader.readAsArrayBuffer(file);
         }
 
         // ── loadVideoFile ────────────────────────────────────────────────

@@ -135,6 +135,19 @@ async function loadImages(page: Page, fileNames: string[]) {
   await page.locator('.asset-name').first().waitFor({ state: 'attached', timeout: 5000 });
 }
 
+/**
+ * Load any media files (images, video, audio). Uses a longer timeout than loadImages
+ * to accommodate video metadata and audio decode latency.
+ * Note: viewActivating stays true after loading completes (reset only by clearAllMedia),
+ * so we use the same comparisonView.active + asset-name signals as loadImages.
+ */
+async function loadMedia(page: Page, fileNames: string[], timeout = 20000) {
+  const filePaths = fileNames.map(f => path.join(fixturesDir, f));
+  await page.locator('#multiFileInput').setInputFiles(filePaths);
+  await page.locator('#comparisonView.active').waitFor({ state: 'visible', timeout });
+  await page.locator('.asset-name').first().waitFor({ state: 'attached', timeout: 5000 });
+}
+
 /** Load images and enter Stack mode (current hotkey 'S'). Waits for stable zoom/layout. */
 async function loadAndEnterStack(page: Page, fileNames: string[]) {
   await loadImages(page, fileNames);
@@ -240,8 +253,15 @@ test.describe('File Loading & Slot Assignment', () => {
     await expect(toast).toHaveClass(/warning/);
   });
 
-  test('rejects mixed media types with warning toast', async () => {
-    test.skip(true, 'Needs a synthetic audio fixture (WAV/MP3)');
+  test('rejects mixed media types with warning toast', async ({ page }) => {
+    await page.goto('/');
+    const toast = page.locator('.load-toast');
+    await page.locator('#multiFileInput').setInputFiles([
+      path.join(fixturesDir, 'red.png'),
+      path.join(fixturesDir, 'track.mp3'),
+    ]);
+    await toast.waitFor({ timeout: 5000 });
+    await expect(toast).toHaveClass(/warning/);
   });
 });
 
@@ -671,6 +691,144 @@ test.describe('Landing State', () => {
       return e.defaultPrevented;
     });
     expect(handled).toBe(true);
+  });
+});
+
+test.describe('Video Loading', () => {
+  test('hasVideos is true after loading MP4 files', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    expect(await getVar(page, 'hasVideos')).toBe(true);
+    expect(await getVar(page, 'hasImages')).toBe(false);
+    expect(await isGridMode(page)).toBe(true);
+  });
+
+  test('3 videos load with Ref/A/B slot assignment by mtime', async ({ page }) => {
+    await page.goto('/');
+    // landscape_a.mp4 has oldest mtime (Jan 1) → Ref/GT slot
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await expect(page.locator('.asset-name')).toHaveCount(3);
+    await expect(page.locator('#layerOriginal .asset-name')).toContainText(/Ref/i);
+  });
+
+  test('W key opens audio viz panel for video with audio track', async ({ page }) => {
+    await page.goto('/');
+    // landscape_a.mp4 has an AAC audio track — W should open the panel, not show a toast
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    expect(await getVar(page, 'audioVizVisible')).toBe(false);
+    await page.keyboard.press('w');
+    expect(await getVar(page, 'audioVizVisible')).toBe(true);
+  });
+
+  test('V key opens scopes panel for video content', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    await page.keyboard.press('v');
+    await expect(page.locator('#scopesPanel')).toHaveClass(/active/);
+    expect(await getVar(page, 'videoScopesVisible')).toBe(true);
+  });
+
+  test('timecode display is visible for video', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    // #videoTimecode is the timecode span in the controls bar
+    await expect(page.locator('#videoTimecode')).toBeVisible();
+  });
+});
+
+test.describe('Audio Loading', () => {
+  test('hasAudios is true after loading WAV files', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['stereo.wav', 'mono.wav']);
+    expect(await getVar(page, 'hasAudios')).toBe(true);
+    expect(await getVar(page, 'hasVideos')).toBe(false);
+    expect(await getVar(page, 'hasImages')).toBe(false);
+  });
+
+  test('info bars show real sample rate and channel count', async ({ page }) => {
+    await page.goto('/');
+    // With 2 audio files the app enters symmetric A/B mode (no GT slot); original is empty.
+    // stereo.wav (oldest mtime Jan 1) → editA (A), mono.wav (Jan 2) → editB (B).
+    // After AudioContext.decodeAudioData the buffer's sampleRate reflects the AudioContext
+    // native rate (44.1 or 48 kHz depending on OS/browser). Check for any kHz value.
+    await loadMedia(page, ['stereo.wav', 'mono.wav']);
+    const aBar = page.locator('#layerEditA .asset-info-bar');
+    await expect(aBar).toContainText(/\d[\d.]*\s*kHz/i, { timeout: 15000 });
+    await expect(aBar).toContainText(/Stereo/i, { timeout: 5000 });
+    const bBar = page.locator('#layerEditB .asset-info-bar');
+    await expect(bBar).toContainText(/Mono/i, { timeout: 5000 });
+  });
+
+  test('original slot label is GT for audio', async ({ page }) => {
+    await page.goto('/');
+    // Audio mode uses "GT" (Ground Truth) instead of "Ref" for the original slot
+    await loadMedia(page, ['stereo.wav', 'mono.wav', 'track.mp3']);
+    await expect(page.locator('#layerOriginal .asset-name')).toContainText(/GT/i);
+  });
+
+  test('audio viz canvases are shown in main view for audio files', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['stereo.wav', 'mono.wav']);
+    // In audio mode, waveform/spectrogram canvas is always shown in the main view
+    // (not in a toggleable side panel — that's video-only). Each slot gets one canvas.
+    const canvases = page.locator('.audio-viz-slot-canvas');
+    await expect(canvases.first()).toBeAttached();
+  });
+
+  test('W key in audio mode shows informational toast (viz is in main view)', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['stereo.wav', 'mono.wav']);
+    // In audio mode W doesn't toggle a panel — it shows a toast explaining the viz is in the main view.
+    // audioVizVisible (the side-panel flag) stays false throughout.
+    expect(await getVar(page, 'audioVizVisible')).toBe(false);
+    await page.keyboard.press('w');
+    await expect(page.locator('#toast')).toBeVisible();
+    expect(await getVar(page, 'audioVizVisible')).toBe(false);
+  });
+
+  test('3 audio files: all three slots populated', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['stereo.wav', 'mono.wav', 'track.mp3']);
+    expect(await getVar(page, 'hasAudios')).toBe(true);
+    // All 3 slot name labels should be present
+    await expect(page.locator('.asset-name')).toHaveCount(3);
+  });
+});
+
+test.describe('Mixed Orientation Offset Layout', () => {
+  test('offset layout works for mixed portrait/landscape videos', async ({ page }) => {
+    await page.goto('/');
+    // landscape_a (960×540) + landscape_b (960×540) + portrait (540×960) = mixed orientations
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await page.waitForFunction(() => (window as any).__testAPI?.isGridMode === true, {}, { timeout: 5000 });
+
+    // Ensure we're in offset mode (gridInlineMode === false)
+    if (await getVar(page, 'gridInlineMode')) {
+      await page.keyboard.press('3');
+      await page.waitForFunction(
+        () => (window as any).__testAPI?.gridInlineMode === false,
+        {}, { timeout: 3000 }
+      );
+    }
+
+    // Offset layout should be active with no blocking toast about mixed orientations
+    expect(await getVar(page, 'gridInlineMode')).toBe(false);
+    await expect(page.locator('body')).toHaveClass(/offset/);
+  });
+
+  test('3 key cycles between inline and offset for mixed-orientation videos', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await page.waitForFunction(() => (window as any).__testAPI?.isGridMode === true, {}, { timeout: 5000 });
+
+    const before = await getVar(page, 'gridInlineMode');
+    await page.keyboard.press('3');
+    const after = await getVar(page, 'gridInlineMode');
+    expect(after).toBe(!before);
+
+    // Toggle back
+    await page.keyboard.press('3');
+    expect(await getVar(page, 'gridInlineMode')).toBe(before);
   });
 });
 

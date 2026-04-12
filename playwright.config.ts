@@ -10,7 +10,9 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'chromium', use: { browserName: 'chromium',
+        launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] }
+    } },
   ],
   webServer: {
     command: 'npx serve -l 8080 --no-clipboard .',
