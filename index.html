@@ -925,12 +925,12 @@
 
         /* ── Slot color tokens — overridden at runtime by _applySlotColors() ── */
         :root {
-            --slot-original-bg:  #22c060;  --slot-original-txt: #061610;
-            --slot-original-bar: #1a3224;  --slot-original-hi:  #1e7e44;
-            --slot-editA-bg:     #e08810;  --slot-editA-txt:    #1c0e00;
-            --slot-editA-bar:    #392c1a;  --slot-editA-hi:     #915c14;
-            --slot-editB-bg:     #d035a8;  --slot-editB-txt:    #220018;
-            --slot-editB-bar:    #392234;  --slot-editB-hi:     #872a6f;
+            --slot-original-bg:  #2aa7c0;  --slot-original-txt: #061610;
+            --slot-original-bar: #0f2e34;  --slot-original-hi:  #145e6e;
+            --slot-editA-bg:     #f0bf0f;  --slot-editA-txt:    #1c0e00;
+            --slot-editA-bar:    #302600;  --slot-editA-hi:     #706000;
+            --slot-editB-bg:     #da3e99;  --slot-editB-txt:    #220018;
+            --slot-editB-bar:    #320020;  --slot-editB-hi:     #7a1a50;
         }
 
         /* Ghost pills shown in header when a slot is hidden */
@@ -10569,9 +10569,9 @@
         // from HSL lightness clamping. Persisted to localStorage.slotColors.
 
         const _SLOT_COLOR_DEFAULTS = {
-            original: '#22c060',
-            editA:    '#e08810',
-            editB:    '#d035a8',
+            original: '#2aa7c0',
+            editA:    '#f0bf0f',
+            editB:    '#da3e99',
         };
         let _slotColors = Object.assign({}, _SLOT_COLOR_DEFAULTS);
 
