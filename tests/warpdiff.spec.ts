@@ -178,7 +178,7 @@ test.describe('Page Load & Initial State', () => {
 
   test('header shows version and action buttons', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#appVersion')).toContainText('v3.9');
+    await expect(page.locator('#appVersion')).toContainText('v3.10');
     await expect(page.locator('#loadBtn')).toBeVisible();
     await expect(page.locator('#helpBtn')).toBeVisible();
   });
