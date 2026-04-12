@@ -3562,8 +3562,8 @@
         (function () {
             // Colour ramp stops — RGB multipliers, neutral at 5500 K = (1, 1, 1)
             const RAMP = [
-                { k:  1500, r: 1.00, g: 0.45, b: 0.08 },  // deep amber
-                { k:  3200, r: 1.00, g: 0.78, b: 0.50 },  // warm white
+                { k:  1500, r: 0.55, g: 0.25, b: 0.04 },  // dark ember
+                { k:  3200, r: 0.85, g: 0.66, b: 0.43 },  // dim warm white
                 { k:  5500, r: 1.00, g: 1.00, b: 1.00 },  // neutral (logo natural colour)
                 { k:  8000, r: 0.82, g: 0.91, b: 1.00 },  // cool blue-white
                 { k: 10000, r: 0.62, g: 0.78, b: 1.00 },  // deep blue
@@ -3610,8 +3610,8 @@
                     _matrix.setAttribute('values',
                         `${r.toFixed(3)} 0 0 0 0  0 ${g.toFixed(3)} 0 0 0  0 0 ${b.toFixed(3)} 0 0  0 0 0 1 0`);
                     logo.style.filter = 'url(#_kwTint)';
-                    // Scale tracks K: warm end = 1.00, cool end = 1.08
-                    const scale = 1 + 0.08 * ((K - 1500) / 8500);
+                    // Scale tracks K: warm end = 1.00, cool end = 1.16
+                    const scale = 1 + 0.16 * ((K - 1500) / 8500);
                     logo.style.transform = `scale(${scale.toFixed(3)})`;
                 }
                 _rafId = requestAnimationFrame(_tick);
