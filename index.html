@@ -3581,13 +3581,13 @@
 
                 // sepia(1) base ≈ hue 38° — offset hue-rotate to reach target hue
                 const hRot     = ((h - 38) + 360) % 360;
-                const satScale = Math.max(0.3, s * 9);
-                const bright   = Math.max(0.75, Math.min(1.1, 0.5 + lum * 0.9));
+                const satScale = Math.max(0.2, s * 16); // exaggerated: ~16 at 1500K, ~5.5 at 10000K, ~1.6 at 5500K
+                const bright   = Math.max(0.55, Math.min(1.1, 0.35 + lum * 0.85)); // wider: ~0.68 at 1500K, ~1.1 at 5500K
                 return `brightness(${bright.toFixed(2)}) sepia(1) hue-rotate(${hRot.toFixed(0)}deg) saturate(${satScale.toFixed(1)})`;
             }
 
-            const KELVIN_PERIOD = 8000; // ms — full 1500→10000→1500 K sweep
-            const SCALE_PERIOD  = 3000; // ms — gentle pulse (matches original feel)
+            const KELVIN_PERIOD = 6000; // ms — full 1500→10000→1500 K sweep
+            const SCALE_PERIOD  = 6000; // ms — scale pulse, same period as colour
             let _rafId = null;
 
             function _tick(ts) {
@@ -3602,7 +3602,7 @@
                     logo.style.transform = '';
                 } else {
                     const K     = 5750 + 4250 * Math.sin((ts / KELVIN_PERIOD) * Math.PI * 2);
-                    const scale = 1 + 0.025 * (1 - Math.cos((ts / SCALE_PERIOD) * Math.PI * 2));
+                    const scale = 1 + 0.04 * (1 - Math.cos((ts / SCALE_PERIOD) * Math.PI * 2)); // 1.0→1.08
                     logo.style.filter    = _kelvinToFilter(K);
                     logo.style.transform = `scale(${scale.toFixed(3)})`;
                 }
