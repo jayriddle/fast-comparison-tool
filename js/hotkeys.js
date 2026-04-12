@@ -238,6 +238,85 @@ function _renderShortcutsList() {
     colsRow.appendChild(rightCol);
     list.appendChild(colsRow);
 
+    // ── Appearance section (slot color pickers) ──
+    const SLOTS = [
+        { id: 'original', label: 'Ref' },
+        { id: 'editA',    label: 'A'   },
+        { id: 'editB',    label: 'B'   },
+    ];
+    const appearSection = document.createElement('div');
+    appearSection.className = 'slot-appearance-section';
+
+    const appearHeader = document.createElement('div');
+    appearHeader.className = 'shortcut-section-header';
+    appearHeader.textContent = 'Appearance';
+    appearSection.appendChild(appearHeader);
+
+    const swatchRow = document.createElement('div');
+    swatchRow.className = 'slot-appearance-row';
+
+    SLOTS.forEach(({ id, label }) => {
+        const bgVar  = `--slot-${id}-bg`;
+        const txtVar = `--slot-${id}-txt`;
+        const currentBg  = getComputedStyle(document.documentElement).getPropertyValue(bgVar).trim()
+                        || _SLOT_COLOR_DEFAULTS[id];
+        const currentTxt = getComputedStyle(document.documentElement).getPropertyValue(txtVar).trim()
+                        || '#0a0c0a';
+
+        const swatch = document.createElement('label');
+        swatch.className = 'slot-color-swatch';
+        swatch.style.background = currentBg;
+        swatch.style.color      = currentTxt;
+        swatch.title = `Change ${label} slot color`;
+
+        const dot = document.createElement('span');
+        dot.className = 'slot-color-dot';
+        dot.style.background = currentTxt;
+
+        const name = document.createElement('span');
+        name.textContent = label;
+
+        const picker = document.createElement('input');
+        picker.type  = 'color';
+        picker.value = currentBg;
+
+        picker.addEventListener('input', () => {
+            _applySlotColors(Object.assign({}, _slotColors, { [id]: picker.value }), false);
+            const newTxt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${id}-txt`).trim();
+            swatch.style.background = picker.value;
+            swatch.style.color      = newTxt;
+            dot.style.background    = newTxt;
+            resetBtn.classList.toggle('hidden', _isDefaultColors());
+        });
+
+        // Persist on close — _slotColors already up-to-date from input events
+        picker.addEventListener('change', () => {
+            localStorage.setItem('slotColors', JSON.stringify(_slotColors));
+        });
+
+        swatch.appendChild(dot);
+        swatch.appendChild(name);
+        swatch.appendChild(picker);
+        swatchRow.appendChild(swatch);
+    });
+
+    // Reset to defaults button
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'slot-appearance-reset';
+    resetBtn.title  = 'Reset to default colors';
+    resetBtn.textContent = 'Reset';
+    const _isDefaultColors = () =>
+        SLOTS.every(({ id }) => _slotColors[id] === _SLOT_COLOR_DEFAULTS[id]);
+    resetBtn.classList.toggle('hidden', _isDefaultColors());
+    resetBtn.addEventListener('click', () => {
+        _applySlotColors(_SLOT_COLOR_DEFAULTS, true);
+        _renderShortcutsList(); // re-render to sync swatch values
+    });
+
+    swatchRow.appendChild(resetBtn);
+    appearSection.appendChild(swatchRow);
+    list.appendChild(appearSection);
+
     // Reset All button (only show if any customised)
     if (Object.keys(_customKeys).length > 0) {
         const resetRow = document.createElement('div');
