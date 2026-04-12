@@ -3557,33 +3557,28 @@
         // The scale pulses independently at the original 3 s rate.
         (function () {
             function _kelvinToFilter(K) {
-                const t = K / 100;
-                const r = t <= 66 ? 255 : Math.min(255, Math.max(0,
-                    329.698727446 * Math.pow(t - 60, -0.1332047592)));
-                const g = t <= 66
-                    ? Math.min(255, Math.max(0, 99.4708025861 * Math.log(t) - 161.1195681661))
-                    : Math.min(255, Math.max(0, 288.1221695283 * Math.pow(t - 60, -0.0755148492)));
-                const b = t >= 66 ? 255 : t <= 19 ? 0
-                    : Math.min(255, Math.max(0, 138.5177312231 * Math.log(t - 10) - 305.0447927307));
-
-                // RGB → HSV for hue and saturation
-                const rn = r / 255, gn = g / 255, bn = b / 255;
-                const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn), d = max - min;
-                let h = 0;
-                if (d > 0.001) {
-                    if (max === rn)      h = 60 * ((gn - bn) / d % 6);
-                    else if (max === gn) h = 60 * ((bn - rn) / d + 2);
-                    else                 h = 60 * ((rn - gn) / d + 4);
-                    if (h < 0) h += 360;
+                // Direct parameter interpolation — avoids the RGB→HSV hue
+                // discontinuity that occurs near 6500 K (where Kelvin colour is
+                // near-white and HSV hue becomes undefined, causing hue-rotate
+                // to jump erratically even at low saturation).
+                //
+                // Two smooth linear segments anchored at known visual targets:
+                //   1500 K  deep amber  hRot=-10°  sat=14  bright=0.62
+                //   6500 K  neutral     hRot=  0°  sat=0.3 bright=1.10
+                //  10000 K  cool blue   hRot=172°  sat=5.5 bright=1.00
+                let hRot, sat, bright;
+                if (K <= 6500) {
+                    const t = (K - 1500) / 5000;          // 0 at 1500 K → 1 at 6500 K
+                    hRot   = -10 + 10 * t;                 // -10° → 0°
+                    sat    = 14 - 13.7 * t;                // 14   → 0.3
+                    bright = 0.62 + 0.48 * t;              // 0.62 → 1.10
+                } else {
+                    const t = (K - 6500) / 3500;           // 0 at 6500 K → 1 at 10000 K
+                    hRot   = 172 * t;                      //  0°  → 172°
+                    sat    = 0.3 + 5.2 * t;                //  0.3 → 5.5
+                    bright = 1.10 - 0.10 * t;              //  1.10 → 1.00
                 }
-                const s   = max < 0.001 ? 0 : d / max;
-                const lum = 0.2126 * rn + 0.7152 * gn + 0.0722 * bn;
-
-                // sepia(1) base ≈ hue 38° — offset hue-rotate to reach target hue
-                const hRot     = ((h - 38) + 360) % 360;
-                const satScale = Math.max(0.2, s * 16); // exaggerated: ~16 at 1500K, ~5.5 at 10000K, ~1.6 at 5500K
-                const bright   = Math.max(0.55, Math.min(1.1, 0.35 + lum * 0.85)); // wider: ~0.68 at 1500K, ~1.1 at 5500K
-                return `brightness(${bright.toFixed(2)}) sepia(1) hue-rotate(${hRot.toFixed(0)}deg) saturate(${satScale.toFixed(1)})`;
+                return `brightness(${bright.toFixed(2)}) sepia(1) hue-rotate(${hRot.toFixed(1)}deg) saturate(${sat.toFixed(1)})`;
             }
 
             const KELVIN_PERIOD = 6000; // ms — full 1500→10000→1500 K sweep
