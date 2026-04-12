@@ -1940,9 +1940,6 @@
             color: rgba(45, 124, 255, 0.6);
         }
 
-        .asset-btn.first-asset {}
-        .asset-btn.last-asset {}
-
         .strip-sep.asset-sep {
             background: transparent;
             color: rgba(45, 124, 255, 0.3);
@@ -8560,6 +8557,18 @@
             _audioVizDecodeStarted = false;
             // audioVizVisible persists across loads (saved in localStorage)
             magnifierEnabled = false;
+            // Clean up magnifier clone video elements — they are inserted into the DOM and
+            // reference blob URLs, so they must be explicitly removed and their src cleared
+            // to avoid leaking video elements and blob URL references across file loads.
+            Object.values(_magState).forEach(state => {
+                if (state.clone) { state.clone.pause(); state.clone.src = ''; state.clone.remove(); }
+            });
+            // _magState itself: IDs are fixed (3 loupes), so reset to a fresh object rather
+            // than pruning — ensures stale clone/overlay refs don't survive.
+            Object.keys(_magState).forEach(k => delete _magState[k]);
+            // Close AudioContext so the browser can fully reclaim audio resources between
+            // loads. A fresh context is created lazily on the next getAudioContext() call.
+            if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
             // Keep persisted prefs (magnifierLinked, magnifierZoom, magnifierSize,
             // spectrogramLogScale, palette) — don't reset to defaults
             _magnifierEls.forEach(id => {
