@@ -7,7 +7,9 @@
 
 ## Audio Memory Optimizations
 - **Scrub audio**: Downsampled to mono 22.05 kHz (`_downsampleForScrub()`) — ~5-8× smaller than full stereo 48 kHz. Full quality retained *only* for Opus sync slots in Chrome for accurate A/V playback.
-- **AudioBuffer management**: `audioFileBuffers[slot]` deleted after processing. `decodeAudioData()` wrapped in loading overlay (`#loadingOverlay`); `startFadeIn()` hides it.
+- **AudioBuffer management**: `audioFileBuffers[slot]` deleted after decode. Decoded `AudioBuffer` lives in `_audioSlotVizData[slot].audioBuffer`; freed when `_audioSlotVizData = {}` in `clearAllMedia()`.
+- **AudioContext lifecycle**: Lazy-created via `getAudioContext()`. Closed and nulled in `clearAllMedia()` — `audioContext.close().catch(() => {}); audioContext = null` — so browser fully reclaims audio resources between loads. Fresh context created on next `getAudioContext()` call.
+- **Stale decode guard**: `_audioDecodeGen[slot]` counter incremented before each `decodeAudioData` call; captured in closure; checked before any state write in `.then()`. Prevents a slow decode completing after reload from writing `_audioSlotVizData` against a new batch. Reset to `{}` in `clearAllMedia()`.
 - **BPM & viz**: Uses typed arrays (`Float32Array`) for FFT, waveform buckets, spectral flux. Spectrogram palettes precomputed once.
 
 ## Video Scopes & Visualization (`js/scopes.js`)
@@ -25,12 +27,16 @@
 - **Difference mode**: Computed on-the-fly per frame; no stored difference buffers.
 - **Loupe**: Canvas-based, follows cursor, uses native pixels at current zoom.
 
+## Magnifier Clone Video Elements
+- Clone `<video>` elements are created inside each loupe (`_magState[id].clone`) so hardware compositor path is used — `drawImage(video, canvas)` produces incorrect colours on macOS P3 displays.
+- Clones reference the same blob URL as the original; they are NOT added to `_blobUrls` (no duplicate revocation needed).
+- `clearAllMedia()` iterates `_magState`, pauses each clone, clears its `src`, removes it from the DOM, then wipes `_magState` entries. Prevents clone elements and blob URL refs leaking across file loads.
+
 ## General Patterns
 - **_prefixed private state**: All module globals prefixed (e.g. `_frameStepping`, `_audioSlotVizData`) for clarity.
 - **Typed arrays everywhere**: Avoid JS numbers/objects for bulk data (bins, hits, audio samples, image data).
 - **GC pressure avoidance**: Reuse objects, debounce layout/resize handlers, cache where resize is infrequent.
-- **ffmpeg.wasm**: Embedded in `/ffmpeg/`; `INITIAL_MEMORY||33554432` (~32MB); used for video transcoding with progress toasts.
-- **No dependencies**: Zero npm packages — keeps memory footprint tiny.
+- **No build dependencies**: Zero npm packages in the app — keeps memory footprint tiny. `node_modules/` is dev-only (Playwright).
 
 ## Performance Notes
 - Large 4K+ videos or multiple high-res assets can still push browser limits (VRAM, decode memory).
