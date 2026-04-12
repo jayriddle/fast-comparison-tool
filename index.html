@@ -5994,6 +5994,7 @@
         // ── Audio File Comparison ──────────────────────────────────────────
 
         let _audioSlotVizData = {};  // { slot: { waveform, spectrogram, audioBuffer } }
+        let _audioDecodeGen = {};    // { slot: number } — incremented on each decode start; guards stale completions
         let _lastPrimaryAudioTime = 0;
         let _blobUrls = [];          // track blob URLs for revocation on cleanup
         let _audioMaxDuration = 0;   // uniform time scale across all audio slots
@@ -6178,8 +6179,11 @@
         }
 
         function decodeAndComputeAudioSlotViz(slot, arrayBuffer) {
+            _audioDecodeGen[slot] = (_audioDecodeGen[slot] || 0) + 1;
+            const gen = _audioDecodeGen[slot];
             const ctx = getAudioContext();
             ctx.decodeAudioData(arrayBuffer.slice(0)).then(audioBuffer => {
+                if (_audioDecodeGen[slot] !== gen) return;
                 updateLoadingStatus('Computing waveforms…');
                 const dpr = window.devicePixelRatio || 1;
                 const maxPx = Math.round(window.innerWidth * dpr);
@@ -6865,6 +6869,7 @@
                     updateMediaProgress(primary);
                     if (_noVideoMode) updateAllAudioSlotCursors(primary);
                     if (hasAudios) {
+                        if (isDragging) return;
                         const t = primary.currentTime;
                         if (_lastPrimaryAudioTime > 0 && t < _lastPrimaryAudioTime - 0.5) {
                             const all = getAllPlayableMedia();
@@ -8550,6 +8555,7 @@
             _videoAudioBuffers = {};
             audioFileBuffers = {};
             _audioSlotVizData = {};
+            _audioDecodeGen = {};
             _audioMaxDuration = 0;
             _audioVizDecodeStarted = false;
             // audioVizVisible persists across loads (saved in localStorage)
