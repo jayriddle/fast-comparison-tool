@@ -2552,7 +2552,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.2';
+        const APP_VERSION = '3.10.3';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -10012,7 +10012,7 @@
 
                     const visibleSlotCount = getVisibleSlots().length;
                     if (targetMode === 'vertical') {
-                        document.body.classList.add(visibleSlotCount <= 2 ? 'side-by-side' : 'vertical-stack');
+                        document.body.classList.add('vertical-stack');
                     } else if (targetMode === 'offset') {
                         if (visibleSlotCount <= 2) {
                             const best = pickBestGridLayout(2);
