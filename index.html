@@ -872,9 +872,10 @@
             bottom: 28px;
             left: 50%;
             transform: translateX(-50%);
-            background: #fff;
-            color: #111;
-            padding: 8px 22px;
+            background: rgba(46, 46, 54, 0.97);
+            color: #d8d8e0;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 7px 20px;
             border-radius: 999px;
             font-size: 13px;
             font-weight: 500;
@@ -884,7 +885,7 @@
             opacity: 0;
             transition: opacity 0.15s ease;
             white-space: nowrap;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+            box-shadow: 0 2px 16px rgba(0,0,0,0.55);
         }
         .toast.visible {
             opacity: 1;
@@ -933,25 +934,27 @@
             --slot-editB-bar:    #320020;  --slot-editB-hi:     #7a1a50;
         }
 
-        /* Ghost pills shown in header when a slot is hidden */
-        #hiddenSlotPills { display: none; align-items: center; gap: 4px; }
-        #hiddenSlotPills.has-hidden { display: flex; }
+        /* Ghost pills — inline in modeStrip, same position as active pills, clearly distinct */
+        #hiddenSlotPills { display: none; } /* legacy container — kept in DOM but unused */
         .hidden-slot-pill {
             display: inline-flex; align-items: center;
-            padding: 1px 8px; border-radius: 5px;
-            font-size: 13px; font-weight: 700;
-            cursor: pointer; opacity: 0.45;
+            padding: 0px 7px; border-radius: 5px;
+            font-size: 12px; font-weight: 700;
+            cursor: pointer;
+            background: transparent;
+            border: 1.5px dashed currentColor;
+            opacity: 0.5;
             letter-spacing: 0.05em; user-select: none;
             transition: opacity 0.15s;
         }
-        .hidden-slot-pill:hover { opacity: 0.8; }
-        .hidden-slot-pill.slot-original { background: var(--slot-original-bg); color: var(--slot-original-txt); }
-        .hidden-slot-pill.slot-editA    { background: var(--slot-editA-bg);    color: var(--slot-editA-txt); }
-        .hidden-slot-pill.slot-editB    { background: var(--slot-editB-bg);    color: var(--slot-editB-txt); }
+        .hidden-slot-pill:hover { opacity: 0.85; }
+        .hidden-slot-pill.slot-original { color: var(--slot-original-bg); }
+        .hidden-slot-pill.slot-editA    { color: var(--slot-editA-bg); }
+        .hidden-slot-pill.slot-editB    { color: var(--slot-editB-bg); }
         /* Slot label: deep saturated fill, dark text — same in all states */
-        #layerOriginal .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: var(--slot-original-bg); }
-        #layerEditA    .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: var(--slot-editA-bg); }
-        #layerEditB    .asset-info-bar .asset-name { background: rgba(0,0,0,0.5); color: var(--slot-editB-bg); }
+        #layerOriginal .asset-info-bar .asset-name { background: var(--slot-original-hi); color: var(--slot-original-bg); }
+        #layerEditA    .asset-info-bar .asset-name { background: var(--slot-editA-hi);    color: var(--slot-editA-bg); }
+        #layerEditB    .asset-info-bar .asset-name { background: var(--slot-editB-hi);    color: var(--slot-editB-bg); }
 
         #layerOriginal.active-audio .asset-info-bar .asset-name { background: var(--slot-original-bg); color: var(--slot-original-txt); }
         #layerEditA.active-audio    .asset-info-bar .asset-name { background: var(--slot-editA-bg);    color: var(--slot-editA-txt); }
@@ -975,7 +978,7 @@
         }
 
         /* Sub-option pills (Inline/Offset, Fit/Balance) share base shape */
-        .mode-sub-btn, #stackZoomPill {
+        .mode-sub-btn {
             font-size: 11px;
             font-weight: 600;
             letter-spacing: 0.03em;
@@ -1007,15 +1010,22 @@
             background: rgba(45, 124, 255, 0.1);
         }
 
-        /* Stack sub-option: always full orange — pill shows current mode, always active */
-        #stackZoomPill {
+        /* Stack sub-options: orange family (inherited from stack icon active color) */
+        #stackModeGroup .mode-sub-btn {
+            color: rgba(240, 160, 48, 0.5);
+            border-color: rgba(240, 160, 48, 0.2);
+        }
+        #stackModeGroup .mode-sub-btn:hover {
+            background: rgba(240, 160, 48, 0.15);
+            border-color: rgba(240, 160, 48, 0.4);
+            color: #f0a030;
+        }
+        #stackModeGroup .mode-sub-btn.active {
             color: #f0a030;
             border-color: rgba(240, 160, 48, 0.45);
+            background: rgba(240, 160, 48, 0.1);
         }
-        #stackZoomPill:hover { background: rgba(240, 160, 48, 0.12); }
-        /* Balance (non-default): subtle fill to signal a special state */
-        #stackZoomPill.match { background: rgba(240, 160, 48, 0.1); }
-        body.grid-mode #stackZoomPill { display: none !important; }
+        body.grid-mode #stackSubOptions { display: none !important; }
 
         #stackMiniMap {
             position: fixed;
@@ -1967,9 +1977,14 @@
         #stackIconBtn:hover  { color: #fff; background: #555; }
         #stackIconBtn.active { color: #f0a030; }
         #stackIconBtn.active:hover { background: rgba(240,160,48,0.12); color: #f0a030; }
-        /* Waveform/scope keep the general active rule */
+        /* Generic active fallback */
         .analysis-btn.active { color: #2d7cff; }
         .analysis-btn.active:hover { background: #3a4a50; }
+        /* Waveform and scopes: green when active — matches the luma-waveform and vectorscope palette */
+        #waveformToggleBtn.active,
+        #scopesToggleBtn.active { color: #4add20; }
+        #waveformToggleBtn.active:hover,
+        #scopesToggleBtn.active:hover { background: rgba(74,221,32,0.1); color: #4add20; }
         .analysis-btn svg { width: 20px; height: 20px; display: block; }
         .analysis-btn:focus { outline: none; }
         .analysis-btn:focus-visible { outline: 2px solid #f0a030; outline-offset: 2px; }
@@ -2367,10 +2382,13 @@
                         <button class="mode-sub-btn" id="offsetModeBtn">Offset</button>
                     </div>
                 </div>
-                <!-- Stack mode group: icon + Fit/Balance sub-option -->
+                <!-- Stack mode group: icon + Fit/Balance sub-options -->
                 <div class="mode-group" id="stackModeGroup">
                     <button class="analysis-btn" id="stackIconBtn" title="Stack mode (S)"></button>
-                    <span id="stackZoomPill" onclick="_toggleStackZoomMode()" title="Stack: Fit / Balance zoom (\)">Fit</span>
+                    <div id="stackSubOptions" style="display:none; align-items:center; gap:2px;">
+                        <button class="mode-sub-btn" id="fitModeBtn">Fit</button>
+                        <button class="mode-sub-btn" id="balanceModeBtn">Balance</button>
+                    </div>
                 </div>
                 <span style="color:#444; margin:0 1px;">|</span>
                 <button class="analysis-btn" id="waveformToggleBtn" onclick="toggleAudioViz(); this.blur();" title="Audio waveform / spectrogram (W)"></button>
@@ -2594,6 +2612,18 @@
         document.getElementById('waveformToggleBtn').innerHTML = _SVG_WAVEFORM;
         document.getElementById('scopesToggleBtn').innerHTML = _SVG_SCOPES;
 
+        // Static Fit/Balance button handlers
+        document.getElementById('fitModeBtn').addEventListener('click', function() {
+            if (_stackZoomMode === 'fit') return;
+            _toggleStackZoomMode();
+            this.blur();
+        });
+        document.getElementById('balanceModeBtn').addEventListener('click', function() {
+            if (_stackZoomMode === 'balance') return;
+            _toggleStackZoomMode();
+            this.blur();
+        });
+
         // Static Inline/Offset button handlers
         document.getElementById('inlineModeBtn').addEventListener('click', function() {
             if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
@@ -2676,19 +2706,19 @@
         }
 
         function _updateHiddenSlotPills() {
+            // Ghost pills are now rendered inline in #modeStrip (in assetOrder sequence).
+            // Clear the legacy #hiddenSlotPills container so nothing appears twice.
             const container = document.getElementById('hiddenSlotPills');
-            if (!container) return;
-            container.innerHTML = '';
-            _hiddenSlots.forEach(slot => {
-                const label = slotLabel(slot);
-                const pill = document.createElement('span');
-                pill.className = `hidden-slot-pill slot-${slot}`;
-                pill.textContent = label;
-                pill.title = `Show ${label}`;
-                pill.onclick = () => toggleSlotVisibility(slot);
-                container.appendChild(pill);
-            });
-            container.classList.toggle('has-hidden', _hiddenSlots.size > 0);
+            if (container) { container.innerHTML = ''; container.classList.remove('has-hidden'); }
+            // In Stack mode, rebuild the mode strip so ghost pills appear in correct order.
+            // Force visible immediately — don't rely on rAF since this is a content update,
+            // not an initial reveal, and the rAF closure can be stale if rebuilt twice quickly.
+            if (!isGridMode) {
+                updateModeStrip('overlay');
+                const strip = document.getElementById('modeStrip');
+                const ag = strip && strip.querySelector('.asset-group[data-group-type="overlay"]');
+                if (ag) ag.classList.add('visible');
+            }
             // Update info bar pills: disable cursor when hiding would leave 0 visible slots
             const visibleCount = getVisibleSlots().length;
             assetOrder.forEach(slot => {
@@ -2733,6 +2763,8 @@
             document.body.classList.remove(...splitModeClasses);
             document.body.classList.add('grid-mode');
             if (container) container.style.gridTemplateColumns = ''; container.style.gridTemplateRows = '';
+            // Clear stale layer width overrides (set by side-by-side/compare positionLabelsToMedia).
+            document.querySelectorAll('.asset-layer').forEach(l => { l.style.width = ''; });
 
             if (nowVisible.length >= 3) {
                 const best = pickBestGridLayout(3);
@@ -8235,22 +8267,19 @@
             _stackZoomMode = _stackZoomMode === 'fit' ? 'balance' : 'fit';
             _prefs.save('stackZoomMode', _stackZoomMode);
             applyZoom();
-            _updateStackZoomPill();
+            _updateStackSubOptions();
             showToast(_stackZoomMode === 'fit' ? 'Fit' : 'Balance');
         }
 
-        function _updateStackZoomPill() {
-            const pill = document.getElementById('stackZoomPill');
-            if (!pill) return;
-            if (isGridMode) { pill.style.display = 'none'; return; }
-            pill.style.display = '';
-            if (_stackZoomMode === 'balance') {
-                pill.textContent = 'Balance';
-                pill.classList.add('match');
-            } else {
-                pill.textContent = 'Fit';
-                pill.classList.remove('match');
-            }
+        function _updateStackSubOptions() {
+            const container = document.getElementById('stackSubOptions');
+            if (!container) return;
+            const show = !isGridMode && getLoadedSlotCount() > 0 && !hasAudios;
+            container.style.display = show ? 'flex' : 'none';
+            const fitBtn = document.getElementById('fitModeBtn');
+            const balBtn = document.getElementById('balanceModeBtn');
+            if (fitBtn) fitBtn.classList.toggle('active', _stackZoomMode === 'fit');
+            if (balBtn) balBtn.classList.toggle('active', _stackZoomMode === 'balance');
         }
 
         // ── Stack mode header info strip ──────────────────────────────────────────
@@ -9269,25 +9298,34 @@
                         const dRef = gridLayout['original'];
                         const dA   = gridLayout['editA'];
                         const dB   = gridLayout['editB'];
-                        // Hoist right-column geometry so both fitArea and clamping blocks share values.
                         const rA     = dA ? ratios['editA'] : 1;
                         const rB     = dB ? ratios['editB'] : 1;
-                        const rightW = dA ? dA.cw : 0;
-                        const rightH = dA && dB ? (dA.ch - dA.ibH) + (dB.ch - dB.ibH) - 4 : 0;
 
-                        // fitArea: smallest per-slot max area across all constraints
-                        let fitArea = dRef ? dRef.fitW * dRef.fitH : Infinity;
+                        // Use the actual grid container dimensions rather than viewport math.
+                        // After the first layout pass the grid tracks are fixed-px, so
+                        // layer.offsetWidth/Height is stale — but ac.offsetWidth/Height stays
+                        // correct because it reflects the live container size.
+                        const offAvailW = ac ? ac.offsetWidth  - 16 : window.innerWidth  - 16;
+                        const offAvailH = ac ? ac.offsetHeight -  4 : window.innerHeight - 60;
+                        const offIbA = dA ? (dA.ibH || 24) : 24;
+                        const offIbB = dB ? (dB.ibH || 24) : 24;
 
+                        // fitArea: max equal-area T for all three slots using viewport dimensions.
+                        // Using viewport instead of stale cell measurements (the grid tracks are
+                        // set to fixed px after the first pass, so offsetWidth/Height is stale).
+                        let fitArea = Infinity;
                         if (dA && dB) {
-                            // Width: rw ≤ rightW → A ≤ rightW²/max(rA,rB)
-                            const aFromW = rightW * rightW / Math.max(rA, rB);
-                            // Height group: √A·(1/√rA + 1/√rB) ≤ rightH
+                            // Width: √T·(√rRef + max(√rA,√rB)) ≤ offAvailW − 4 (col gap)
+                            const sqrtRRef = dRef ? Math.sqrt(ratios['original']) : 0;
+                            const aFromW = Math.pow((offAvailW - 4) / (sqrtRRef + Math.sqrt(Math.max(rA, rB))), 2);
+                            // Height (right col): √T·(1/√rA + 1/√rB) ≤ offAvailH − ibA − ibB − 4
                             const sumInvSqrtR = 1 / Math.sqrt(rA) + 1 / Math.sqrt(rB);
-                            const aFromH = (rightH / sumInvSqrtR) ** 2;
-                            fitArea = Math.min(fitArea, aFromW, aFromH);
+                            const aFromH = Math.pow(Math.max(1, offAvailH - offIbA - offIbB - 4) / sumInvSqrtR, 2);
+                            fitArea = Math.min(aFromW, aFromH);
                         } else {
-                            if (dA) fitArea = Math.min(fitArea, dA.fitW * dA.fitH);
-                            if (dB) fitArea = Math.min(fitArea, dB.fitW * dB.fitH);
+                            if (dA)   fitArea = Math.min(fitArea, dA.fitW * dA.fitH);
+                            if (dB)   fitArea = Math.min(fitArea, dB.fitW * dB.fitH);
+                            if (dRef) fitArea = Math.min(fitArea, dRef.fitW * dRef.fitH);
                         }
                         if (!isFinite(fitArea) || fitArea <= 0) fitArea = 1;
 
@@ -9301,20 +9339,23 @@
                         }
                         let targetArea = fitArea * linearZoom * linearZoom;
 
-                        // Clamp to fit constraints
+                        // Clamp when user-zoom overflows the viewport
                         let clamped = false;
                         if (splitZoomLevel !== 1) {
-                            if (dRef && (Math.sqrt(targetArea * ratios['original']) > dRef.cw ||
-                                        Math.sqrt(targetArea / ratios['original']) > dRef.ch - dRef.ibH)) clamped = true;
                             if (dA && dB) {
-                                if (Math.sqrt(targetArea * rA) > dA.cw ||
-                                    Math.sqrt(targetArea * rB) > dB.cw ||
-                                    Math.sqrt(targetArea / rA) + Math.sqrt(targetArea / rB) > rightH) clamped = true;
+                                const projRightH = Math.sqrt(targetArea / rA) + Math.sqrt(targetArea / rB) + offIbA + offIbB + 4;
+                                const projGridW  = (dRef ? Math.sqrt(targetArea * ratios['original']) : 0)
+                                                 + Math.max(Math.sqrt(targetArea * rA), Math.sqrt(targetArea * rB)) + 8;
+                                if (projRightH > offAvailH + 1 || projGridW > offAvailW) clamped = true;
+                            } else {
+                                if (dA && Math.sqrt(targetArea * rA) > dA.cw) clamped = true;
+                                if (dB && Math.sqrt(targetArea * rB) > dB.cw) clamped = true;
                             }
                             if (clamped) { targetArea = fitArea; if (splitStepZoom > 1) splitStepZoom = 1; }
                         }
                         _gridZoomWasCapped = clamped;
 
+                        // Equal-area sizing for all slots
                         loadedSlots.forEach(s => {
                             const d = gridLayout[s];
                             d.rw = Math.round(Math.sqrt(targetArea * ratios[s]));
@@ -9323,8 +9364,6 @@
                         });
 
                         // Update grid cells to content sizes and center the group in the viewport.
-                        // dA/dB/dRef cw+ch are updated so the positioning pass below uses the
-                        // new dimensions rather than the stale measured values.
                         if (dA && dB) {
                             const rowA = dA.ibH + dA.rh;
                             const rowB = dB.ibH + dB.rh;
@@ -9937,6 +9976,7 @@
                     document.querySelectorAll('.asset-layer').forEach(layer => {
                         const hasMedia = layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
                         if (hasMedia) layer.classList.add('active');
+                        layer.style.width = '';
                         layer.style.height = '';
                         layer.style.marginTop = '';
                     });
@@ -10013,7 +10053,7 @@
             // Update mode and asset strips in header
             updateModeStrip(isGridMode ? layoutMode : 'overlay');
             updateAssetStrip();
-            _updateStackZoomPill();
+            _updateStackSubOptions();
             _updateStackInfoStrip();
         }
 
@@ -10041,7 +10081,7 @@
         function _updateGridSubOptions() {
             const container = document.getElementById('gridSubOptions');
             if (!container) return;
-            const show = isGridMode && getLoadedSlotCount() === 3 && !hasAudios;
+            const show = isGridMode && getVisibleSlots().length === 3 && !hasAudios;
             container.style.display = show ? 'flex' : 'none';
             const inlineBtn = document.getElementById('inlineModeBtn');
             const offsetBtn = document.getElementById('offsetModeBtn');
@@ -10057,7 +10097,7 @@
             // Always show analysis icons; hide mode strip for single file
             document.getElementById('headerRight').style.display = 'flex';
             document.getElementById('analysisStrip').style.display = 'flex';
-            document.getElementById('iconSep1').style.display = '';
+            document.getElementById('iconSep1').style.display = 'none'; // shown only in Stack mode below
             // Normalise activeMode: horizontal/vertical both map to 'compare' for highlighting
             const normalised = (activeMode === 'horizontal' || activeMode === 'vertical') ? 'compare' : activeMode;
 
@@ -10078,7 +10118,9 @@
             strip.innerHTML = '';
             document.getElementById('headerRight').style.display = 'flex';
             document.getElementById('analysisStrip').style.display = 'flex';
-            document.getElementById('iconSep1').style.display = '';
+            // Separator between modeStrip and analysisStrip: only meaningful in Stack mode
+            // where the modeStrip holds the asset pills (Ref/A/B). In Grid mode it's empty.
+            document.getElementById('iconSep1').style.display = normalised === 'overlay' ? '' : 'none';
 
             // Update stack/grid icon active states
             const stackIconBtn = document.getElementById('stackIconBtn');
@@ -10090,14 +10132,15 @@
             if (gridIconBtn) {
                 gridIconBtn.classList.toggle('active', normalised !== 'overlay');
                 gridIconBtn.onclick = () => {
-                    const gm = loadedCount === 3 ? 'offset' : (layoutMode || 'horizontal');
+                    const gm = getVisibleSlots().length === 3 ? 'offset' : (layoutMode || 'horizontal');
                     setViewMode(gm);
                     gridIconBtn.blur();
                 };
             }
 
-            // Update static Grid sub-options (Inline/Offset) in analysisStrip
+            // Update static Grid sub-options (Inline/Offset) and Stack sub-options (Fit/Balance)
             _updateGridSubOptions();
+            _updateStackSubOptions();
 
             // When overlay is active, build the asset group and animate it sliding in
             if (normalised === 'overlay') {
@@ -10114,22 +10157,30 @@
                     sep.textContent = '·';
                     assetGroup.appendChild(sep);
 
-                    const layerEl = getLayer(slot);
-                    const nameEl = layerEl ? layerEl.querySelector('.asset-name') : null;
-                    const label = nameEl ? nameEl.textContent : slot;
-                    const btn = document.createElement('button');
-                    const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
-                    const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
-                    btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
-                    btn.textContent = label;
-                    // Match info bar pill style: inactive = slot color as text on dark bg,
-                    // active = slot color fills pill with dark text (active-audio state)
-                    const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
-                    const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
-                    btn.style.background = isActive ? hex : 'rgba(0,0,0,0.5)';
-                    btn.style.color      = isActive ? txt : hex;
-                    btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
-                    assetGroup.appendChild(btn);
+                    const label = slotLabel(slot);
+                    if (_hiddenSlots.has(slot)) {
+                        // Ghost pill — same position in strip, dimmed, click to restore
+                        const ghost = document.createElement('span');
+                        ghost.className = `hidden-slot-pill slot-${slot}`;
+                        ghost.textContent = label;
+                        ghost.title = `Show ${label}`;
+                        ghost.onclick = () => toggleSlotVisibility(slot);
+                        assetGroup.appendChild(ghost);
+                    } else {
+                        const btn = document.createElement('button');
+                        const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
+                        const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
+                        btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
+                        btn.dataset.slot = slot;
+                        btn.textContent = label;
+                        const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
+                        const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
+                        const hi  = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-hi`).trim();
+                        btn.style.background = isActive ? hex : (hi || 'rgba(0,0,0,0.5)');
+                        btn.style.color      = isActive ? txt : hex;
+                        btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
+                        assetGroup.appendChild(btn);
+                    }
                 });
                 strip.appendChild(assetGroup);
 
@@ -10146,6 +10197,7 @@
         }
 
         // Updates active state and fill colors on inline asset buttons without rebuilding.
+        // Uses data-slot attribute (set at creation) so ghost pills don't skew the index.
         function refreshAssetButtons() {
             const strip = document.getElementById('modeStrip');
             if (!strip) return;
@@ -10153,17 +10205,16 @@
             const assetBtns = assetGroup ? assetGroup.querySelectorAll('.asset-btn') : [];
             if (!assetBtns.length) return;
 
-            const loaded = assetOrder.filter(slot => mediaData[slot]);
-            assetBtns.forEach((btn, i) => {
-                const slot = loaded[i];
-                const isActive = slot && assetOrder.indexOf(slot) === currentAssetIndex;
+            assetBtns.forEach(btn => {
+                const slot = btn.dataset.slot;
+                if (!slot) return;
+                const isActive = assetOrder.indexOf(slot) === currentAssetIndex;
                 btn.classList.toggle('active', !!isActive);
-                if (slot) {
-                    const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
-                    const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
-                    btn.style.background = isActive ? hex : 'rgba(0,0,0,0.5)';
-                    btn.style.color      = isActive ? txt : hex;
-                }
+                const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
+                const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
+                const hi  = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-hi`).trim();
+                btn.style.background = isActive ? hex : (hi || 'rgba(0,0,0,0.5)');
+                btn.style.color      = isActive ? txt : hex;
             });
         }
 

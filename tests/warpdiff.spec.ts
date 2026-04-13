@@ -475,13 +475,23 @@ test.describe('Zoom & Loupe', () => {
     expect(zoom).toBe(1); // 100% native
   });
 
-  test('\\ key toggles Stack Fit/Match zoom mode', async ({ page }) => {
+  test('\\ key toggles Stack Fit/Balance zoom mode', async ({ page }) => {
     await page.goto('/');
     await loadAndEnterStack(page, ['red.png', 'green.png']);
+    // Fit/Balance sub-options are shown in Stack mode when images are loaded
+    const fitBtn = page.locator('#fitModeBtn');
+    const balBtn = page.locator('#balanceModeBtn');
+    await expect(fitBtn).toBeVisible();
+    await expect(balBtn).toBeVisible();
+    // Initially Fit is active
+    await expect(fitBtn).toHaveClass(/active/);
+    // Press \ to toggle to Balance
     await page.keyboard.press('\\');
-    // Match mode requires GT slot; test toggles the state (pill indicator or _stackZoomMode)
-    const stackZoomPill = page.locator('#stackZoomPill');
-    await expect(stackZoomPill).toBeVisible(); // Pill shows Fit or Match · GT
+    await expect(balBtn).toHaveClass(/active/);
+    await expect(fitBtn).not.toHaveClass(/active/);
+    // Press \ again to toggle back to Fit
+    await page.keyboard.press('\\');
+    await expect(fitBtn).toHaveClass(/active/);
   });
 
   test('Shift+Z enables linked loupe in Grid mode', async ({ page }) => {
