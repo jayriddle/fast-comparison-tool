@@ -10151,13 +10151,7 @@
                 // After layout: measure asset group width, set it as a CSS custom property
                 // so the @keyframe animation slides mode-core left by exactly that amount.
                 requestAnimationFrame(() => {
-                    const groupW = assetGroup.offsetWidth;
-
-                    // Tell the keyframe animation how far to slide
-                    modeCore.style.setProperty('--asset-group-width', `${groupW}px`);
-                    modeCore.classList.add('sliding');
-
-                    // Snap underline into place (offsetLeft-based, immune to transforms)
+                    // Snap underline into place before reveal so it doesn't animate from 0
                     underline.style.transition = 'none';
                     positionAssetUnderline();
 
