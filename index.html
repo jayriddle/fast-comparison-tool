@@ -967,20 +967,56 @@
         }
         .asset-info-bar .asset-zoom:empty { display: none; }
 
-        #stackZoomPill {
-            font-size: 13px;
-            font-weight: 700;
-            color: #ccc;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.14);
-            border-radius: 10px;
-            padding: 1px 8px;
+        /* ── Mode groups: tight icon + sub-option pairing ── */
+        .mode-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        /* Sub-option pills (Inline/Offset, Fit/Balance) share base shape */
+        .mode-sub-btn, #stackZoomPill {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            padding: 2px 7px;
+            border-radius: 8px;
+            border: 1.5px solid transparent;
             cursor: pointer;
+            background: transparent;
             white-space: nowrap;
             user-select: none;
             flex-shrink: 0;
+            font-family: inherit;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
-        #stackZoomPill:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        /* Grid sub-options: blue family (inherited from grid icon active color) */
+        #gridModeGroup .mode-sub-btn {
+            color: rgba(45, 124, 255, 0.5);
+            border-color: rgba(45, 124, 255, 0.2);
+        }
+        #gridModeGroup .mode-sub-btn:hover {
+            background: rgba(45, 124, 255, 0.15);
+            border-color: rgba(45, 124, 255, 0.4);
+            color: #2d7cff;
+        }
+        #gridModeGroup .mode-sub-btn.active {
+            color: #2d7cff;
+            border-color: rgba(45, 124, 255, 0.45);
+            background: rgba(45, 124, 255, 0.1);
+        }
+
+        /* Stack sub-option (Fit/Balance): orange family */
+        #stackZoomPill {
+            color: rgba(240, 160, 48, 0.5);
+            border-color: rgba(240, 160, 48, 0.22);
+        }
+        #stackZoomPill:hover {
+            background: rgba(240, 160, 48, 0.12);
+            border-color: rgba(240, 160, 48, 0.45);
+            color: #f0a030;
+        }
         #stackZoomPill.match { color: #f0a030; border-color: rgba(240,160,48,0.45); background: rgba(240,160,48,0.1); }
         body.grid-mode #stackZoomPill { display: none !important; }
 
@@ -2335,11 +2371,21 @@
             <div id="assetStrip" style="display:none;"></div>
             <!-- Layout + analysis toggles -->
             <span class="icon-sep" style="color:#555; margin:0 2px; display:none;" id="iconSep1">|</span>
-            <div id="analysisStrip" style="display:none; align-items:center; gap:2px;">
-                <button class="analysis-btn" id="stackIconBtn" title="Stack mode (S)"></button>
-                <span id="stackZoomPill" onclick="_toggleStackZoomMode()" title="Stack: Fit / Balance zoom (\)">Fit</span>
-                <button class="analysis-btn" id="gridIconBtn" title="Grid mode (G)"></button>
-                <span style="color:#555; margin:0 2px;">|</span>
+            <div id="analysisStrip" style="display:none; align-items:center; gap:4px;">
+                <!-- Grid mode group: icon + Inline/Offset sub-options -->
+                <div class="mode-group" id="gridModeGroup">
+                    <button class="analysis-btn" id="gridIconBtn" title="Grid mode (G)"></button>
+                    <div id="gridSubOptions" style="display:none; align-items:center; gap:2px;">
+                        <button class="mode-sub-btn" id="inlineModeBtn">Inline</button>
+                        <button class="mode-sub-btn" id="offsetModeBtn">Offset</button>
+                    </div>
+                </div>
+                <!-- Stack mode group: icon + Fit/Balance sub-option -->
+                <div class="mode-group" id="stackModeGroup">
+                    <button class="analysis-btn" id="stackIconBtn" title="Stack mode (S)"></button>
+                    <span id="stackZoomPill" onclick="_toggleStackZoomMode()" title="Stack: Fit / Balance zoom (\)">Fit</span>
+                </div>
+                <span style="color:#444; margin:0 1px;">|</span>
                 <button class="analysis-btn" id="waveformToggleBtn" onclick="toggleAudioViz(); this.blur();" title="Audio waveform / spectrogram (W)"></button>
                 <button class="analysis-btn" id="scopesToggleBtn" onclick="toggleVideoScopes(); this.blur();" title="Video scopes (V)"></button>
             </div>
@@ -2560,6 +2606,24 @@
         document.getElementById('gridIconBtn').innerHTML = _SVG_GRID;
         document.getElementById('waveformToggleBtn').innerHTML = _SVG_WAVEFORM;
         document.getElementById('scopesToggleBtn').innerHTML = _SVG_SCOPES;
+
+        // Static Inline/Offset button handlers
+        document.getElementById('inlineModeBtn').addEventListener('click', function() {
+            if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
+            if (gridInlineMode) return;
+            gridInlineMode = true;
+            localStorage.setItem('gridInlineMode', gridInlineMode);
+            splitStepZoom = 1.0;
+            _swapGridSubLayout();
+        });
+        document.getElementById('offsetModeBtn').addEventListener('click', function() {
+            if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
+            if (!gridInlineMode) return;
+            gridInlineMode = false;
+            localStorage.setItem('gridInlineMode', gridInlineMode);
+            splitStepZoom = 1.0;
+            _swapGridSubLayout();
+        });
         // Help icon table is below the script block — defer until DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
             var t = document.getElementById('helpIconTable');
@@ -9979,21 +10043,23 @@
             } else {
                 document.body.classList.add('offset');
             }
-            // Update button highlights in the grid sub-options
-            const gridGroup = document.querySelector('.asset-group[data-group-type="grid"]');
-            if (gridGroup) {
-                const btns = gridGroup.querySelectorAll('.asset-btn');
-                btns.forEach(btn => {
-                    const isInline = btn.textContent === 'INLINE';
-                    btn.classList.toggle('active', isInline === gridInlineMode);
-                });
-            }
-            // Move underline to the newly active sub-option
-            positionAssetUnderline();
+            _updateGridSubOptions();
             // Reposition after layout settles
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => positionLabelsToMedia(10));
             });
+        }
+
+        // Show/hide and sync active state of the static Inline/Offset buttons.
+        function _updateGridSubOptions() {
+            const container = document.getElementById('gridSubOptions');
+            if (!container) return;
+            const show = isGridMode && getLoadedSlotCount() === 3 && !hasAudios;
+            container.style.display = show ? 'flex' : 'none';
+            const inlineBtn = document.getElementById('inlineModeBtn');
+            const offsetBtn = document.getElementById('offsetModeBtn');
+            if (inlineBtn) inlineBtn.classList.toggle('active', gridInlineMode === true);
+            if (offsetBtn) offsetBtn.classList.toggle('active', gridInlineMode === false);
         }
 
         // Rebuilds the mode strip in the header. activeMode is 'overlay', 'offset',
@@ -10043,81 +10109,8 @@
                 };
             }
 
-            const isGridWith3 = normalised !== 'overlay' && loadedCount === 3;
-
-            // Split mode first, STACK last: GRID  [grid-options]  STACK  [asset-options]
-            const gridMode = loadedCount === 3 ? 'offset' : 'compare';
-
-            // Wrap grid sub-options in a flex group (no text GRID/STACK — icons handle that)
-            const modeCore = document.createElement('div');
-            modeCore.className = 'mode-core';
-
-            // Grid sub-options (Inline/Offset) — only shown with 3 files in grid mode
-            if (isGridWith3) {
-                const gridGroup = document.createElement('div');
-                gridGroup.className = 'asset-group';
-                gridGroup.dataset.groupType = 'grid';
-
-                const gridOpts = [
-                    { label: 'INLINE', is3Col: true },
-                    { label: 'OFFSET', is3Col: false }
-                ];
-                gridOpts.forEach((opt, i) => {
-                    const sep = document.createElement('span');
-                    sep.className = 'strip-sep asset-sep';
-                    sep.textContent = '·';
-                    gridGroup.appendChild(sep);
-
-                    const btn = document.createElement('button');
-                    const isActive = gridInlineMode === opt.is3Col;
-                    const posClass = (i === 0 ? ' first-asset' : '') + (i === gridOpts.length - 1 ? ' last-asset' : '');
-                    btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
-                    btn.textContent = opt.label;
-                    btn.onclick = () => {
-                        if (hasAudios) { showToast('Offset layout not available in audio mode'); return; }
-                        if (gridInlineMode === opt.is3Col) return; // already active
-                        gridInlineMode = opt.is3Col;
-                        localStorage.setItem('gridInlineMode', gridInlineMode);
-                        splitStepZoom = 1.0;
-                        _swapGridSubLayout();
-                    };
-                    gridGroup.appendChild(btn);
-                });
-                modeCore.appendChild(gridGroup);
-            }
-
-            strip.appendChild(modeCore);
-
-            // Animate grid sub-options expanding between GRID and STACK
-            if (isGridWith3) {
-                const gridGroup = modeCore.querySelector('.asset-group');
-                let underline = document.getElementById('assetUnderline');
-                if (!underline) {
-                    underline = document.createElement('div');
-                    underline.id = 'assetUnderline';
-                }
-                strip.appendChild(underline);
-
-                requestAnimationFrame(() => {
-                    // Measure natural width: temporarily remove max-width constraint
-                    gridGroup.style.maxWidth = 'none';
-                    gridGroup.style.opacity = '0';
-                    const naturalW = gridGroup.scrollWidth;
-                    // Reset to 0 so the transition animates from 0 → natural
-                    gridGroup.style.maxWidth = '0px';
-                    gridGroup.style.opacity = '';
-
-                    // Force layout at 0, then transition to natural width
-                    void gridGroup.offsetWidth;
-                    gridGroup.style.maxWidth = naturalW + 'px';
-                    gridGroup.classList.add('visible');
-
-                    underline.style.transition = 'none';
-                    // Position underline after width transition completes
-                    setTimeout(() => positionAssetUnderline(), 260);
-                    requestAnimationFrame(() => { underline.style.transition = ''; });
-                });
-            }
+            // Update static Grid sub-options (Inline/Offset) in analysisStrip
+            _updateGridSubOptions();
 
             // When overlay is active, build the asset group and animate it sliding in
             if (normalised === 'overlay') {
