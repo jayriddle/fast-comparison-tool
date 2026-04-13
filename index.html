@@ -2552,7 +2552,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.1';
+        const APP_VERSION = '3.10.2';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -2700,6 +2700,7 @@
         }
 
         const _hiddenSlots = new Set();
+        const _noAudioSlots = new Set(); // video slots confirmed to have no audio track
 
         function getVisibleSlots() {
             return assetOrder.filter(s => mediaData[s] && !_hiddenSlots.has(s));
@@ -4341,6 +4342,18 @@
         let _ffmpegQueue      = [];     // slots waiting for the instance to free up
         const _FFMPEG_WASM_SIZE = 24 * 1024 * 1024;
 
+        // Called when a video slot is confirmed to have no audio track.
+        // Shows a brief toast and updates the waveform canvas placeholder text.
+        // Does NOT trigger ffmpeg — there is nothing to transcode.
+        function _markSlotNoAudio(slot) {
+            if (_noAudioSlots.has(slot)) return;
+            _noAudioSlots.add(slot);
+            console.log('[audio]', slot, ': no audio track detected');
+            showToast(slotLabel(slot) + ': no audio track', false, 3500);
+            // Redraw canvas placeholder if the W panel is open
+            requestAnimationFrame(() => _drawDecodingPlaceholder(slot));
+        }
+
         // Called when both decodeAudioData and WebCodecs have failed for a slot.
         // Use the byte-scanned codec if available, otherwise 'unknown' — ffmpeg
         // identifies the actual codec from the bitstream regardless.
@@ -4349,6 +4362,12 @@
             const filename = mediaData[slot] && mediaData[slot].name;
             if (!filename) return;
             const codec = _byteScannedCodec[slot] || 'unknown';
+            // For video files with no detected unsupported codec, decode failure means
+            // the file has no audio track — not a codec problem. Skip ffmpeg.
+            if (mediaData[slot] && mediaData[slot].type === 'video' && codec === 'unknown') {
+                _markSlotNoAudio(slot);
+                return;
+            }
             _registerFfmpegCommand(slot, filename, codec);
         }
 
@@ -5097,7 +5116,13 @@
 
             if (!extracted || extracted.chunks.length === 0) {
                 console.warn('No audio packets extracted for', slot);
-                _onAllDecodeFailed(slot);
+                // For video files with no unsupported codec detected, empty chunks means
+                // no audio track — not a codec problem. Avoid triggering ffmpeg.
+                if (mediaData[slot] && mediaData[slot].type === 'video' && !_byteScannedCodec[slot]) {
+                    _markSlotNoAudio(slot);
+                } else {
+                    _onAllDecodeFailed(slot);
+                }
                 _webcodecsFinished();
                 return;
             }
@@ -5860,7 +5885,8 @@
             ctx.font = `${Math.round(13 * dpr)}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('Decoding audio\u2026', canvas.width / 2, canvas.height / 2);
+            const label = _noAudioSlots.has(slot) ? 'No audio track' : 'Decoding audio\u2026';
+            ctx.fillText(label, canvas.width / 2, canvas.height / 2);
         }
 
         function _setupNoVideoCanvas(slot) {
@@ -8700,6 +8726,7 @@
             mediaData.editA = null;
             mediaData.editB = null;
             _hiddenSlots.clear();
+            _noAudioSlots.clear();
             assetOrder.forEach(s => { const l = getLayer(s); if (l) l.style.display = ''; });
             _updateHiddenSlotPills();
             currentAssetIndex = 0;
