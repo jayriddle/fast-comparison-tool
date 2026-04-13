@@ -2718,6 +2718,8 @@
                 const strip = document.getElementById('modeStrip');
                 const ag = strip && strip.querySelector('.asset-group[data-group-type="overlay"]');
                 if (ag) ag.classList.add('visible');
+            } else {
+                updateModeStrip(layoutMode || 'horizontal');
             }
             // Update info bar pills: disable cursor when hiding would leave 0 visible slots
             const visibleCount = getVisibleSlots().length;
@@ -10142,6 +10144,23 @@
             _updateGridSubOptions();
             _updateStackSubOptions();
 
+            // In Grid mode, show ghost pills for hidden slots so they can be restored
+            if (normalised !== 'overlay') {
+                const hiddenInGrid = assetOrder.filter(s => mediaData[s] && _hiddenSlots.has(s));
+                if (hiddenInGrid.length > 0) {
+                    strip.style.display = 'flex';
+                    hiddenInGrid.forEach(slot => {
+                        const ghost = document.createElement('span');
+                        ghost.className = `hidden-slot-pill slot-${slot}`;
+                        ghost.textContent = slotLabel(slot);
+                        ghost.title = `Show ${slotLabel(slot)}`;
+                        ghost.onclick = () => toggleSlotVisibility(slot);
+                        strip.appendChild(ghost);
+                    });
+                    document.getElementById('iconSep1').style.display = '';
+                }
+            }
+
             // When overlay is active, build the asset group and animate it sliding in
             if (normalised === 'overlay') {
                 const loaded = assetOrder.filter(slot => mediaData[slot]);
@@ -11347,6 +11366,13 @@
                 <li>Per-source audio switching (O/A/B) with individual mute</li>
             </ul>
 
+            <h3>Grid Mode</h3>
+            <ul>
+                <li>Click a slot label (Ref / A / B) in the info bar to hide that asset</li>
+                <li>A dimmed pill appears in the header — click it to restore the hidden slot</li>
+                <li><kbd>⇧1</kbd> <kbd>⇧2</kbd> <kbd>⇧3</kbd> toggle slot visibility from the keyboard</li>
+            </ul>
+
             <h3>Analysis</h3>
             <ul>
                 <li><kbd>D</kbd> difference mode — pixel difference between two assets (Stack mode)</li>
@@ -11379,6 +11405,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.2</h3>
+            <ul>
+                <li><strong>Hidden slot restore in Grid mode</strong> — ghost pills now appear in the header when a slot is hidden, so you can click to bring it back. Previously the pill was missing and there was no way to restore without reloading.</li>
+            </ul>
             <h3>v3.10</h3>
             <ul>
                 <li><strong>Hide slots in Grid mode</strong> — click any slot label to hide that slot and give more space to the others. A ghost pill appears in the header to restore it. <kbd>⇧1</kbd> / <kbd>⇧2</kbd> / <kbd>⇧3</kbd> toggles slots from the keyboard.</li>

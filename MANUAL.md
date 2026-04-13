@@ -40,6 +40,26 @@ All three assets displayed in a grid. Press **3** to toggle between Inline (colu
 
 ---
 
+## Hiding Slots (Grid Mode)
+
+In Grid mode, you can hide any slot to give more screen space to the remaining assets.
+
+**To hide a slot:** click its colored label pill in the info bar (e.g. "Ref", "A", or "B"). The slot disappears and the remaining assets expand to fill the space.
+
+**To restore a hidden slot:** click its ghost pill in the header. Hidden slots appear as dimmed, colored labels next to the mode icons — click one to bring that slot back.
+
+You can't hide the last visible slot.
+
+| Shortcut | Action |
+|----------|--------|
+| **Shift+1** | Toggle Ref / slot 1 visibility |
+| **Shift+2** | Toggle A / slot 2 visibility |
+| **Shift+3** | Toggle B / slot 3 visibility |
+
+These shortcuts are no-ops in Stack mode or when a slot isn't loaded.
+
+---
+
 ## Switching Modes
 
 | Action | Result |
@@ -218,6 +238,7 @@ All hotkeys are customizable — press **H** to open the shortcuts panel, then c
 | **S** | Stack mode |
 | **G** | Grid mode |
 | **3** | Toggle Grid layout (Inline ↔ Offset) |
+| **Shift+1 / 2 / 3** | Toggle slot visibility (Grid mode) |
 | **F** | Fullscreen |
 
 ### Zoom & Pan
