@@ -1007,17 +1007,14 @@
             background: rgba(45, 124, 255, 0.1);
         }
 
-        /* Stack sub-option (Fit/Balance): orange family */
+        /* Stack sub-option: always full orange — pill shows current mode, always active */
         #stackZoomPill {
-            color: rgba(240, 160, 48, 0.5);
-            border-color: rgba(240, 160, 48, 0.22);
-        }
-        #stackZoomPill:hover {
-            background: rgba(240, 160, 48, 0.12);
-            border-color: rgba(240, 160, 48, 0.45);
             color: #f0a030;
+            border-color: rgba(240, 160, 48, 0.45);
         }
-        #stackZoomPill.match { color: #f0a030; border-color: rgba(240,160,48,0.45); background: rgba(240,160,48,0.1); }
+        #stackZoomPill:hover { background: rgba(240, 160, 48, 0.12); }
+        /* Balance (non-default): subtle fill to signal a special state */
+        #stackZoomPill.match { background: rgba(240, 160, 48, 0.1); }
         body.grid-mode #stackZoomPill { display: none !important; }
 
         #stackMiniMap {
