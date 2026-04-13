@@ -1961,11 +1961,19 @@
             justify-content: center;
         }
         .analysis-btn:hover { background: #555; color: #fff; }
+        /* Grid icon: blue family at all times — dim when inactive, full when active */
+        #gridIconBtn         { color: rgba(45,124,255,0.35); }
+        #gridIconBtn:hover   { color: #fff; background: #555; }
+        #gridIconBtn.active  { color: #2d7cff; }
+        #gridIconBtn.active:hover { background: rgba(45,124,255,0.15); color: #2d7cff; }
+        /* Stack icon: orange family at all times */
+        #stackIconBtn        { color: rgba(240,160,48,0.35); }
+        #stackIconBtn:hover  { color: #fff; background: #555; }
+        #stackIconBtn.active { color: #f0a030; }
+        #stackIconBtn.active:hover { background: rgba(240,160,48,0.12); color: #f0a030; }
+        /* Waveform/scope keep the general active rule */
         .analysis-btn.active { color: #2d7cff; }
         .analysis-btn.active:hover { background: #3a4a50; }
-        /* Stack icon inherits the orange family used by Fit/Balance sub-option */
-        #stackIconBtn.active { color: #f0a030; }
-        #stackIconBtn.active:hover { background: rgba(240,160,48,0.12); }
         .analysis-btn svg { width: 20px; height: 20px; display: block; }
         .analysis-btn:focus { outline: none; }
         .analysis-btn:focus-visible { outline: 2px solid #f0a030; outline-offset: 2px; }
@@ -2024,22 +2032,20 @@
         .fp-note { font-size: 11px; color: #555; margin-top: 12px; line-height: 1.5; }
         .fp-wasm-note { font-size: 11px; color: #444; margin-top: 6px; }
 
-        /* Asset sub-items: dim tint, no gap, square left edge so they connect to OVERLAY pill */
+        /* Asset sub-items: slot color applied via inline style; transition handles hover */
         .asset-btn {
-            background: rgba(45, 124, 255, 0.15);
             transition: background 0.15s, color 0.15s;
             border-radius: 4px;
-            color: rgba(45, 124, 255, 0.6);
         }
 
         .strip-sep.asset-sep {
             background: transparent;
-            color: rgba(45, 124, 255, 0.3);
+            color: rgba(255,255,255,0.15);
             padding: 4px 0;
             margin: 0;
         }
 
-        /* Active asset: brighter cyan text */
+        /* Active asset: inline styles set slot-specific colors; these are fallback only */
         .asset-btn.active {
             background: rgba(45, 124, 255, 0.25);
             color: #2d7cff;
@@ -10138,6 +10144,12 @@
                     const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
                     btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
                     btn.textContent = label;
+                    // Colour each pill with its slot color
+                    const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
+                    const [sr, sg, sb] = _hexToRgb(hex);
+                    btn.style.background = isActive ? `rgba(${sr},${sg},${sb},0.22)` : `rgba(${sr},${sg},${sb},0.1)`;
+                    btn.style.color      = isActive ? hex : `rgba(${sr},${sg},${sb},0.55)`;
+                    btn.dataset.slot = slot; // keep reference for positionAssetUnderline slot-tinted underline
                     btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
                     assetGroup.appendChild(btn);
                 });
