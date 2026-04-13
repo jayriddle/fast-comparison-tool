@@ -1858,7 +1858,6 @@
             display: flex;
             align-items: center;
             gap: 2px;
-            position: relative; /* anchor the sliding underline */
         }
 
         /* Mode buttons slide left when overlay activates, right when leaving */
@@ -2032,40 +2031,22 @@
         .fp-note { font-size: 11px; color: #555; margin-top: 12px; line-height: 1.5; }
         .fp-wasm-note { font-size: 11px; color: #444; margin-top: 6px; }
 
-        /* Asset sub-items: slot color applied via inline style; transition handles hover */
+        /* Asset pills — match info bar .asset-name style exactly; slot colors via inline */
         .asset-btn {
-            transition: background 0.15s, color 0.15s;
-            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            border-radius: 5px;
+            padding: 1px 8px;
+            transition: opacity 0.15s;
         }
+        .asset-btn:hover { opacity: 0.75; }
 
         .strip-sep.asset-sep {
             background: transparent;
             color: rgba(255,255,255,0.15);
             padding: 4px 0;
             margin: 0;
-        }
-
-        /* Active asset: inline styles set slot-specific colors; these are fallback only */
-        .asset-btn.active {
-            background: rgba(45, 124, 255, 0.25);
-            color: #2d7cff;
-        }
-
-        /* Sliding underline bar — positioned absolutely over the active asset button */
-        #assetUnderline {
-            position: absolute;
-            bottom: 0;
-            height: 2px;
-            background: #2d7cff;
-            border-radius: 1px;
-            pointer-events: none;
-            transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-                        width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-                        opacity 0.15s ease;
-            opacity: 0;
-        }
-        #assetUnderline.visible {
-            opacity: 1;
         }
 
         .strip-sep {
@@ -10144,71 +10125,21 @@
                     const posClass = (i === 0 ? ' first-asset' : '') + (i === loaded.length - 1 ? ' last-asset' : '');
                     btn.className = 'asset-btn' + (isActive ? ' active' : '') + posClass;
                     btn.textContent = label;
-                    // Colour each pill with its slot color
+                    // Match info bar pill style: inactive = slot color as text on dark bg,
+                    // active = slot color fills pill with dark text (active-audio state)
                     const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
-                    const [sr, sg, sb] = _hexToRgb(hex);
-                    btn.style.background = isActive ? `rgba(${sr},${sg},${sb},0.22)` : `rgba(${sr},${sg},${sb},0.1)`;
-                    btn.style.color      = isActive ? hex : `rgba(${sr},${sg},${sb},0.55)`;
-                    btn.dataset.slot = slot; // keep reference for positionAssetUnderline slot-tinted underline
+                    const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
+                    btn.style.background = isActive ? hex : 'rgba(0,0,0,0.5)';
+                    btn.style.color      = isActive ? txt : hex;
                     btn.onclick = () => switchToAsset(assetOrder.indexOf(slot));
                     assetGroup.appendChild(btn);
                 });
                 strip.appendChild(assetGroup);
 
-                // Create (or reuse) the sliding underline bar
-                let underline = document.getElementById('assetUnderline');
-                if (!underline) {
-                    underline = document.createElement('div');
-                    underline.id = 'assetUnderline';
-                }
-                strip.appendChild(underline);
-
-                // After layout: measure asset group width, set it as a CSS custom property
-                // so the @keyframe animation slides mode-core left by exactly that amount.
                 requestAnimationFrame(() => {
-                    // Snap underline into place before reveal so it doesn't animate from 0
-                    underline.style.transition = 'none';
-                    positionAssetUnderline();
-
-                    // Trigger asset group reveal animation
                     assetGroup.classList.add('visible');
-
-                    // Re-enable underline slide transition after it's been placed
-                    requestAnimationFrame(() => {
-                        underline.style.transition = '';
-                    });
                 });
             }
-        }
-
-        // Moves the sliding underline to sit beneath the currently active asset button.
-        // Uses offsetLeft traversal (not getBoundingClientRect) so CSS transforms on
-        // parent elements don't skew the measurement.
-        function positionAssetUnderline() {
-            const strip = document.getElementById('modeStrip');
-            const underline = document.getElementById('assetUnderline');
-            if (!strip || !underline) return;
-
-            const activeBtn = strip.querySelector('.asset-btn.active');
-            if (!activeBtn) { underline.classList.remove('visible'); return; }
-
-            // Walk up offsetParent chain to sum offsetLeft relative to the strip
-            let left = 0;
-            let el = activeBtn;
-            while (el && el !== strip) {
-                left += el.offsetLeft;
-                el = el.offsetParent;
-            }
-
-            // Size the underline to the text content, not the full padded button width,
-            // then offset it to sit centered under the text (skipping the 8px padding).
-            const paddingLeft = parseFloat(getComputedStyle(activeBtn).paddingLeft);
-            const paddingRight = parseFloat(getComputedStyle(activeBtn).paddingRight);
-            const textWidth = activeBtn.offsetWidth - paddingLeft - paddingRight;
-
-            underline.style.left = (left + paddingLeft) + 'px';
-            underline.style.width = textWidth + 'px';
-            underline.classList.add('visible');
         }
 
         // Asset buttons are now inlined into the mode strip when overlay is active.
@@ -10217,26 +10148,26 @@
             document.getElementById('assetStrip').style.display = 'none';
         }
 
-        // Updates the active class on inline asset buttons without rebuilding the strip,
-        // then slides the underline to the newly active button.
+        // Updates active state and fill colors on inline asset buttons without rebuilding.
         function refreshAssetButtons() {
             const strip = document.getElementById('modeStrip');
             if (!strip) return;
-            // Only update asset buttons (not grid sub-option buttons like INLINE/OFFSET)
             const assetGroup = strip.querySelector('.asset-group[data-group-type="overlay"]');
             const assetBtns = assetGroup ? assetGroup.querySelectorAll('.asset-btn') : [];
             if (!assetBtns.length) return;
 
-            // Re-sync .active class based on current assetOrder / currentAssetIndex
             const loaded = assetOrder.filter(slot => mediaData[slot]);
             assetBtns.forEach((btn, i) => {
                 const slot = loaded[i];
                 const isActive = slot && assetOrder.indexOf(slot) === currentAssetIndex;
                 btn.classList.toggle('active', !!isActive);
+                if (slot) {
+                    const hex = _slotColors[slot] || _SLOT_COLOR_DEFAULTS[slot];
+                    const txt = getComputedStyle(document.documentElement).getPropertyValue(`--slot-${slot}-txt`).trim() || '#0a0c0a';
+                    btn.style.background = isActive ? hex : 'rgba(0,0,0,0.5)';
+                    btn.style.color      = isActive ? txt : hex;
+                }
             });
-
-            // Slide underline to new position
-            positionAssetUnderline();
         }
 
         // Update checkAllLoaded to show view mode buttons
