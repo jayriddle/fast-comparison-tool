@@ -2552,7 +2552,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.3';
+        const APP_VERSION = '3.10.4';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -8955,9 +8955,7 @@
                 // frame boundaries without overshooting from frame midpoints.
                 const currentFrame = Math.floor(v.currentTime * fps + 0.01);
                 const totalFrames = Math.floor(v.duration * fps + 0.01);
-                const targetFrame = currentFrame + direction;
-                // Clamp to valid frame range — don't wrap at either end
-                if (targetFrame < 0 || targetFrame >= totalFrames) return;
+                const targetFrame = (currentFrame + direction + totalFrames) % totalFrames;
                 // Seek to the midpoint of the target frame to avoid landing on
                 // a frame boundary where IEEE 754 rounding leaves us in the
                 // wrong frame (e.g. 1/24 = 0.04166...64, just short of frame 1).
