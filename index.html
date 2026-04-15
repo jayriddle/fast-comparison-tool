@@ -2552,7 +2552,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.4';
+        const APP_VERSION = '3.10.5';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -10426,12 +10426,12 @@
                     // container.offsetWidth may be 0 on this tick (comparisonView.active was
                     // just added synchronously and the browser hasn't reflowed yet), so
                     // re-evaluate in rAF once layout dimensions are correct.
+                    // The rAF fires post-reflow and is the authoritative pick — always apply
+                    // it (don't gate on best !== layoutMode) so a zero-width fallback in the
+                    // initial call can't get locked in when the rAF happens to agree.
                     setViewMode(pickBestGridLayout(2));
                     requestAnimationFrame(() => {
-                        const best = pickBestGridLayout(2);
-                        // Guard: only re-evaluate if still in Grid mode. If the user switched
-                        // to Stack between checkAllLoaded() and this rAF, don't override them.
-                        if (isGridMode && best !== layoutMode) setViewMode(best);
+                        if (isGridMode) setViewMode(pickBestGridLayout(2));
                     });
                 } else if (loadedCount === 3) {
                     document.querySelector('#layerOriginal .asset-name').textContent = slotLabel('original');
@@ -10447,12 +10447,11 @@
                     setViewMode('offset');
                 } else if (loadedCount === 2) {
                     // Ref+A or Ref+B: pick layout by aspect ratio, same as A+B case
+                    // Same rAF re-evaluation as the A+B branch above — always apply the
+                    // post-reflow pick to correct any zero-width fallback from the initial call.
                     setViewMode(pickBestGridLayout(2));
                     requestAnimationFrame(() => {
-                        const best = pickBestGridLayout(2);
-                        // Guard: only re-evaluate if still in Grid mode. If the user switched
-                        // to Stack between checkAllLoaded() and this rAF, don't override them.
-                        if (isGridMode && best !== layoutMode) setViewMode(best);
+                        if (isGridMode) setViewMode(pickBestGridLayout(2));
                     });
                 } else {
                     setViewMode('horizontal');
