@@ -3693,6 +3693,9 @@
         // startFadeIn waits for this before revealing layers so the fade-in never shows
         // the pre-JS full-cell wrapper size (which would look oversized on portrait assets).
         let _layoutReady = false;
+        // True while a loadedmetadata-based dimension wait is in flight.
+        // Prevents checkAllLoaded() re-entries from stacking up multiple Promise chains.
+        let _dimensionsWaiting = false;
         function positionLabelsToMediaDebounced() {
             clearTimeout(_positionDebounceTimer);
             _positionDebounceTimer = setTimeout(positionLabelsToMedia, 150);
@@ -8831,6 +8834,7 @@
             document.body.classList.remove('fullscreen', 'single-asset', ...splitModeClasses);
             isGridMode = false;
             viewActivating = false;
+            _dimensionsWaiting = false;
             layoutMode = 'horizontal';
 
             // Restore all layers to visible for next load
@@ -10281,7 +10285,33 @@
                 return v && v.videoWidth > 0;
             });
             if (!allDimensionsReady) {
-                requestAnimationFrame(checkAllLoaded);
+                // Avoid stacking multiple waits if checkAllLoaded() fires again
+                // (e.g. from a second img.load event) before dimensions arrive.
+                if (_dimensionsWaiting) return;
+                _dimensionsWaiting = true;
+                // Attach loadedmetadata listeners to every video still missing dimensions.
+                // loadedmetadata is guaranteed to carry valid videoWidth by the HTML spec,
+                // so this is more precise than polling via rAF at 60 fps.
+                const pending = assetOrder
+                    .filter(s => {
+                        if (!mediaData[s] || mediaData[s].type !== 'video') return false;
+                        if (mediaData[s]._videoLoadFailed) return false;
+                        const layer = getLayer(s);
+                        const v = layer && layer.querySelector('video');
+                        return v && v.videoWidth === 0;
+                    })
+                    .map(s => {
+                        const v = getLayer(s).querySelector('video');
+                        return new Promise(resolve =>
+                            v.addEventListener('loadedmetadata', resolve, { once: true })
+                        );
+                    });
+                // Race all listeners against a timeout so a stalled video can't block
+                // activation indefinitely. 500 ms matches the startFadeIn safety timeout.
+                Promise.race([
+                    Promise.all(pending),
+                    new Promise(resolve => setTimeout(resolve, 500))
+                ]).then(() => { _dimensionsWaiting = false; checkAllLoaded(); });
                 return;
             }
 
