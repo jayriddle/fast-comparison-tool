@@ -2685,6 +2685,11 @@
                    document.body.classList.contains('inline-cols') ||
                    document.body.classList.contains('inline-rows');
         }
+        // True for inline-cols and inline-rows (equal-area 3-up), false for offset (L-shaped).
+        function isInlineMode() {
+            return document.body.classList.contains('inline-cols') ||
+                   document.body.classList.contains('inline-rows');
+        }
 
         // Updates the mute button appearance for a given audio slot.
         function updateAudioButton(slot, isMuted) {
@@ -3596,7 +3601,7 @@
         let _panBoundsYMin = 0, _panBoundsYMax = 0;
         let _snapAnimId = null; // rAF id for rubber-band snap-back animation
         let _currentMatchAnchor = null; // slot with tightest per-asset fit; set by applyZoom()
-        let _stackPerAssetFit = {};    // slot → effective per-asset fit scale; updated by applyZoom()
+        let _perAssetFits = {};         // slot → effective per-asset fit scale; updated by applyZoom()
         let _savedFitZoom = null, _savedFitPanX = 0, _savedFitPanY = 0; // saved before entering Balance
 
         let zoomLevel = 1; // Default 1x zoom (actual size/fit)
@@ -8015,7 +8020,7 @@
             // Info bar is hidden in Stack mode (shown in header strip instead) — no vertical offset needed.
             const _stackIbH = 0;
             const _stackViewH = window.innerHeight - headerH - _stackIbH - 1 - controlsH;
-            const _perAssetFits = {};
+            const _fitScales = {};   // fit-only scales; used for balance computation below
             const _srcAreas = {};
             let _minFit = Infinity;
             let _minFitSlot = null;
@@ -8027,7 +8032,7 @@
                 const { w: nw, h: nh } = mediaDims(media);
                 if (nw > 0 && nh > 0) {
                     const paf = Math.min(_stackViewW / nw, _stackViewH / nh);
-                    _perAssetFits[slot] = paf;
+                    _fitScales[slot] = paf;
                     _srcAreas[slot] = nw * nh;
                     if (paf < _minFit) { _minFit = paf; _minFitSlot = slot; }
                 }
@@ -8041,19 +8046,28 @@
             // balanceFit[slot] = sqrt(T / srcPixels[slot]) ≤ perAssetFit[slot] for every
             // slot, so no asset overflows regardless of resolution or orientation.
             let _balanceT = Infinity;
-            Object.keys(_perAssetFits).forEach(slot => {
+            Object.keys(_fitScales).forEach(slot => {
                 if (_srcAreas[slot]) {
-                    const sa = _perAssetFits[slot] * _perAssetFits[slot] * _srcAreas[slot];
+                    const sa = _fitScales[slot] * _fitScales[slot] * _srcAreas[slot];
                     if (sa < _balanceT) _balanceT = sa;
                 }
             });
             if (_balanceT === Infinity) _balanceT = 0;
             const _eqAreaFits = {};
-            Object.keys(_perAssetFits).forEach(slot => {
+            Object.keys(_fitScales).forEach(slot => {
                 _eqAreaFits[slot] = (_balanceT && _srcAreas[slot])
                     ? Math.sqrt(_balanceT / _srcAreas[slot])
-                    : _perAssetFits[slot];
+                    : _fitScales[slot];
             });
+
+            // Returns the effective per-asset fit scale for a slot in the current zoom mode.
+            // Falls back to a fresh viewport-fit calculation if the slot isn't in the table yet.
+            const _getSlotScale = (slot, nw, nh) => {
+                const fallback = Math.min(window.innerWidth / nw, availH / nh);
+                return _stackZoomMode === 'balance'
+                    ? (_eqAreaFits[slot] ?? fallback)
+                    : (_fitScales[slot]  ?? fallback);
+            };
 
             // If the user was at fit-to-viewport zoom, track the new fitZoom on resize.
             if (zoomLevel === prevFitZoom) {
@@ -8091,14 +8105,8 @@
                     // Each asset independently fills the viewport at its own fit scale (Fit mode),
                     // or all assets are scaled to the same rendered screen area (Balance mode).
                     // relZoom is the user's zoom multiplier relative to fitZoom.
-                    const perAssetFit = _stackZoomMode === 'balance'
-                        ? (_eqAreaFits[slot] !== undefined
-                            ? _eqAreaFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh))
-                        : (_perAssetFits[slot] !== undefined
-                            ? _perAssetFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh));
-                    _stackPerAssetFit[slot] = perAssetFit; // expose for '1' key handler
+                    const perAssetFit = _getSlotScale(slot, nw, nh);
+                    _perAssetFits[slot] = perAssetFit; // expose for '1' key and '\' toggle
                     const relZoom = fitZoom > 0 ? zoomLevel / fitZoom : 1;
                     const perAssetScale = perAssetFit * relZoom;
                     scaledW = Math.round(nw * perAssetScale);
@@ -8133,38 +8141,23 @@
                 vw.style.width = scaledW + 'px';
                 vw.style.height = scaledH + 'px';
 
-                // Media fills its wrapper; no transform needed — pan is on the wrapper
-                if (!isAudioCanvas) {
-                    const _paf = _stackZoomMode === 'balance'
-                        ? (_eqAreaFits[slot] !== undefined
-                            ? _eqAreaFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh))
-                        : (_perAssetFits[slot] !== undefined
-                            ? _perAssetFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh));
-                    const _pas = _paf * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
-                    media.style.imageRendering = _pas >= 2 ? 'pixelated' : '';
+                // Media fills its wrapper; no transform needed — pan is on the wrapper.
+                // Guards below are not needed (already in the !isAudioCanvas else branch)
+                // but kept as comments for clarity.
+                /* !isAudioCanvas */ {
+                    const perAssetScaleForMedia = _perAssetFits[slot] * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
+                    media.style.imageRendering = perAssetScaleForMedia >= 2 ? 'pixelated' : '';
                     media.style.width = '100%';
                     media.style.height = '100%';
                     media.style.maxWidth = 'none';
                     media.style.maxHeight = 'none';
                     media.style.objectFit = 'contain';
                     media.style.transform = '';
-                }
 
-                // Update per-asset zoom in info bar (actual pixel ratio for this specific asset)
-                if (!isAudioCanvas) {
-                    const _paf = _stackZoomMode === 'balance'
-                        ? (_eqAreaFits[slot] !== undefined
-                            ? _eqAreaFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh))
-                        : (_perAssetFits[slot] !== undefined
-                            ? _perAssetFits[slot]
-                            : Math.min(window.innerWidth / nw, availH / nh));
-                    const perAssetScale = _paf * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
+                    // Update per-asset zoom in info bar (actual pixel ratio for this specific asset)
                     const infoBarLocal = layer.querySelector('.asset-info-bar');
                     const zoomSpan = infoBarLocal && infoBarLocal.querySelector('.asset-zoom');
-                    if (zoomSpan) zoomSpan.textContent = formatZoom(perAssetScale);
+                    if (zoomSpan) zoomSpan.textContent = formatZoom(perAssetScaleForMedia);
                 }
 
             });
@@ -9152,8 +9145,7 @@
             const slots = getVisibleSlots();
             const isVertical = document.body.classList.contains('vertical-stack');
             const isTripartite = isTripartiteMode();
-            const isEqualLayout = document.body.classList.contains('inline-cols') ||
-                                  document.body.classList.contains('inline-rows');
+            const isEqualLayout = isInlineMode();
             // Reset video controls position when not in vertical-stack (CSS takes over)
             if (!isVertical) {
                 const controls = document.querySelector('.video-controls');
@@ -10009,30 +10001,31 @@
                     });
 
                     const visibleSlotCount = getVisibleSlots().length;
+                    // Compute layout direction once per applyLayout call; avoid re-running
+                    // the area heuristic separately for each branch.
+                    const _best2 = visibleSlotCount <= 2 ? pickBestGridLayout(2) : null;
+                    const _best3 = visibleSlotCount > 2  ? pickBestGridLayout(3) : null;
+
                     if (targetMode === 'vertical') {
                         document.body.classList.add('vertical-stack');
                     } else if (targetMode === 'offset') {
                         if (visibleSlotCount <= 2) {
-                            const best = pickBestGridLayout(2);
-                            document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                            document.body.classList.add(_best2 === 'vertical' ? 'vertical-stack' : 'side-by-side');
                         } else {
                             const dims = Object.values(mediaData).filter(m => m && m.w && m.h && !_hiddenSlots.has(Object.keys(mediaData).find(k => mediaData[k] === m)));
                             const landscapes = dims.filter(m => m.w >= m.h).length;
                             const mixedOr = landscapes > 0 && landscapes < dims.length;
                             if (mixedOr || gridInlineMode) {
-                                const best = pickBestGridLayout(3);
-                                document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
+                                document.body.classList.add(_best3 === 'vertical' ? 'inline-rows' : 'inline-cols');
                             } else {
                                 document.body.classList.add('offset');
                             }
                         }
                     } else if (targetMode === 'horizontal' || targetMode === 'inline-cols' || targetMode === 'inline-rows') {
                         if (visibleSlotCount <= 2) {
-                            const best = pickBestGridLayout(2);
-                            document.body.classList.add(best === 'vertical' ? 'vertical-stack' : 'side-by-side');
+                            document.body.classList.add(_best2 === 'vertical' ? 'vertical-stack' : 'side-by-side');
                         } else {
-                            const best = pickBestGridLayout(3);
-                            document.body.classList.add(best === 'vertical' ? 'inline-rows' : 'inline-cols');
+                            document.body.classList.add(_best3 === 'vertical' ? 'inline-rows' : 'inline-cols');
                         }
                     } else {
                         document.body.classList.add('side-by-side');
@@ -10768,7 +10761,7 @@
                       // perAssetScale = perAssetFit × (zoomLevel / fitZoom) = 1
                       // → zoomLevel = fitZoom / perAssetFit
                       const slot = assetOrder[currentAssetIndex];
-                      const paf = _stackPerAssetFit[slot];
+                      const paf = _perAssetFits[slot];
                       zoomLevel = (paf && fitZoom) ? fitZoom / paf : 1;
                       panOffsetX = 0; panOffsetY = 0; applyZoom();
                   } else {
