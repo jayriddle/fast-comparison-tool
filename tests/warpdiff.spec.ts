@@ -167,6 +167,11 @@ async function loadAndEnterStack(page: Page, fileNames: string[]) {
       Math.abs(api.zoomLevel - api.fitZoom) < 0.001
     );
   }, {}, { timeout: 5000 });
+  // Drain any rAFs still pending after zoom settles (e.g. a queued applyZoom() that
+  // would overwrite zoomLevel immediately after a zoom key press). Without this,
+  // zoom tests fail ~10% of the time when a stale rAF fires between key press and
+  // state read.
+  await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 }
 
 /** Check current Grid mode via __testAPI (replaces old isSplitMode). */
