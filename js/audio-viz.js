@@ -316,3 +316,186 @@ function drawSpectrogramRegion(pixels, canvasW, frames, numBins, startY, regionH
         }
     }
 }
+
+// ── EBU R128 / ITU-R BS.1770-4 loudness & true peak metrics ──────────────────
+//
+// K-weighting filter: two cascaded biquad IIR stages per BS.1770-4 §4
+//   Stage 1 — pre-filter    : high-shelf, +4 dB, Q = 1/√2, fc ≈ 1500 Hz
+//   Stage 2 — RLB high-pass : 2nd-order Butterworth, fc = 38.13506 Hz
+// Coefficients derived analytically via the Audio EQ Cookbook for any fs.
+//
+// Integrated loudness (LUFS):
+//   400 ms blocks at 75% overlap → absolute gate −70 LUFS → relative gate −10 LU
+//   Power-domain mean of gated blocks.
+//
+// Loudness range (LRA, LU):
+//   3 s short-term blocks at 1 s step → abs gate −70 LUFS → rel gate −20 LU
+//   10th–95th percentile spread of gated distribution.
+//
+// True peak (dBTP):
+//   4-point Catmull-Rom cubic interpolation at ×4 density per channel.
+//   Catches inter-sample peaks without requiring async OfflineAudioContext.
+
+function _kwCoeffs(fs) {
+    // Stage 1: high-shelf pre-filter (+4 dB, Q = 1/√2, fc = 1500 Hz)
+    const A    = Math.pow(10, 4.0 / 40.0);      // sqrt(10^(4/20))
+    const w0   = 2 * Math.PI * 1500.0 / fs;
+    const cos0 = Math.cos(w0), sin0 = Math.sin(w0);
+    const alp0 = sin0 / Math.SQRT2;             // Q = 1/√2
+    const sqA  = Math.sqrt(A);
+    const a0hs = (A + 1) - (A - 1) * cos0 + 2 * sqA * alp0;
+    const hs   = [
+         A * ((A + 1) + (A - 1) * cos0 + 2 * sqA * alp0) / a0hs,  // b0
+        -2 * A * ((A - 1) + (A + 1) * cos0)               / a0hs,  // b1
+         A * ((A + 1) + (A - 1) * cos0 - 2 * sqA * alp0) / a0hs,  // b2
+         2 * ((A - 1) - (A + 1) * cos0)                   / a0hs,  // a1
+            ((A + 1) - (A - 1) * cos0 - 2 * sqA * alp0)  / a0hs,  // a2
+    ];
+
+    // Stage 2: RLB high-pass (2nd-order Butterworth, fc = 38.13506 Hz)
+    const w1   = 2 * Math.PI * 38.13506 / fs;
+    const cos1 = Math.cos(w1), sin1 = Math.sin(w1);
+    const alp1 = sin1 / Math.SQRT2;
+    const a0hp = 1 + alp1;
+    const hp   = [
+         (1 + cos1) / 2 / a0hp,   // b0
+        -(1 + cos1)     / a0hp,   // b1
+         (1 + cos1) / 2 / a0hp,   // b2
+        -2 * cos1       / a0hp,   // a1
+         (1 - alp1)     / a0hp,   // a2
+    ];
+
+    return { hs, hp };
+}
+
+function _biquad(src, b0, b1, b2, a1, a2) {
+    const dst = new Float32Array(src.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < src.length; i++) {
+        const x0 = src[i];
+        const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+        dst[i] = y0;
+    }
+    return dst;
+}
+
+function _kweight(data, c) {
+    const s1 = _biquad(data, c.hs[0], c.hs[1], c.hs[2], c.hs[3], c.hs[4]);
+    return      _biquad(s1,  c.hp[0], c.hp[1], c.hp[2], c.hp[3], c.hp[4]);
+}
+
+// 4× Catmull-Rom interpolation true peak for one channel
+function _truePeakCh(data) {
+    const n = data.length;
+    let peak = 0;
+    for (let i = 0; i < n; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > peak) peak = abs;
+        // Interpolate t = 0.25, 0.5, 0.75 between sample i and i+1
+        const x0 = data[Math.max(0, i - 1)];
+        const x1 = data[i];
+        const x2 = data[Math.min(n - 1, i + 1)];
+        const x3 = data[Math.min(n - 1, i + 2)];
+        for (let k = 1; k <= 3; k++) {
+            const t = k / 4, t2 = t * t, t3 = t2 * t;
+            const v = 0.5 * (
+                (-x0 + 3 * x1 - 3 * x2 + x3) * t3 +
+                (2 * x0 - 5 * x1 + 4 * x2 - x3) * t2 +
+                (-x0 + x2) * t +
+                2 * x1
+            );
+            const av = Math.abs(v);
+            if (av > peak) peak = av;
+        }
+    }
+    return peak;
+}
+
+// Power-domain mean of LUFS block values:
+// L̄ = 10·log₁₀( mean( 10^(lᵢ/10) ) )  — the −0.691 offsets cancel out.
+function _lufsAvg(arr) {
+    return 10 * Math.log10(arr.reduce((s, l) => s + Math.pow(10, l / 10), 0) / arr.length);
+}
+
+function computeAudioMetrics(audioBuffer) {
+    if (!audioBuffer || !audioBuffer.getChannelData) return null;
+
+    const fs    = audioBuffer.sampleRate;
+    const nCh   = audioBuffer.numberOfChannels;
+    const nSamp = audioBuffer.length;
+    const c     = _kwCoeffs(fs);
+
+    // K-weight every channel (BS.1770 channel weight = 1.0 for L/R/C; 1.41 for Ls/Rs,
+    // but browsers decode multichannel to stereo/mono so all channels use 1.0 here)
+    const kw = [];
+    for (let ch = 0; ch < nCh; ch++) kw.push(_kweight(audioBuffer.getChannelData(ch), c));
+
+    // ── Integrated loudness ───────────────────────────────────────────────────
+    const blkSz  = Math.round(0.400 * fs);   // 400 ms block
+    const blkStp = Math.round(0.100 * fs);   // 75% overlap → 100 ms step
+    const blks   = [];
+
+    for (let s = 0; s + blkSz <= nSamp; s += blkStp) {
+        let z = 0;
+        for (let ch = 0; ch < nCh; ch++) {
+            const d = kw[ch];
+            let sq = 0;
+            for (let i = s; i < s + blkSz; i++) sq += d[i] * d[i];
+            z += sq / blkSz;
+        }
+        blks.push(-0.691 + 10 * Math.log10(z || 1e-20));
+    }
+
+    let integratedLUFS = null;
+    const absGated = blks.filter(l => l > -70);
+    if (absGated.length > 0) {
+        const ungated  = _lufsAvg(absGated);
+        const relGated = absGated.filter(l => l > ungated - 10);
+        if (relGated.length > 0) integratedLUFS = _lufsAvg(relGated);
+    }
+
+    // ── Loudness range (LRA) ──────────────────────────────────────────────────
+    const stSz  = Math.round(3.0 * fs);   // 3 s short-term window
+    const stStp = Math.round(1.0 * fs);   // 1 s step
+    const stBlks = [];
+
+    for (let s = 0; s + stSz <= nSamp; s += stStp) {
+        let z = 0;
+        for (let ch = 0; ch < nCh; ch++) {
+            const d = kw[ch];
+            let sq = 0;
+            for (let i = s; i < s + stSz; i++) sq += d[i] * d[i];
+            z += sq / stSz;
+        }
+        stBlks.push(-0.691 + 10 * Math.log10(z || 1e-20));
+    }
+
+    let lra = null;
+    const stAbsGated = stBlks.filter(l => l > -70);
+    if (stAbsGated.length >= 2) {
+        const stRelGated = stAbsGated.filter(l => l > _lufsAvg(stAbsGated) - 20)
+                                     .sort((a, b) => a - b);
+        if (stRelGated.length >= 2) {
+            const p10 = stRelGated[Math.floor(stRelGated.length * 0.10)];
+            const p95 = stRelGated[Math.min(stRelGated.length - 1, Math.floor(stRelGated.length * 0.95))];
+            lra = p95 - p10;
+        }
+    }
+
+    // ── True peak (4× Catmull-Rom per channel) ────────────────────────────────
+    let maxPeak = 0;
+    for (let ch = 0; ch < nCh; ch++) {
+        const p = _truePeakCh(audioBuffer.getChannelData(ch));
+        if (p > maxPeak) maxPeak = p;
+    }
+
+    return {
+        integratedLUFS: integratedLUFS !== null ? integratedLUFS.toFixed(1) : null,
+        lra:            lra            !== null ? lra.toFixed(1)            : null,
+        truePeakDBTP:   (20 * Math.log10(maxPeak || 1e-10)).toFixed(1),
+        sampleRate:     fs,
+        channels:       nCh,
+        duration:       audioBuffer.duration,
+    };
+}

@@ -21,6 +21,9 @@ self.addEventListener('fetch', e => {
     if (e.request.method !== 'GET') return;
     const url = new URL(e.request.url);
     if (url.origin !== self.location.origin) return;
+    // Never intercept blob: URLs — they are in-memory object URLs created by the
+    // page and cannot be fetched from a service worker context.
+    if (url.protocol === 'blob:') return;
 
     // Network-first: try fresh copy, fall back to cache
     e.respondWith(
