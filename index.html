@@ -5139,10 +5139,35 @@
             }
         }
 
+        // Populate .asset-lufs / .asset-lra / .asset-tp in whichever info bar the slot has.
+        // Works for both audio-only and video slots (called after audioMetrics[slot] is set).
+        function _updateMetricSpans(slot) {
+            const layer = getLayer(slot);
+            if (!layer) return;
+            const infoBar = layer.querySelector('.asset-info-bar');
+            if (!infoBar) return;
+            const m = audioMetrics[slot];
+            const lufsEl = infoBar.querySelector('.asset-lufs');
+            const lraEl  = infoBar.querySelector('.asset-lra');
+            const tpEl   = infoBar.querySelector('.asset-tp');
+            if (lufsEl) {
+                if (m && m.integratedLUFS !== null) {
+                    lufsEl.textContent = m.integratedLUFS + ' LUFS';
+                    const v = parseFloat(m.integratedLUFS);
+                    lufsEl.style.color = v > -10 ? '#f66' : v > -18 ? '#fb3' : '';
+                } else {
+                    lufsEl.textContent = '';
+                }
+            }
+            if (lraEl) lraEl.textContent = (m && m.lra !== null) ? 'LRA ' + m.lra + ' LU' : '';
+            if (tpEl)  tpEl.textContent  = (m && m.truePeakDBTP) ? 'TP '  + m.truePeakDBTP + ' dBTP' : '';
+        }
+
         function _finalizeAudioViz(slot, audioBuffer) {
             waveformData[slot] = computeWaveformData(audioBuffer, 600);
             spectrogramData[slot] = computeSpectrogramData(audioBuffer);
             audioMetrics[slot] = computeAudioMetrics(audioBuffer);
+            _updateMetricSpans(slot);
 
             // If this slot just finished a transcode, advance toast to 'done' now
             if (_ffmpegTranscoding[slot] && _ffmpegTranscoding[slot].phase === 'computing') {
@@ -6625,25 +6650,8 @@
                 szEl.textContent = formatFileSize(md.size);
             }
 
-            // EBU R128 metrics — populated by computeAudioMetrics() in audio-viz.js
-            const m = audioMetrics[slot];
-            const lufsEl = infoBar.querySelector('.asset-lufs');
-            const lraEl  = infoBar.querySelector('.asset-lra');
-            const tpEl   = infoBar.querySelector('.asset-tp');
-            if (lufsEl) {
-                if (m && m.integratedLUFS !== null) {
-                    lufsEl.textContent = m.integratedLUFS + ' LUFS';
-                    // Simple compliance colouring: EBU R128 target is −23, streaming −14
-                    const v = parseFloat(m.integratedLUFS);
-                    lufsEl.style.color = v > -10 ? '#f66' : v > -18 ? '#fb3' : '';
-                } else {
-                    lufsEl.textContent = '';
-                }
-            }
-            if (lraEl)  lraEl.textContent  = (m && m.lra  !== null) ? 'LRA ' + m.lra  + ' LU'  : '';
-            if (tpEl)   tpEl.textContent   = (m && m.truePeakDBTP)   ? 'TP '  + m.truePeakDBTP + ' dBTP' : '';
-
             if (md && md.name) setFilename(infoBar, md.name);
+            _updateMetricSpans(slot);
         }
 
         function decodeAndComputeAudioSlotViz(slot, arrayBuffer) {
@@ -6660,6 +6668,7 @@
                 const spectrogram = computeSpectrogramData(audioBuffer);
                 _audioSlotVizData[slot] = { waveform, spectrogram, audioBuffer };
                 audioMetrics[slot] = computeAudioMetrics(audioBuffer);
+                _updateMetricSpans(slot);
                 delete audioFileBuffers[slot];
 
                 // Update info bar with audio metadata
@@ -6954,6 +6963,9 @@
             <span class="asset-resolution">-</span>
             <span class="asset-aspect">-</span>
             <span class="asset-fps"></span>
+            <span class="asset-lufs"></span>
+            <span class="asset-lra"></span>
+            <span class="asset-tp"></span>
             <span class="asset-duration"></span>
             <span class="asset-filename"></span>
         `;
