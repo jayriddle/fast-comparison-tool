@@ -10,8 +10,11 @@ const _KEY_DISPLAY = {
     ' ': 'Space', 'ArrowLeft': '←', 'ArrowRight': '→', 'ArrowUp': '↑', 'ArrowDown': '↓',
     '+': '+', '-': '−', '=': '=', '_': '_',
 };
+const _isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 function _keyDisplay(key, shift, alt) {
-    return (alt ? '⌥' : '') + (shift ? '⇧' : '') + (_KEY_DISPLAY[key] || key.toUpperCase());
+    const altStr = alt ? (_isMac ? '⌥' : 'Alt+') : '';
+    const shiftStr = shift ? '⇧' : '';
+    return altStr + shiftStr + (_KEY_DISPLAY[key] || key.toUpperCase());
 }
 
 // Build keymap: maps key (with shift prefix) → action id

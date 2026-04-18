@@ -3749,6 +3749,8 @@
         let magnifierLinked = _prefs.load('magnifierLinked', false); // Shift+Z toggle
         let spectrogramLogScale = _prefs.load('spectrogramLogScale', false);
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
+        let audioMetrics = {};         // { slot: { integratedLUFS: string, truePeakDBTP: string, ... } } — from computeAudioMetrics()
+        window.audioMetrics = audioMetrics; // global for console/debug (also in __testAPI)
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
         // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
         const ZOOM_STEP = Math.SQRT2;
@@ -9043,6 +9045,7 @@
             _opusSyncActive = false;
             _videoAudioBuffers = {};
             audioFileBuffers = {};
+            audioMetrics = window.audioMetrics = {};  // reset both for clean state
             _audioSlotVizData = {};
             _audioDecodeGen = {};
             _audioMaxDuration = 0;
@@ -11509,6 +11512,7 @@
             get gridInlineMode() { return gridInlineMode; },
             get viewActivating() { return viewActivating; },
             get spectrogramLogScale() { return spectrogramLogScale; },
+            get audioMetrics() { return audioMetrics; },
             get timecopyFmt() { return _prefs.load('timecopyFmt', 'hms'); },
         };
 
@@ -11763,6 +11767,13 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.6</h3>
+            <ul>
+                <li><strong>Image rotation (⌥← / ⌥→ on Mac, Alt+← / Alt+→ on Windows)</strong> — rotate any asset 90° CW or CCW. Works in both Stack and Grid; the zoom loupe follows the rotation.</li>
+                <li><strong>Resizable audio panel</strong> — drag the top edge of the waveform / spectrogram panel to make it taller or shorter.</li>
+                <li><strong>Frame step wraps</strong> — stepping past the last frame with <kbd>,</kbd> / <kbd>.</kbd> now wraps around to the other end.</li>
+                <li><strong>Hotkeys panel</strong> — <kbd>P</kbd> cycles the spectrogram color palette; Appearance section is now always visible at the bottom of the panel.</li>
+            </ul>
             <h3>v3.10.2</h3>
             <ul>
                 <li><strong>Hidden slot restore in Grid mode</strong> — ghost pills now appear in the header when a slot is hidden, so you can click to bring it back. Previously the pill was missing and there was no way to restore without reloading.</li>
