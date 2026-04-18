@@ -10,8 +10,8 @@ const _KEY_DISPLAY = {
     ' ': 'Space', 'ArrowLeft': '←', 'ArrowRight': '→', 'ArrowUp': '↑', 'ArrowDown': '↓',
     '+': '+', '-': '−', '=': '=', '_': '_',
 };
-function _keyDisplay(key, shift) {
-    return (shift ? '⇧' : '') + (_KEY_DISPLAY[key] || key.toUpperCase());
+function _keyDisplay(key, shift, alt) {
+    return (alt ? '⌥' : '') + (shift ? '⇧' : '') + (_KEY_DISPLAY[key] || key.toUpperCase());
 }
 
 // Build keymap: maps key (with shift prefix) → action id
@@ -25,7 +25,7 @@ function _buildKeymap() {
     for (const action of _hotkeyActions) {
         const hasCustom = _customKeys[action.id] !== undefined;
         const key = hasCustom ? _customKeys[action.id] : action.defaultKey;
-        const prefix = action.shift ? 'S+' : '';
+        const prefix = action.shift ? 'S+' : (action.alt ? 'A+' : '');
         const mapKey = prefix + key;
         if (key) {
             if (hasCustom || !_keymap[mapKey]) {
@@ -36,6 +36,7 @@ function _buildKeymap() {
                     actionId:   action.id,
                     defaultKey: key,
                     shift:      !!action.shift,
+                    alt:        !!action.alt,
                     blockedBy:  _keymap[mapKey],
                 });
             }
@@ -72,8 +73,8 @@ function _reassignKey(actionId, newKey) {
     }
     // Normalize to lowercase for letter keys
     if (newKey.length === 1) newKey = newKey.toLowerCase();
-    // Check for conflicts (same key + same shift state)
-    const prefix = action.shift ? 'S+' : '';
+    // Check for conflicts (same key + same modifier state)
+    const prefix = action.shift ? 'S+' : (action.alt ? 'A+' : '');
     const conflictId = _keymap[prefix + newKey] || _keymap[prefix + newKey.toLowerCase()];
     if (conflictId && conflictId !== actionId) {
         const conflict = _hotkeyActions.find(a => a.id === conflictId);
@@ -126,6 +127,7 @@ const _pairedLabels = {
     speed:         'Slower / Faster',
     loopPoints:    'Loop in / out point',
     copyTc:        'Timecode: Copy / Format',
+    rotate:        'Rotate CW / CCW',
 };
 
 // Which sections go in which column, with display headers
@@ -162,12 +164,12 @@ function _renderShortcutsList() {
             row.className = 'shortcut-conflict-row';
             const keyEl = document.createElement('span');
             keyEl.className = 'shortcut-conflict-key';
-            keyEl.textContent = _keyDisplay(c.defaultKey, c.shift);
+            keyEl.textContent = _keyDisplay(c.defaultKey, c.shift, c.alt);
             const desc = document.createElement('span');
             desc.className = 'shortcut-conflict-desc';
             desc.innerHTML =
                 '<strong>' + unbound.label + '</strong> has no key \u2014 ' +
-                '<kbd class="shortcut-conflict-key">' + _keyDisplay(c.defaultKey, c.shift) + '</kbd>' +
+                '<kbd class="shortcut-conflict-key">' + _keyDisplay(c.defaultKey, c.shift, c.alt) + '</kbd>' +
                 ' is taken by your custom <strong>' + blocker.label + '</strong> mapping.';
             const btn = document.createElement('button');
             btn.className = 'shortcut-conflict-assign';
@@ -407,7 +409,7 @@ function _buildKbd(action) {
     const kbd = document.createElement('kbd');
     kbd.textContent = _reassigningActionId === action.id ? 'Press a key\u2026'
                     : isUnbound                          ? '\u2014'
-                    : _keyDisplay(_actionKey(action.id), action.shift);
+                    : _keyDisplay(_actionKey(action.id), action.shift, action.alt);
     kbd.className = 'shortcut-kbd-clickable' +
                     (_reassigningActionId === action.id ? ' reassigning' : '') +
                     (_isCustomised(action.id) ? ' customised' : '') +
@@ -422,7 +424,7 @@ function _buildResetIcon(action) {
     const rst = document.createElement('span');
     rst.className = 'shortcut-reset';
     rst.textContent = '↺';
-    rst.title = 'Reset to default (' + _keyDisplay(action.defaultKey, action.shift) + ')';
+    rst.title = 'Reset to default (' + _keyDisplay(action.defaultKey, action.shift, action.alt) + ')';
     rst.addEventListener('click', (ev) => { ev.stopPropagation(); _resetHotkey(action.id); });
     return rst;
 }

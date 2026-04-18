@@ -3668,6 +3668,8 @@
         let audioVizVisible = _prefs.load('audioVizVisible', false);   // W key toggle
         let _audioVizHeight = _prefs.load('audioVizHeight', 200);     // combined row px (waveform + spectrogram)
         let _audioVizSplit  = _prefs.load('audioVizSplit',  0.40);    // fraction for waveform row (default 80/200)
+        let _slotRotation = JSON.parse(_prefs.load('slotRotation', '{"original":0,"editA":0,"editB":0}'));
+                                                                       // per-slot rotation in degrees (0/90/180/270)
         const _AUDIO_VIZ_SPLITTER_H    = 5;
         const _AUDIO_VIZ_RESIZE_H      = 6;
         const _AUDIO_VIZ_MIN_ROW       = 40;
@@ -8135,6 +8137,31 @@
             }
         });
 
+        // Returns effective {nw, nh} for a slot after applying rotation.
+        // For 90°/270°, width and height are swapped (landscape ↔ portrait).
+        function _rotatedDims(slot, nw, nh) {
+            const rot = _slotRotation[slot] || 0;
+            return (rot === 90 || rot === 270) ? { nw: nh, nh: nw } : { nw, nh };
+        }
+
+        // Rotate the asset in `slot` by `delta` degrees (±90). Clamps to 0/90/180/270.
+        // Resets pan, triggers relayout, and persists to prefs.
+        function _rotateSlot(slot, delta) {
+            if (!mediaData[slot]) { showToast('Nothing loaded in that slot'); return; }
+            if (mediaData[slot].type === 'audio') { showToast('Rotation not available for audio'); return; }
+            _slotRotation[slot] = ((_slotRotation[slot] || 0) + delta + 360) % 360;
+            _prefs.save('slotRotation', JSON.stringify(_slotRotation));
+            panOffsetX = 0;
+            panOffsetY = 0;
+            if (!isGridMode) {
+                applyZoom();
+            } else {
+                requestAnimationFrame(positionLabelsToMedia);
+            }
+            const deg = _slotRotation[slot];
+            showToast(slotLabel(slot) + ': ' + deg + '°');
+        }
+
         function applyZoom() {
             if (isGridMode) return; // zoom/pan only applies in overlay mode
 
@@ -8163,7 +8190,8 @@
                 const layer = getLayer(slot);
                 const media = layer && layer.querySelector('img, video, canvas.audio-viz-slot-canvas');
                 if (!media || media.classList.contains('audio-viz-slot-canvas')) return;
-                const { w: nw, h: nh } = mediaDims(media);
+                const { w: _w0, h: _h0 } = mediaDims(media);
+                const { nw, nh } = _rotatedDims(slot, _w0, _h0);
                 if (nw > 0 && nh > 0) {
                     const paf = Math.min(_stackViewW / nw, _stackViewH / nh);
                     _fitScales[slot] = paf;
@@ -8221,7 +8249,8 @@
                 const vw = layer.querySelector('.video-wrapper');
                 if (!media || !vw) return;
 
-                const { w: nw, h: nh } = mediaDims(media);
+                const { w: origW, h: origH } = mediaDims(media);
+                const { nw, nh } = _rotatedDims(slot, origW, origH);
                 if (!nw || !nh) return;
 
                 const isAudioCanvas = media.classList.contains('audio-viz-slot-canvas');
@@ -8275,18 +8304,38 @@
                 vw.style.width = scaledW + 'px';
                 vw.style.height = scaledH + 'px';
 
-                // Media fills its wrapper; no transform needed — pan is on the wrapper.
-                // Guards below are not needed (already in the !isAudioCanvas else branch)
-                // but kept as comments for clarity.
+                // Media fills its wrapper. For rotated assets, we position the media
+                // at its original (unrotated) pixel size centered in the wrapper, then
+                // apply the CSS rotation so it fills the wrapper's rotated footprint.
                 /* !isAudioCanvas */ {
                     const perAssetScaleForMedia = _perAssetFits[slot] * (fitZoom > 0 ? zoomLevel / fitZoom : 1);
                     media.style.imageRendering = perAssetScaleForMedia >= 2 ? 'pixelated' : '';
-                    media.style.width = '100%';
-                    media.style.height = '100%';
-                    media.style.maxWidth = 'none';
-                    media.style.maxHeight = 'none';
-                    media.style.objectFit = 'contain';
-                    media.style.transform = '';
+                    const rot = _slotRotation[slot] || 0;
+                    if (rot) {
+                        // Wrapper is sized to effective (rotated) dims.
+                        // Media needs to be its original pixel dims, centered, then rotated.
+                        const mediaPhysW = Math.round(origW * perAssetScaleForMedia);
+                        const mediaPhysH = Math.round(origH * perAssetScaleForMedia);
+                        media.style.position = 'absolute';
+                        media.style.width = mediaPhysW + 'px';
+                        media.style.height = mediaPhysH + 'px';
+                        media.style.top = '50%';
+                        media.style.left = '50%';
+                        media.style.maxWidth = 'none';
+                        media.style.maxHeight = 'none';
+                        media.style.objectFit = 'fill';
+                        media.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+                    } else {
+                        media.style.position = '';
+                        media.style.width = '100%';
+                        media.style.height = '100%';
+                        media.style.top = '';
+                        media.style.left = '';
+                        media.style.maxWidth = 'none';
+                        media.style.maxHeight = 'none';
+                        media.style.objectFit = 'contain';
+                        media.style.transform = '';
+                    }
 
                     // Update per-asset zoom in info bar (actual pixel ratio for this specific asset)
                     const infoBarLocal = layer.querySelector('.asset-info-bar');
@@ -8873,6 +8922,7 @@
             panOffsetY = 0;
             isPanning = false;
             _savedFitZoom = null; _savedFitPanX = 0; _savedFitPanY = 0;
+            _slotRotation = { original: 0, editA: 0, editB: 0 };
 
             // Stop video/audio progress loop — will be restarted if new load includes videos/audio
             stopProgressUpdateLoop();
@@ -9245,7 +9295,8 @@
                 const infoBar = mediaContainer ? mediaContainer.querySelector('.asset-info-bar') : null;
                 if (!media || !mediaContainer || !videoWrapper) return;
 
-                const { w: nw, h: nh } = mediaDims(media);
+                const { w: origW, h: origH } = mediaDims(media);
+                const { nw, nh } = _rotatedDims(slot, origW, origH);
                 if (!nw || !nh) return;
 
                 // Use layer dimensions for grid cells (mediaContainer is position:absolute)
@@ -9258,7 +9309,7 @@
                 const fitW = Math.min(cw, Math.floor(availH * nw / nh));
                 const fitH = Math.min(availH, Math.floor(cw * nh / nw));
 
-                data[slot] = { nw, nh, cw, ch, ibH, availH, fitW, fitH,
+                data[slot] = { nw, nh, origW, origH, cw, ch, ibH, availH, fitW, fitH,
                                layer, mediaContainer, media, videoWrapper, infoBar };
             });
             return { data, anySkipped };
@@ -9912,6 +9963,34 @@
                 m.videoWrapper.style.left = g.tx + 'px';
                 m.videoWrapper.style.transform = '';
                 m.videoWrapper.style.transformOrigin = '';
+
+                // Apply per-slot rotation to media (wrapper holds the effective footprint;
+                // media is positioned at original dims, centered, then rotated in-place).
+                const rot = _slotRotation[slot] || 0;
+                if (rot && m.media) {
+                    const scale = m.nw > 0 ? g.rw / m.nw : 1;
+                    const mediaPhysW = Math.round((m.origW || m.nw) * scale);
+                    const mediaPhysH = Math.round((m.origH || m.nh) * scale);
+                    m.media.style.position = 'absolute';
+                    m.media.style.width = mediaPhysW + 'px';
+                    m.media.style.height = mediaPhysH + 'px';
+                    m.media.style.top = '50%';
+                    m.media.style.left = '50%';
+                    m.media.style.maxWidth = 'none';
+                    m.media.style.maxHeight = 'none';
+                    m.media.style.objectFit = 'fill';
+                    m.media.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+                } else if (m.media) {
+                    m.media.style.position = '';
+                    m.media.style.width = '';
+                    m.media.style.height = '';
+                    m.media.style.top = '';
+                    m.media.style.left = '';
+                    m.media.style.maxWidth = '';
+                    m.media.style.maxHeight = '';
+                    m.media.style.objectFit = '';
+                    m.media.style.transform = '';
+                }
 
                 const infoBarZoom = m.layer.querySelector('.asset-info-bar .asset-zoom');
                 if (infoBarZoom) infoBarZoom.textContent = formatZoom(g.zoom);
@@ -10911,6 +10990,10 @@
                   localStorage.setItem('starfieldOn', off ? '' : '1');
                   showToast('Ad Astra ' + (off ? 'OFF' : 'ON'));
               } },
+            { id: 'rotateCW',  defaultKey: 'ArrowRight', alt: true, label: 'Rotate CW 90°',  section: 'view', paired: 'rotate',
+              fn: () => { _rotateSlot(assetOrder[currentAssetIndex], 90); } },
+            { id: 'rotateCCW', defaultKey: 'ArrowLeft',  alt: true, label: 'Rotate CCW 90°', section: 'view', paired: 'rotate',
+              fn: () => { _rotateSlot(assetOrder[currentAssetIndex], -90); } },
 
             // ── Zoom ──
             { id: 'zoomFit', defaultKey: '0', label: 'Zoom to fit screen', section: 'zoom',
@@ -11172,11 +11255,14 @@
                 return;
             }
 
-            // Look up the action for this key
-            // Try shift-prefixed first, then unprefixed (for keys like ? that are Shift+/ but not flagged as shift actions)
-            // For Shift+digit, e.key is the symbol (!@#...) not the digit — also try the physical key from e.code
+            // Look up the action for this key.
+            // Alt (⌥) keys use 'A+' prefix; Shift keys use 'S+' prefix (falling back to unshifted).
+            // For Shift+digit, e.key is the symbol (!@#...) not the digit — also try the physical key from e.code.
+            // Alt+key is handled exclusively — it does NOT fall through to plain-key lookup.
             const _shiftDigit = e.shiftKey && e.code && e.code.startsWith('Digit') ? e.code.slice(5) : null;
-            const actionId = e.shiftKey
+            const actionId = e.altKey
+                ? (_keymap['A+' + e.key] || _keymap['A+' + e.key.toLowerCase()])
+                : e.shiftKey
                 ? (_keymap['S+' + e.key] || _keymap['S+' + e.key.toLowerCase()] || (_shiftDigit && _keymap['S+' + _shiftDigit]) || _keymap[e.key] || _keymap[e.key.toLowerCase()])
                 : (_keymap[e.key] || _keymap[e.key.toLowerCase()]);
             if (!actionId) return;
