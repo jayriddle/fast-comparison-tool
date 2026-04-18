@@ -1574,7 +1574,7 @@
         }
 
         .spectrogram-panel.active {
-            max-height: 200px;
+            max-height: var(--avh, 219px); /* 219 = default 200 rows + 5 splitter + 6 handle + 8 pad */
             padding-top: 4px;
             padding-bottom: 4px;
         }
@@ -1624,7 +1624,7 @@
         }
 
         .waveform-row {
-            height: 80px;
+            height: 80px; /* overridden by JS _applyAudioVizLayout */
         }
 
         .waveform-row .audio-viz-canvas-wrap {
@@ -1632,7 +1632,7 @@
         }
 
         .spectrogram-row {
-            height: 120px;
+            height: 120px; /* overridden by JS _applyAudioVizLayout */
         }
 
         .spectrogram-row .audio-viz-canvas-wrap {
@@ -1654,6 +1654,46 @@
             min-width: 36px;
             max-width: 36px;
         }
+
+        /* ── Audio viz resize controls ── */
+        #audioVizResizeHandle {
+            height: 6px;
+            flex-shrink: 0;
+            cursor: ns-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 -16px; /* bleed to panel edges */
+            position: relative;
+        }
+        #audioVizResizeHandle::after {
+            content: '';
+            width: 28px;
+            height: 2px;
+            background: #3a3a44;
+            border-radius: 1px;
+            transition: background 0.15s;
+        }
+        #audioVizResizeHandle:hover::after { background: #666672; }
+
+        #audioVizSplitter {
+            height: 5px;
+            flex-shrink: 0;
+            cursor: ns-resize;
+            position: relative;
+        }
+        #audioVizSplitter::after {
+            content: '';
+            position: absolute;
+            left: -16px; right: -16px; /* bleed to panel edges */
+            top: 50%;
+            transform: translateY(-50%);
+            height: 1px;
+            background: #2a2a32;
+            transition: background 0.15s;
+        }
+        #audioVizSplitter:hover::after { background: #555560; }
+        .spectrogram-panel.active.no-audio-data #audioVizSplitter { visibility: hidden; }
 
         .scopes-panel {
             max-height: 0;
@@ -2489,6 +2529,7 @@
                 </div>
             </div>
             <div class="spectrogram-panel" id="spectrogramPanel">
+                <div id="audioVizResizeHandle" title="Drag to resize audio panel"></div>
                 <div id="audioNoDataMsg">No audio for this asset</div>
                 <div class="audio-viz-row waveform-row">
                     <div class="audio-viz-label" id="waveformLabels"><span>L</span><span>R</span></div>
@@ -2498,6 +2539,7 @@
                     </div>
                     <div class="audio-viz-right"></div>
                 </div>
+                <div id="audioVizSplitter" title="Drag to adjust waveform/spectrogram split"></div>
                 <div class="audio-viz-row spectrogram-row">
                     <div class="audio-viz-label" id="spectrogramLabels">
                         <span>20k</span>
@@ -3624,6 +3666,13 @@
         let waveformData = {};         // { slot: Float32Array } — downsampled amplitude
         let spectrogramData = {};      // { slot: { data: Uint8Array[], sampleRate, duration } }
         let audioVizVisible = _prefs.load('audioVizVisible', false);   // W key toggle
+        let _audioVizHeight = _prefs.load('audioVizHeight', 200);     // combined row px (waveform + spectrogram)
+        let _audioVizSplit  = _prefs.load('audioVizSplit',  0.40);    // fraction for waveform row (default 80/200)
+        const _AUDIO_VIZ_SPLITTER_H    = 5;
+        const _AUDIO_VIZ_RESIZE_H      = 6;
+        const _AUDIO_VIZ_MIN_ROW       = 40;
+        const _AUDIO_VIZ_MIN_TOTAL     = _AUDIO_VIZ_MIN_ROW * 2 + _AUDIO_VIZ_SPLITTER_H;
+        const _AUDIO_VIZ_MAX_TOTAL     = 600;
         let _preVizZoomLevel = null;   // saved zoom when waveform panel forces fit
         let audioVizExpanded = false;  // removed — kept as false for compat
         let _noVideoMode = false;
@@ -5800,6 +5849,87 @@
             }
         }
 
+        // ── Audio viz resize layout ───────────────────────────────────────────────
+        function _applyAudioVizLayout(redrawAfter) {
+            const panel = document.getElementById('spectrogramPanel');
+            if (!panel) return;
+
+            const totalRows = Math.max(_AUDIO_VIZ_MIN_TOTAL, Math.min(_AUDIO_VIZ_MAX_TOTAL, _audioVizHeight));
+            const waveH = Math.max(_AUDIO_VIZ_MIN_ROW, Math.round(totalRows * _audioVizSplit));
+            const specH = Math.max(_AUDIO_VIZ_MIN_ROW, totalRows - _AUDIO_VIZ_SPLITTER_H - waveH);
+
+            // Update state in case min clamping pushed totals around
+            _audioVizHeight = waveH + specH + _AUDIO_VIZ_SPLITTER_H;
+
+            // max-height for open-state CSS transition:
+            // padding(8) + resize-handle(6) + waveH + splitter(5) + specH
+            panel.style.setProperty('--avh', (_audioVizHeight + _AUDIO_VIZ_RESIZE_H + 8) + 'px');
+
+            const waveRow = document.querySelector('.waveform-row');
+            const specRow = document.querySelector('.spectrogram-row');
+            if (waveRow) waveRow.style.height = waveH + 'px';
+            if (specRow) specRow.style.height = specH + 'px';
+
+            if (redrawAfter && audioVizVisible) {
+                const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                if (slot) requestAnimationFrame(() => updateAudioVisForSlot(slot));
+            }
+        }
+
+        // Resize handle drag (overall panel height)
+        (function _initAudioVizDragHandles() {
+            const resizeHandle = document.getElementById('audioVizResizeHandle');
+            const splitter     = document.getElementById('audioVizSplitter');
+            if (!resizeHandle || !splitter) return;
+
+            // ── Panel height drag ──
+            resizeHandle.addEventListener('mousedown', e => {
+                e.preventDefault();
+                const startY  = e.clientY;
+                const startH  = _audioVizHeight;
+
+                const onMove = ev => {
+                    const delta = startY - ev.clientY; // drag up = positive = grow
+                    _audioVizHeight = Math.max(_AUDIO_VIZ_MIN_TOTAL,
+                                      Math.min(_AUDIO_VIZ_MAX_TOTAL, startH + delta));
+                    _applyAudioVizLayout(false);
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    _prefs.save('audioVizHeight', _audioVizHeight);
+                    _applyAudioVizLayout(true);
+                    animateRelayout(0);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+
+            // ── Waveform / spectrogram split drag ──
+            splitter.addEventListener('mousedown', e => {
+                e.preventDefault();
+                const startY    = e.clientY;
+                const availH    = _audioVizHeight - _AUDIO_VIZ_SPLITTER_H;
+                const startWaveH = Math.max(_AUDIO_VIZ_MIN_ROW, Math.round(availH * _audioVizSplit));
+
+                const onMove = ev => {
+                    const delta    = ev.clientY - startY; // drag down = waveform grows
+                    const newWaveH = Math.max(_AUDIO_VIZ_MIN_ROW,
+                                    Math.min(availH - _AUDIO_VIZ_MIN_ROW, startWaveH + delta));
+                    _audioVizSplit = newWaveH / availH;
+                    _applyAudioVizLayout(false);
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    _prefs.save('audioVizSplit', _audioVizSplit);
+                    _applyAudioVizLayout(true);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        })();
+
         function toggleAudioViz() {
             // N mode and W panel are mutually exclusive — opening W exits N mode first
             if (!audioVizVisible && _noVideoMode) {
@@ -5813,6 +5943,7 @@
             audioVizVisible = !audioVizVisible;
             if (audioVizVisible) {
                 if (panel) panel.classList.add('active');
+                _applyAudioVizLayout(false); // set row heights before transition plays
                 if (controls) controls.classList.add('audio-viz-active');
                 showToast('Audio: waveform + spectrogram');
                 _ensureAudioVizDecoded();
@@ -10561,6 +10692,7 @@
                         if (audioVizVisible && hasVideos) {
                             const ap = document.getElementById('spectrogramPanel');
                             if (ap) ap.classList.add('active');
+                            _applyAudioVizLayout(false); // apply saved row heights
                             const vc = document.getElementById('videoControls');
                             if (vc) vc.classList.add('audio-viz-active');
                             const wb = document.getElementById('waveformToggleBtn');
