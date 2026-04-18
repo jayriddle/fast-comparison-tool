@@ -6684,6 +6684,18 @@
                 assetOrder.forEach(s => {
                     if (_audioSlotVizData[s]) drawAudioSlotCanvas(s);
                 });
+
+                // Update duration display using decoded duration as a fallback in case
+                // the <audio> element's loadedmetadata event is slow (e.g. service worker
+                // intercepting the blob URL). This is idempotent — loadedmetadata will
+                // overwrite it with the same value when it eventually fires.
+                updateDurationDisplay(slot, audioBuffer.duration);
+
+                // Activate the view if it hasn't been activated yet (i.e. loadedmetadata
+                // hasn't fired). This unblocks the loading screen when the <audio> element
+                // is slow to fire loadedmetadata. The viewActivating guard in
+                // checkAllLoaded() prevents a double-activation when loadedmetadata later fires.
+                if (!viewActivating) checkAllLoaded();
             }).catch(err => {
                 console.error('Audio decode error for slot ' + slot + ':', err);
                 showLoadToast('Audio decode failed for ' + slotLabel(slot), true, 5000);
