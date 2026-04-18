@@ -1135,6 +1135,27 @@
             text-overflow: ellipsis;
         }
 
+        /* Metrics group in Stack header strip — same pill style as info bar */
+        #stackInfoStrip .sih-group-metrics {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        #stackInfoStrip .sih-lufs,
+        #stackInfoStrip .sih-lra,
+        #stackInfoStrip .sih-tp {
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: rgba(0,0,0,0.35);
+            color: #7de87d;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        #stackInfoStrip .sih-lra { color: #8cacef; }
+        #stackInfoStrip .sih-tp  { color: #e0a0e0; }
+
         /* Hover tooltip — matches UI font, two-column label/value layout */
         #sihTooltip {
             position: fixed;
@@ -2422,6 +2443,12 @@
                 <span class="sih-group-time">
                     <span class="sih-duration"></span>
                     <span class="sih-fps"></span>
+                </span>
+                <span class="sih-sep sih-sep-metrics" aria-hidden="true">·</span>
+                <span class="sih-group-metrics">
+                    <span class="sih-lufs"></span>
+                    <span class="sih-lra"></span>
+                    <span class="sih-tp"></span>
                 </span>
             </div>
             <div id="sihTooltip"></div>
@@ -5159,6 +5186,8 @@
             }
             if (lraEl) lraEl.textContent = (m && m.lra !== null) ? 'LRA ' + m.lra + ' LU' : '';
             if (tpEl)  tpEl.textContent  = (m && m.truePeakDBTP) ? 'TP '  + m.truePeakDBTP + ' dBTP' : '';
+            // Keep Stack header strip in sync (reads from these same hidden spans)
+            _updateStackInfoStrip();
         }
 
         function _finalizeAudioViz(slot, audioBuffer) {
@@ -8654,6 +8683,9 @@
             const fps        = bar ? bar.querySelector('.asset-fps')?.textContent        : '';
             const resolution = bar ? bar.querySelector('.asset-resolution')?.textContent : '';
             const aspect     = bar ? bar.querySelector('.asset-aspect')?.textContent     : '';
+            const lufs       = bar ? bar.querySelector('.asset-lufs')?.textContent       : '';
+            const lra        = bar ? bar.querySelector('.asset-lra')?.textContent        : '';
+            const tp         = bar ? bar.querySelector('.asset-tp')?.textContent         : '';
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
             // Duration: compute fresh using the user's chosen format (not the hardcoded M:SS:FF string)
@@ -8694,13 +8726,25 @@
             const hasSpatial = !!(res || ar);
             strip.querySelector('.sih-group-spatial').style.display = hasSpatial ? 'flex' : 'none';
 
+            // Metrics group (LUFS / LRA / TP)
+            const lufsEl = strip.querySelector('.sih-lufs');
+            const lraEl  = strip.querySelector('.sih-lra');
+            const tpEl   = strip.querySelector('.sih-tp');
+            if (lufsEl) lufsEl.textContent = lufs || '';
+            if (lraEl)  lraEl.textContent  = lra  || '';
+            if (tpEl)   tpEl.textContent   = tp   || '';
+            const hasMetrics = !!(lufs || lra || tp);
+            strip.querySelector('.sih-group-metrics').style.display = hasMetrics ? 'flex' : 'none';
+
             // Separator dots — shown only when there's content on both sides
-            // Order is now: name · zoom · [spatial] · [time]
+            // Order: name · zoom · [spatial] · [time] · [metrics]
             const hasLeft = showName || !!zoom;
             const sepSpatial = strip.querySelector('.sih-sep-spatial');
             const sepTime    = strip.querySelector('.sih-sep-time');
-            if (sepSpatial) sepSpatial.style.display = (hasSpatial && hasLeft)                       ? '' : 'none';
-            if (sepTime)    sepTime.style.display    = (hasTime    && (hasLeft || hasSpatial))        ? '' : 'none';
+            const sepMetrics = strip.querySelector('.sih-sep-metrics');
+            if (sepSpatial) sepSpatial.style.display = (hasSpatial && hasLeft)                            ? '' : 'none';
+            if (sepTime)    sepTime.style.display    = (hasTime    && (hasLeft || hasSpatial))             ? '' : 'none';
+            if (sepMetrics) sepMetrics.style.display = (hasMetrics && (hasLeft || hasSpatial || hasTime))  ? '' : 'none';
 
             // Hover tooltip — UI font, two-column label/value rows
             const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -8716,6 +8760,9 @@
                 tipRow('AR',       ar),
                 tipRow('FPS',      fps),
                 tipRow('Duration', duration),
+                tipRow('LUFS',     lufs),
+                tipRow('LRA',      lra),
+                tipRow('True Peak',tp),
             ].filter(Boolean).join('');
 
             strip.style.display = 'flex';
