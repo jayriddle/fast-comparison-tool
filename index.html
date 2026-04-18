@@ -3767,8 +3767,6 @@
         let magnifierLinked = _prefs.load('magnifierLinked', false); // Shift+Z toggle
         let spectrogramLogScale = _prefs.load('spectrogramLogScale', false);
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
-        let audioMetrics = {};         // { slot: { integratedLUFS: string, truePeakDBTP: string, ... } } — from computeAudioMetrics()
-        window.audioMetrics = audioMetrics; // global for console/debug (also in __testAPI)
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
         // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
         const ZOOM_STEP = Math.SQRT2;
@@ -9098,7 +9096,7 @@
             _opusSyncActive = false;
             _videoAudioBuffers = {};
             audioFileBuffers = {};
-            audioMetrics = window.audioMetrics = {};  // reset both for clean state
+            audioMetrics = {};
             _audioSlotVizData = {};
             _audioDecodeGen = {};
             _audioMaxDuration = 0;
