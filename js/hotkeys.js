@@ -142,9 +142,11 @@ function _renderShortcutsList() {
     const list = document.querySelector('#shortcutsPanel .shortcuts-list');
     if (!list) return;
     list.innerHTML = '';
-    // Remove any previous reset-all row
+    // Remove any previous reset-all row and appearance section (re-rendered below as panel footer)
     const oldReset = list.parentElement.querySelector('.shortcut-reset-all-row');
     if (oldReset) oldReset.remove();
+    const oldAppear = list.parentElement.querySelector('.slot-appearance-section');
+    if (oldAppear) oldAppear.remove();
 
     // ── Conflict warnings (full-width row inside the scrollable list) ──
     const oldConflicts = list.parentElement.querySelector('.shortcut-conflicts');
@@ -196,6 +198,7 @@ function _renderShortcutsList() {
     let lastRightSection = null;
 
     for (const action of _hotkeyActions) {
+        if (action.hidden) continue;
         const isLeft = _leftSections.has(action.section);
         const col = isLeft ? leftCol : rightCol;
         const lastSection = isLeft ? lastLeftSection : lastRightSection;
@@ -317,7 +320,7 @@ function _renderShortcutsList() {
 
     swatchRow.appendChild(resetBtn);
     appearSection.appendChild(swatchRow);
-    list.appendChild(appearSection);
+    list.parentElement.appendChild(appearSection);
 
     // Reset All button (only show if any customised)
     if (Object.keys(_customKeys).length > 0) {

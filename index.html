@@ -1242,7 +1242,7 @@
             pointer-events: none;
             transition: opacity 0.15s ease, transform 0.15s ease;
         }
-        .shortcuts-panel { width: 560px; }
+        .shortcuts-panel { width: 600px; }
         .manual-panel { width: 340px; }
 
         .shortcuts-panel.open,
@@ -1346,6 +1346,7 @@
             padding: 8px 14px;
             overflow-y: auto;
             flex: 1;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -1368,14 +1369,14 @@
 
         .shortcut-key {
             flex-shrink: 0;
-            width: 70px;
+            width: 90px;
             color: #ccc;
             font-size: 14px;
             white-space: nowrap;
         }
 
         .shortcut-desc {
-            color: #888;
+            color: #999;
             font-size: 14px;
         }
 
@@ -1399,12 +1400,12 @@
             color: #666;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            padding: 2px 0 2px;
+            padding: 8px 0 2px;
         }
         .shortcut-divider {
             border: none;
             border-top: 1px solid #2a2a2a;
-            margin: 4px 0;
+            margin: 4px 0 0;
         }
 
         .shortcut-kbd-clickable {
@@ -1506,8 +1507,8 @@
         /* ── Appearance section in shortcuts panel ── */
         .slot-appearance-section {
             border-top: 1px solid #2a2a2a;
-            padding: 10px 0 4px;
-            margin-top: 2px;
+            padding: 6px 14px 14px;
+            flex-shrink: 0;
         }
         .slot-appearance-row {
             display: flex;
@@ -1548,7 +1549,7 @@
         }
         .slot-appearance-reset:hover { color: #f88; }
         .slot-appearance-reset.hidden { visibility: hidden; }
-        .slot-appearance-section .shortcut-section-header { padding-bottom: 6px; }
+        .slot-appearance-section .shortcut-section-header { padding-top: 0; padding-bottom: 6px; }
 
         .video-controls {
             background: rgba(0, 0, 0, 0.85);
@@ -11061,7 +11062,7 @@
                   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
                   else document.exitFullscreen();
               } },
-            { id: 'toggleStarfield', defaultKey: 'x', label: 'Ad Astra', section: 'view', global: true,
+            { id: 'toggleStarfield', defaultKey: 'x', label: 'Ad Astra', section: 'view', global: true, hidden: true,
               fn: () => {
                   const dz = document.querySelector('.landing-dropzone');
                   if (!dz) return;
@@ -11245,7 +11246,7 @@
               fn: () => { if (hasVideos || hasImages) toggleBwMode(); } },
             { id: 'spectroScale', defaultKey: 'w', shift: true, label: 'Linear / log frequency', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale(); } },
-            { id: 'spectroPalette', label: 'Cycle color palette', section: 'analysis',
+            { id: 'spectroPalette', defaultKey: 'p', label: 'Cycle color palette', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette(); } },
 
             // ── Panels ──
