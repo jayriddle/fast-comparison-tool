@@ -2640,7 +2640,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.6';
+        const APP_VERSION = '3.10.7';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3156,6 +3156,7 @@
                 btn.addEventListener('click', () => {
                     _prefs.save('timecopyFmt', opt.key);
                     _refreshTimecodeDisplay();
+                    _notifyFrameFmtAudioFallback(opt.key);
                     _renderTimecopyPanel();
                 });
                 fmtGrid.appendChild(btn);
@@ -3255,6 +3256,7 @@
                 row.addEventListener('click', () => {
                     _prefs.save('timecopyFmt', opt.key);
                     _refreshTimecodeDisplay();
+                    _notifyFrameFmtAudioFallback(opt.key);
                     _hideTcChooser();
                 });
                 el.appendChild(row);
@@ -7692,6 +7694,16 @@
             if (pc) { pc.setAttribute('aria-valuemax', duration); pc.setAttribute('aria-valuenow', video.currentTime); }
         }
 
+        // Show a warning toast when a frame-based TC format is selected in audio-only mode.
+        // Frame formats (f, sf, hmsf) fall back silently to their non-frame equivalents
+        // when fps=0 (audio), which makes the display look unchanged if already in the
+        // fallback format. This toast makes the fallback visible.
+        function _notifyFrameFmtAudioFallback(fmt) {
+            if (!hasAudios || hasVideos) return;
+            const fallback = { f: 'ss.xxx', sf: 'ss.xxx', hmsf: 'h:mm:ss.xxx' };
+            if (fallback[fmt]) showToast('Frame timecode N/A for audio — showing ' + fallback[fmt]);
+        }
+
         function toggleTimecodeMode() {
             const order = ['hms', 'hmsf', 's', 'sf', 'f'];
             const cur   = _prefs.load('timecopyFmt', 'hms');
@@ -7699,6 +7711,7 @@
             _prefs.save('timecopyFmt', next);
             const fmtLabels = { hms: 'h:mm:ss.xxx', hmsf: 'h:mm:ss:ff', s: 'ss.xxx', sf: 'ss:ff', f: 'F + integer' };
             showToast('Timecode: ' + fmtLabels[next]);
+            _notifyFrameFmtAudioFallback(next);
             // Update bottom bar display immediately for whichever media type is active
             const activeLayer = document.querySelector('.asset-layer.active');
             if (activeLayer) {
