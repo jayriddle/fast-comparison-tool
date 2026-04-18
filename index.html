@@ -8657,6 +8657,20 @@
         // Mirrors the active asset's info bar content in the fixed header so it's
         // always visible regardless of zoom / pan state.
 
+        // Format a duration in seconds as M:SS.mmm or H:MM:SS.mmm.
+        // Always shows at least the minutes unit (even as 0) so sub-minute
+        // durations read as "0:03.678" rather than bare "3.678".
+        function _formatStripDuration(sec) {
+            const h   = Math.floor(sec / 3600);
+            const m   = Math.floor((sec % 3600) / 60);
+            const s   = sec % 60;
+            const ss  = String(Math.floor(s)).padStart(2, '0');
+            const ms  = String(Math.round((s % 1) * 1000)).padStart(3, '0');
+            return h > 0
+                ? `${h}:${String(m).padStart(2, '0')}:${ss}.${ms}`
+                : `${m}:${ss}.${ms}`;
+        }
+
         function _updateStackInfoStrip() {
             const strip = document.getElementById('stackInfoStrip');
             if (!strip) return;
@@ -8688,11 +8702,11 @@
             const tp         = bar ? bar.querySelector('.asset-tp')?.textContent         : '';
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
-            // Duration: compute fresh using the user's chosen format (not the hardcoded M:SS:FF string)
-            const media    = activeLayer.querySelector('video') || activeLayer.querySelector('audio');
-            const mediaFps = (media && media.tagName === 'VIDEO') ? (videoFrameRates[media.src] || 0) : 0;
-            const rawDur   = media && !isNaN(media.duration) && media.duration > 0 ? media.duration : 0;
-            const duration = rawDur > 0 ? _formatTcForCopy(rawDur, mediaFps) : '';
+            // Duration: always M:SS.mmm / H:MM:SS.mmm — always show at least minutes,
+            // even for sub-minute assets (e.g. 3.678 s → "0:03.678").
+            const media  = activeLayer.querySelector('video') || activeLayer.querySelector('audio');
+            const rawDur = media && !isNaN(media.duration) && media.duration > 0 ? media.duration : 0;
+            const duration = rawDur > 0 ? _formatStripDuration(rawDur) : '';
 
             // Slot-color class on strip root (drives CSS-colored name pill)
             strip.className = slot ? 'sih-slot-' + slot : '';
