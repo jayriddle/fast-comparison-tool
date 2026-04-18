@@ -497,5 +497,96 @@ function computeAudioMetrics(audioBuffer) {
         sampleRate:     fs,
         channels:       nCh,
         duration:       audioBuffer.duration,
+        // Short-term LUFS blocks (1 s step, 3 s window) — used for envelope visualization.
+        // Each entry is the raw LUFS value (unformatted float) at that time position.
+        stBlks,
     };
+}
+
+// ── LUFS envelope rendering ────────────────────────────────────────────────────
+//
+// Draws the short-term LUFS envelope as a filled area chart on top of (or instead
+// of) the waveform. Y-axis is fixed −50…0 LUFS. Reference lines at −14/−16/−23.
+// Integrated LUFS shown as a horizontal dashed line.
+//
+// ctx       — 2D canvas context (already translated/clipped as needed)
+// stBlks    — Float64 array of short-term LUFS values (1 value per second, approx)
+// intLUFS   — integrated LUFS string (e.g. "−14.6") or null
+// x0        — left edge of drawable area (pixels, in ctx coordinates)
+// w         — width of drawable area (pixels)
+// topY      — top of drawing area (pixels)
+// h         — height of drawing area (pixels)
+// dpr       — device pixel ratio (for crisp lines)
+
+function drawLufsEnvelope(ctx, stBlks, intLUFS, x0, w, topY, h, dpr) {
+    ctx.save();
+
+    const LUFS_MIN = -50, LUFS_MAX = 0, LUFS_RANGE = LUFS_MAX - LUFS_MIN;
+    const lufsToY = v => topY + h * (1 - (Math.max(LUFS_MIN, Math.min(LUFS_MAX, v)) - LUFS_MIN) / LUFS_RANGE);
+
+    // ── Reference lines: −14 (streaming), −16 (podcast), −23 (broadcast) ────
+    const refs = [
+        { lufs: -14, label: '-14', lineA: 0.28, textA: 0.45 },
+        { lufs: -16, label: '-16', lineA: 0.18, textA: 0.32 },
+        { lufs: -23, label: '-23', lineA: 0.13, textA: 0.26 },
+    ];
+    const fs7 = Math.max(7, Math.round(7.5 * dpr));
+    ctx.font = fs7 + 'px monospace';
+    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'left';
+    for (const ref of refs) {
+        const ry = lufsToY(ref.lufs);
+        ctx.strokeStyle = `rgba(125,232,125,${ref.lineA})`;
+        ctx.lineWidth = 0.75 * dpr;
+        ctx.setLineDash([4 * dpr, 5 * dpr]);
+        ctx.beginPath(); ctx.moveTo(x0, ry); ctx.lineTo(x0 + w, ry); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(125,232,125,${ref.textA})`;
+        ctx.fillText(ref.label, x0 + 3 * dpr, ry - 1.5 * dpr);
+    }
+
+    // ── Integrated LUFS — dashed horizontal line ──────────────────────────────
+    if (intLUFS !== null && intLUFS !== undefined) {
+        const iv = parseFloat(intLUFS);
+        if (!isNaN(iv)) {
+            const iy = lufsToY(iv);
+            ctx.setLineDash([6 * dpr, 4 * dpr]);
+            ctx.strokeStyle = 'rgba(125,232,125,0.55)';
+            ctx.lineWidth = 1.25 * dpr;
+            ctx.beginPath(); ctx.moveTo(x0, iy); ctx.lineTo(x0 + w, iy); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    // ── Short-term LUFS envelope ──────────────────────────────────────────────
+    if (stBlks && stBlks.length >= 2) {
+        const n = stBlks.length;
+        // Build (x,y) points spanning x0…x0+w
+        const pts = [];
+        for (let i = 0; i < n; i++) {
+            pts.push({ x: x0 + (i / (n - 1)) * w, y: lufsToY(stBlks[i]) });
+        }
+
+        // Filled area
+        const fillPath = new Path2D();
+        fillPath.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < n; i++) fillPath.lineTo(pts[i].x, pts[i].y);
+        fillPath.lineTo(pts[n - 1].x, topY + h);
+        fillPath.lineTo(pts[0].x,     topY + h);
+        fillPath.closePath();
+        ctx.fillStyle = 'rgba(125,232,125,0.18)';
+        ctx.fill(fillPath);
+
+        // Stroke top edge
+        const linePath = new Path2D();
+        linePath.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < n; i++) linePath.lineTo(pts[i].x, pts[i].y);
+        ctx.strokeStyle = 'rgba(125,232,125,0.88)';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([]);
+        ctx.stroke(linePath);
+    }
+
+    ctx.restore();
 }

@@ -1144,7 +1144,8 @@
         }
         #stackInfoStrip .sih-lufs,
         #stackInfoStrip .sih-lra,
-        #stackInfoStrip .sih-tp {
+        #stackInfoStrip .sih-tp,
+        #stackInfoStrip .sih-plr {
             font-size: 11px;
             padding: 1px 6px;
             border-radius: 3px;
@@ -1155,6 +1156,7 @@
         }
         #stackInfoStrip .sih-lra { color: #8cacef; }
         #stackInfoStrip .sih-tp  { color: #e0a0e0; }
+        #stackInfoStrip .sih-plr { color: #f0c06a; }
 
         /* Hover tooltip — matches UI font, two-column label/value layout */
         #sihTooltip {
@@ -1180,7 +1182,8 @@
         /* EBU R128 metric pills in audio info bar */
         .asset-info-bar .asset-lufs,
         .asset-info-bar .asset-lra,
-        .asset-info-bar .asset-tp {
+        .asset-info-bar .asset-tp,
+        .asset-info-bar .asset-plr {
             font-size: 11px;
             padding: 1px 6px;
             border-radius: 3px;
@@ -1190,9 +1193,11 @@
         }
         .asset-info-bar .asset-lufs:empty,
         .asset-info-bar .asset-lra:empty,
-        .asset-info-bar .asset-tp:empty { display: none; }
+        .asset-info-bar .asset-tp:empty,
+        .asset-info-bar .asset-plr:empty { display: none; }
         .asset-info-bar .asset-lra  { color: #8cacef; }
         .asset-info-bar .asset-tp   { color: #e0a0e0; }
+        .asset-info-bar .asset-plr  { color: #f0c06a; }
 
 
         /* Active asset indicator - brighter info bar in overlay mode */
@@ -2449,6 +2454,7 @@
                     <span class="sih-lufs"></span>
                     <span class="sih-lra"></span>
                     <span class="sih-tp"></span>
+                    <span class="sih-plr"></span>
                 </span>
             </div>
             <div id="sihTooltip"></div>
@@ -2640,7 +2646,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.7';
+        const APP_VERSION = '3.10.8';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3795,6 +3801,7 @@
         const _histogramModeLabels = { rgb: 'RGB (log)', 'rgb+luma': 'RGB + Luma (log)', cdf: 'CDF' };
         let magnifierLinked = _prefs.load('magnifierLinked', false); // Shift+Z toggle
         let spectrogramLogScale = _prefs.load('spectrogramLogScale', false);
+        let _audioWaveMode = 0; // 0 = waveform only, 1 = waveform + LUFS overlay, 2 = LUFS only
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
         // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
@@ -5166,8 +5173,8 @@
             }
         }
 
-        // Populate .asset-lufs / .asset-lra / .asset-tp in whichever info bar the slot has.
-        // Works for both audio-only and video slots (called after audioMetrics[slot] is set).
+        // Populate .asset-lufs / .asset-lra / .asset-tp / .asset-plr in whichever info bar
+        // the slot has. Works for both audio-only and video slots.
         function _updateMetricSpans(slot) {
             const layer = getLayer(slot);
             if (!layer) return;
@@ -5177,17 +5184,30 @@
             const lufsEl = infoBar.querySelector('.asset-lufs');
             const lraEl  = infoBar.querySelector('.asset-lra');
             const tpEl   = infoBar.querySelector('.asset-tp');
+            const plrEl  = infoBar.querySelector('.asset-plr');
             if (lufsEl) {
                 if (m && m.integratedLUFS !== null) {
                     lufsEl.textContent = m.integratedLUFS + ' LUFS';
+                    // Threshold coloring: > −9 = red (above all streaming targets);
+                    // < −24 = dimmed (unusually quiet); −9 to −24 = default green.
                     const v = parseFloat(m.integratedLUFS);
-                    lufsEl.style.color = v > -10 ? '#f66' : v > -18 ? '#fb3' : '';
+                    lufsEl.style.color = v > -9 ? '#f66' : v < -24 ? 'rgba(125,232,125,0.45)' : '';
                 } else {
                     lufsEl.textContent = '';
                 }
             }
             if (lraEl) lraEl.textContent = (m && m.lra !== null) ? 'LRA ' + m.lra + ' LU' : '';
             if (tpEl)  tpEl.textContent  = (m && m.truePeakDBTP) ? 'TP '  + m.truePeakDBTP + ' dBTP' : '';
+            // PLR = True Peak (dBTP) − Integrated LUFS — reveals compression/limiting character.
+            // Low PLR (4–6 LU) = heavily limited; high PLR (12–18 LU) = dynamic/unprocessed.
+            if (plrEl) {
+                if (m && m.integratedLUFS !== null && m.truePeakDBTP !== null) {
+                    const plr = (parseFloat(m.truePeakDBTP) - parseFloat(m.integratedLUFS)).toFixed(1);
+                    plrEl.textContent = 'PLR ' + plr + ' LU';
+                } else {
+                    plrEl.textContent = '';
+                }
+            }
             // Keep Stack header strip in sync (reads from these same hidden spans)
             _updateStackInfoStrip();
         }
@@ -5195,7 +5215,10 @@
         function _finalizeAudioViz(slot, audioBuffer) {
             waveformData[slot] = computeWaveformData(audioBuffer, 600);
             spectrogramData[slot] = computeSpectrogramData(audioBuffer);
-            audioMetrics[slot] = computeAudioMetrics(audioBuffer);
+            const _mf = computeAudioMetrics(audioBuffer);
+            audioMetrics[slot] = _mf;
+            // Propagate envelope data to the slot viz data if it already exists (no-video mode)
+            if (_audioSlotVizData[slot]) _audioSlotVizData[slot].lufsEnvelope = _mf ? _mf.stBlks : null;
             _updateMetricSpans(slot);
 
             // If this slot just finished a transcode, advance toast to 'done' now
@@ -6119,7 +6142,8 @@
             _audioSlotVizData[slot] = {
                 waveform: computeWaveformData(buf, numBuckets),
                 spectrogram: computeSpectrogramData(buf),
-                audioBuffer: buf
+                audioBuffer: buf,
+                lufsEnvelope: audioMetrics[slot] ? audioMetrics[slot].stBlks : null,
             };
             _audioMaxDuration = Math.max(_audioMaxDuration, buf.duration);
         }
@@ -6695,8 +6719,9 @@
                 const numBuckets = Math.min(Math.ceil(audioBuffer.duration * 1000), maxPx);
                 const waveform = computeWaveformData(audioBuffer, numBuckets);
                 const spectrogram = computeSpectrogramData(audioBuffer);
-                _audioSlotVizData[slot] = { waveform, spectrogram, audioBuffer };
-                audioMetrics[slot] = computeAudioMetrics(audioBuffer);
+                const _m = computeAudioMetrics(audioBuffer);
+                audioMetrics[slot] = _m;
+                _audioSlotVizData[slot] = { waveform, spectrogram, audioBuffer, lufsEnvelope: _m ? _m.stBlks : null };
                 _updateMetricSpans(slot);
                 delete audioFileBuffers[slot];
 
@@ -6778,42 +6803,52 @@
             const specH = canvas.height - waveH;
             const isStereo = !!vizData.waveform.R;
 
-            // ── Waveform (top 40%) with vertical padding ──
+            // ── Waveform area (top 40%) ───────────────────────────────────────────
             const wfPad = Math.round(waveH * 0.06); // 6% padding top and bottom
             const wfInnerH = waveH - wfPad * 2;
-            ctx.save();
-            ctx.translate(labelMargin, wfPad);
-            const wf = vizData.waveform;
-            const wfColor = 'rgba(80, 200, 80, 0.8)';
 
-            if (isStereo) {
-                const halfH = Math.floor(wfInnerH / 2);
-                drawWaveformChannelSmooth(ctx, wf.L, fillW, 0, halfH);
-                drawWaveformChannelSmooth(ctx, wf.R, fillW, halfH, wfInnerH - halfH);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.beginPath();
-                ctx.moveTo(0, halfH);
-                ctx.lineTo(fillW, halfH);
-                ctx.stroke();
-            } else {
-                drawWaveformChannelSmooth(ctx, wf.L, fillW, 0, wfInnerH);
+            // Mode 0 or 1: draw the waveform first
+            if (_audioWaveMode !== 2) {
+                ctx.save();
+                ctx.translate(labelMargin, wfPad);
+                const wf = vizData.waveform;
+
+                if (isStereo) {
+                    const halfH = Math.floor(wfInnerH / 2);
+                    drawWaveformChannelSmooth(ctx, wf.L, fillW, 0, halfH);
+                    drawWaveformChannelSmooth(ctx, wf.R, fillW, halfH, wfInnerH - halfH);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, halfH);
+                    ctx.lineTo(fillW, halfH);
+                    ctx.stroke();
+                } else {
+                    drawWaveformChannelSmooth(ctx, wf.L, fillW, 0, wfInnerH);
+                }
+
+                // dB grid lines
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.setLineDash([4, 4]);
+                const midY = wfInnerH / 2;
+                [-6, -12].forEach(db => {
+                    const amp = Math.pow(10, db / 20);
+                    [midY - amp * (wfInnerH / 2), midY + amp * (wfInnerH / 2)].forEach(y => {
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(fillW, y);
+                        ctx.stroke();
+                    });
+                });
+                ctx.setLineDash([]);
+                ctx.restore();
             }
 
-            // dB grid lines
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.setLineDash([4, 4]);
-            const midY = wfInnerH / 2;
-            [-6, -12].forEach(db => {
-                const amp = Math.pow(10, db / 20);
-                [midY - amp * (wfInnerH / 2), midY + amp * (wfInnerH / 2)].forEach(y => {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(fillW, y);
-                    ctx.stroke();
-                });
-            });
-            ctx.setLineDash([]);
-            ctx.restore();
+            // Mode 1 or 2: draw the LUFS envelope (overlay on waveform, or standalone)
+            if (_audioWaveMode > 0 && vizData.lufsEnvelope && vizData.lufsEnvelope.length >= 2) {
+                const intLUFS = audioMetrics[slot] ? audioMetrics[slot].integratedLUFS : null;
+                drawLufsEnvelope(ctx, vizData.lufsEnvelope, intLUFS,
+                    labelMargin, fillW, wfPad, wfInnerH, dpr);
+            }
 
             // ── Waveform/Spectrogram divider ──
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -6995,6 +7030,7 @@
             <span class="asset-lufs"></span>
             <span class="asset-lra"></span>
             <span class="asset-tp"></span>
+            <span class="asset-plr"></span>
             <span class="asset-filename"></span>
         `;
 
@@ -7007,6 +7043,7 @@
             <span class="asset-lufs"></span>
             <span class="asset-lra"></span>
             <span class="asset-tp"></span>
+            <span class="asset-plr"></span>
             <span class="asset-duration"></span>
             <span class="asset-filename"></span>
         `;
@@ -8699,6 +8736,7 @@
             const lufs       = bar ? bar.querySelector('.asset-lufs')?.textContent       : '';
             const lra        = bar ? bar.querySelector('.asset-lra')?.textContent        : '';
             const tp         = bar ? bar.querySelector('.asset-tp')?.textContent         : '';
+            const plr        = bar ? bar.querySelector('.asset-plr')?.textContent        : '';
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
             // Duration: use the user's chosen TC format, same as the info bar.
@@ -8739,14 +8777,16 @@
             const hasSpatial = !!(res || ar);
             strip.querySelector('.sih-group-spatial').style.display = hasSpatial ? 'flex' : 'none';
 
-            // Metrics group (LUFS / LRA / TP)
+            // Metrics group (LUFS / LRA / TP / PLR)
             const lufsEl = strip.querySelector('.sih-lufs');
             const lraEl  = strip.querySelector('.sih-lra');
             const tpEl   = strip.querySelector('.sih-tp');
+            const plrEl  = strip.querySelector('.sih-plr');
             if (lufsEl) lufsEl.textContent = lufs || '';
             if (lraEl)  lraEl.textContent  = lra  || '';
             if (tpEl)   tpEl.textContent   = tp   || '';
-            const hasMetrics = !!(lufs || lra || tp);
+            if (plrEl)  plrEl.textContent  = plr  || '';
+            const hasMetrics = !!(lufs || lra || tp || plr);
             strip.querySelector('.sih-group-metrics').style.display = hasMetrics ? 'flex' : 'none';
 
             // Separator dots — shown only when there's content on both sides
@@ -8776,6 +8816,7 @@
                 tipRow('LUFS',     lufs),
                 tipRow('LRA',      lra),
                 tipRow('True Peak',tp),
+                tipRow('PLR',      plr),
             ].filter(Boolean).join('');
 
             strip.style.display = 'flex';
@@ -11365,6 +11406,17 @@
                   if (hasAudios) { showToast('Audio visualization is shown in main view'); }
                   else if (hasVideos) { toggleAudioViz(); }
                   else { showToast('No assets chosen with audio'); }
+              } },
+            { id: 'audioEnvelope', defaultKey: 'e', label: 'Audio: cycle waveform / LUFS envelope', section: 'analysis',
+              fn: () => {
+                  if (!hasAudios && !_noVideoMode) { showToast('No audio visualization active'); return; }
+                  const modes = ['Waveform', 'Waveform + LUFS', 'LUFS envelope'];
+                  _audioWaveMode = (_audioWaveMode + 1) % 3;
+                  // Skip envelope modes when no LUFS data is available
+                  const hasEnvelope = assetOrder.some(s => _audioSlotVizData[s] && _audioSlotVizData[s].lufsEnvelope && _audioSlotVizData[s].lufsEnvelope.length >= 2);
+                  if (_audioWaveMode > 0 && !hasEnvelope) { _audioWaveMode = 0; showToast('LUFS envelope not available (file too short)'); return; }
+                  showToast('Audio: ' + modes[_audioWaveMode]);
+                  redrawAudioSlotCanvases();
               } },
             { id: 'noVideo', defaultKey: 'n', label: 'No video (audio focus)', section: 'analysis',
               fn: () => { if (hasVideos) toggleNoVideoMode(); else showToast('Load videos to use this mode'); } },
