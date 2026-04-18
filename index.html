@@ -8191,6 +8191,14 @@
             return (rot === 90 || rot === 270) ? { nw: nh, nh: nw } : { nw, nh };
         }
 
+        // Refreshes the info bar resolution/AR display for a slot using current rotation.
+        function _refreshResolutionDisplay(slot) {
+            const md = mediaData[slot];
+            if (!md || !md.w || !md.h) return;
+            const { nw, nh } = _rotatedDims(slot, md.w, md.h);
+            updateResolutionDisplay(slot, nw, nh);
+        }
+
         // Rotate the asset in `slot` by `delta` degrees (±90). Clamps to 0/90/180/270.
         // Resets pan, triggers relayout, and persists to prefs.
         function _rotateSlot(slot, delta) {
@@ -8198,12 +8206,16 @@
             if (mediaData[slot].type === 'audio') { showToast('Rotation not available for audio'); return; }
             _slotRotation[slot] = ((_slotRotation[slot] || 0) + delta + 360) % 360;
             _prefs.save('slotRotation', JSON.stringify(_slotRotation));
+            // Update info bar (resolution/AR) to reflect effective rotated dims
+            _refreshResolutionDisplay(slot);
             panOffsetX = 0;
             panOffsetY = 0;
             if (!isGridMode) {
-                applyZoom();
+                applyZoom(); // also calls _updateStackInfoStrip which reads the updated bar
             } else {
-                requestAnimationFrame(positionLabelsToMedia);
+                // Re-pick horizontal/vertical axis using new effective dims, then relayout.
+                // _swapGridSubLayout already schedules positionLabelsToMedia internally.
+                _swapGridSubLayout();
             }
             const deg = _slotRotation[slot];
             showToast(slotLabel(slot) + ': ' + deg + '°');
@@ -9261,9 +9273,16 @@
             const H = (container && container.offsetHeight) || window.innerHeight;
             if (!W || !H) return 'horizontal';
 
-            const dims = assetOrder.filter(s => mediaData[s] && mediaData[s].w && mediaData[s].h && !_hiddenSlots.has(s)).map(s => mediaData[s]);
-            if (dims.length === 0) return 'horizontal';
-            if (dims.length < n) return 'horizontal'; // not all assets have reported dimensions yet; defer
+            const slots = assetOrder.filter(s => mediaData[s] && mediaData[s].w && mediaData[s].h && !_hiddenSlots.has(s));
+            if (slots.length === 0) return 'horizontal';
+            if (slots.length < n) return 'horizontal'; // not all assets have reported dimensions yet; defer
+            // Use effective (post-rotation) dims so the layout picks the best axis for
+            // the content as the user will actually see it.
+            const dims = slots.map(s => {
+                const d = mediaData[s];
+                const { nw, nh } = _rotatedDims(s, d.w, d.h);
+                return { w: nw, h: nh };
+            });
 
             // Subtract the info bar height from each slot's usable video area.
             // In cols mode one bar sits above each column's full height;
