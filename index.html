@@ -3425,7 +3425,7 @@
             ctx.fillText(label, magnifierSize - 4, magnifierSize - 3);
         }
 
-        function drawMagnifierCanvas(magEl, media, relX, relY, screenScale, screenX, screenY) {
+        function drawMagnifierCanvas(magEl, media, relX, relY, screenScale, screenX, screenY, rotation = 0) {
             const natW = media.naturalWidth || media.videoWidth;
             const natH = media.naturalHeight || media.videoHeight;
             if (!natW || !natH) { magEl.classList.remove('active'); return; }
@@ -3489,13 +3489,25 @@
                     }
                 }
 
-                // Scale clone to full zoom size; translate so cursor point is centered
+                // Scale clone to full zoom size; translate so cursor point is centered.
+                // For rotated assets, rotate the clone around the cursor point so the
+                // loupe content matches the on-screen orientation.
                 const cw = natW * effectiveScale * magnifierZoom;
                 const ch = natH * effectiveScale * magnifierZoom;
                 clone.style.width  = cw + 'px';
                 clone.style.height = ch + 'px';
                 clone.style.left   = (magnifierSize / 2 - nativeX * effectiveScale * magnifierZoom) + 'px';
                 clone.style.top    = (magnifierSize / 2 - nativeY * effectiveScale * magnifierZoom) + 'px';
+                if (rotation) {
+                    // Rotate around the sampled point (which is centered in the loupe)
+                    clone.style.transform = 'rotate(' + rotation + 'deg)';
+                    clone.style.transformOrigin =
+                        (nativeX * effectiveScale * magnifierZoom) + 'px ' +
+                        (nativeY * effectiveScale * magnifierZoom) + 'px';
+                } else {
+                    clone.style.transform = '';
+                    clone.style.transformOrigin = '';
+                }
 
                 // Overlay canvas: crosshair + label only (transparent background)
                 let ov = state.overlay;
@@ -3533,7 +3545,17 @@
                 const ctx = canvas.getContext('2d', { colorSpace: 'display-p3' });
                 ctx.clearRect(0, 0, magnifierSize, magnifierSize);
                 ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(media, srcX, srcY, srcW, srcW, 0, 0, magnifierSize, magnifierSize);
+                if (rotation) {
+                    // Rotate the canvas so the loupe content matches on-screen orientation
+                    ctx.save();
+                    ctx.translate(magnifierSize / 2, magnifierSize / 2);
+                    ctx.rotate(rotation * Math.PI / 180);
+                    ctx.translate(-magnifierSize / 2, -magnifierSize / 2);
+                    ctx.drawImage(media, srcX, srcY, srcW, srcW, 0, 0, magnifierSize, magnifierSize);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(media, srcX, srcY, srcW, srcW, 0, 0, magnifierSize, magnifierSize);
+                }
                 _drawMagnifierOverlay(ctx, label);
             }
 
@@ -3577,19 +3599,34 @@
             const natH = media.naturalHeight || media.videoHeight;
             if (!natW || !natH) { mag.classList.remove('active'); return; }
 
-            // Map cursor to normalized 0..1 coords
+            // Map cursor to normalized 0..1 coords within the wrapper
             const rect = targetWrapper.getBoundingClientRect();
             const relX = (e.clientX - rect.left) / rect.width;
             const relY = (e.clientY - rect.top) / rect.height;
 
-            // Screen scale for overlay mode: normalize to fit-to-viewport
-            const screenScale = rect.width / natW;
+            // Find per-slot rotation so we can remap visual coords → original image coords
+            const slotForWrapper = assetOrder.find(s => {
+                const l = getLayer(s);
+                return l && l.contains(targetWrapper);
+            });
+            const slotRot = slotForWrapper ? (_slotRotation[slotForWrapper] || 0) : 0;
+
+            // For rotated 90°/270° slots, the wrapper width equals the original image HEIGHT,
+            // so screen-pixels-per-native-pixel must be computed against the effective natW.
+            const effNatW = (slotRot === 90 || slotRot === 270) ? natH : natW;
+            const screenScale = rect.width / effNatW;
             const effectiveScale = !isGridMode
                 ? screenScale * fitZoom / zoomLevel
                 : screenScale;
 
+            // Map visual (relX, relY) back to original image coords by undoing the rotation
+            let origRelX = relX, origRelY = relY;
+            if      (slotRot === 90)  { origRelX = relY;       origRelY = 1 - relX; }
+            else if (slotRot === 180) { origRelX = 1 - relX;   origRelY = 1 - relY; }
+            else if (slotRot === 270) { origRelX = 1 - relY;   origRelY = relX;     }
+
             // Draw primary loupe at cursor
-            drawMagnifierCanvas(mag, media, relX, relY, effectiveScale, e.clientX, e.clientY);
+            drawMagnifierCanvas(mag, media, origRelX, origRelY, effectiveScale, e.clientX, e.clientY, slotRot);
 
             // In split mode, draw linked loupes on other visible media
             if (isGridMode && magnifierLinked) {
@@ -3603,13 +3640,23 @@
                     const mNatW = m.naturalWidth || m.videoWidth;
                     const mNatH = m.naturalHeight || m.videoHeight;
                     if (!mNatW || !mNatH) return;
+                    // Find this wrapper's slot rotation
+                    const secSlot = assetOrder.find(s => { const l = getLayer(s); return l && l.contains(w); });
+                    const secRot = secSlot ? (_slotRotation[secSlot] || 0) : 0;
+                    // Convert semantic content coords (origRelX, origRelY) back to visual coords
+                    // for this slot's rotation, so the loupe is positioned over the right spot on screen
+                    let secVisX = origRelX, secVisY = origRelY;
+                    if      (secRot === 90)  { secVisX = 1 - origRelY; secVisY = origRelX;     }
+                    else if (secRot === 180) { secVisX = 1 - origRelX; secVisY = 1 - origRelY; }
+                    else if (secRot === 270) { secVisX = origRelY;     secVisY = 1 - origRelX; }
                     const wRect = w.getBoundingClientRect();
-                    // Position the linked loupe at the same relative position on this media
-                    const sx = wRect.left + relX * wRect.width;
-                    const sy = wRect.top + relY * wRect.height;
-                    const wScale = wRect.width / mNatW;
+                    // Position loupe at visual location; use semantic coords for sampling
+                    const sx = wRect.left + secVisX * wRect.width;
+                    const sy = wRect.top  + secVisY * wRect.height;
+                    const secEffNatW = (secRot === 90 || secRot === 270) ? mNatH : mNatW;
+                    const wScale = wRect.width / secEffNatW;
                     const secMag = document.getElementById(secondaryIds[secondaryIdx]);
-                    drawMagnifierCanvas(secMag, m, relX, relY, wScale, sx, sy);
+                    drawMagnifierCanvas(secMag, m, origRelX, origRelY, wScale, sx, sy, secRot);
                     secondaryIdx++;
                 });
             }
