@@ -518,11 +518,18 @@ function computeAudioMetrics(audioBuffer) {
 // h         — height of drawing area (pixels)
 // dpr       — device pixel ratio (for crisp lines)
 
+// Fixed Y-axis: -36 to 0 LUFS. Chosen so broadcast (-23), podcast (-16), and
+// streaming (-14) reference lines land at 36/56/61% from the bottom, giving
+// typical content (-10 to -25 LUFS) good vertical resolution while keeping the
+// scale consistent across files so users can develop comparative intuition.
 function drawLufsEnvelope(ctx, stBlks, intLUFS, x0, w, topY, h, dpr) {
+    const LUFS_MIN = -36, LUFS_MAX = 0, LUFS_RANGE = LUFS_MAX - LUFS_MIN;
     ctx.save();
 
-    const LUFS_MIN = -50, LUFS_MAX = 0, LUFS_RANGE = LUFS_MAX - LUFS_MIN;
     const lufsToY = v => topY + h * (1 - (Math.max(LUFS_MIN, Math.min(LUFS_MAX, v)) - LUFS_MIN) / LUFS_RANGE);
+
+    const fs7 = Math.max(7, Math.round(7.5 * dpr));
+    ctx.font = fs7 + 'px monospace';
 
     // ── Reference lines: −14 (streaming), −16 (podcast), −23 (broadcast) ────
     const refs = [
@@ -530,8 +537,6 @@ function drawLufsEnvelope(ctx, stBlks, intLUFS, x0, w, topY, h, dpr) {
         { lufs: -16, label: '-16', lineA: 0.18, textA: 0.32 },
         { lufs: -23, label: '-23', lineA: 0.13, textA: 0.26 },
     ];
-    const fs7 = Math.max(7, Math.round(7.5 * dpr));
-    ctx.font = fs7 + 'px monospace';
     ctx.textBaseline = 'bottom';
     ctx.textAlign = 'left';
     for (const ref of refs) {
@@ -558,34 +563,40 @@ function drawLufsEnvelope(ctx, stBlks, intLUFS, x0, w, topY, h, dpr) {
         }
     }
 
-    // ── Short-term LUFS envelope ──────────────────────────────────────────────
+    // ── Short-term LUFS envelope — stepped (staircase) ───────────────────────
+    // Each block occupies an equal horizontal slice; the value is held flat
+    // across its slice then drops/rises vertically to the next — matching the
+    // discrete 3-second measurement windows defined by EBU R128.
     if (stBlks && stBlks.length >= 2) {
         const n = stBlks.length;
-        // Build (x,y) points spanning x0…x0+w
-        const pts = [];
+        const sliceW = w / n;
+
+        // Build staircase path: for each block, draw a horizontal segment the
+        // full width of its slice, then a vertical step to the next block.
+        const step = new Path2D();
+        step.moveTo(x0, lufsToY(stBlks[0]));
         for (let i = 0; i < n; i++) {
-            pts.push({ x: x0 + (i / (n - 1)) * w, y: lufsToY(stBlks[i]) });
+            const bx = x0 + i * sliceW;
+            const by = lufsToY(stBlks[i]);
+            const nx = bx + sliceW;
+            step.lineTo(nx, by); // horizontal — hold value across slice
+            if (i < n - 1) step.lineTo(nx, lufsToY(stBlks[i + 1])); // vertical step
         }
 
         // Filled area
-        const fillPath = new Path2D();
-        fillPath.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < n; i++) fillPath.lineTo(pts[i].x, pts[i].y);
-        fillPath.lineTo(pts[n - 1].x, topY + h);
-        fillPath.lineTo(pts[0].x,     topY + h);
+        const fillPath = new Path2D(step);
+        fillPath.lineTo(x0 + w, topY + h);
+        fillPath.lineTo(x0,     topY + h);
         fillPath.closePath();
         ctx.fillStyle = 'rgba(125,232,125,0.18)';
         ctx.fill(fillPath);
 
         // Stroke top edge
-        const linePath = new Path2D();
-        linePath.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < n; i++) linePath.lineTo(pts[i].x, pts[i].y);
         ctx.strokeStyle = 'rgba(125,232,125,0.88)';
         ctx.lineWidth = 1.5 * dpr;
-        ctx.lineJoin = 'round';
+        ctx.lineJoin = 'miter'; // sharp corners for staircase
         ctx.setLineDash([]);
-        ctx.stroke(linePath);
+        ctx.stroke(step);
     }
 
     ctx.restore();

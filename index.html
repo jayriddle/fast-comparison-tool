@@ -899,6 +899,7 @@
             align-items: center;
             gap: 10px;
             padding: 4px 12px;
+            line-height: 1;
             background: #2a2a2a;
             z-index: 10;
             font-size: 12px;
@@ -961,7 +962,25 @@
         #layerEditA.active-audio    .asset-info-bar .asset-name { background: var(--slot-editA-bg);    color: var(--slot-editA-txt); }
         #layerEditB.active-audio    .asset-info-bar .asset-name { background: var(--slot-editB-bg);    color: var(--slot-editB-txt); }
 
+        /* Dim the --fps placeholder until the real value is known */
+        .asset-fps:not(:empty) { transition: color 0.2s; }
+        .asset-info-bar .asset-fps[data-placeholder] { color: rgba(187,187,187,0.35); }
+
+        /* Stopwatch icon prefix on duration spans */
+        .asset-duration .dur-icon,
+        .sih-duration .dur-icon {
+            display: inline-block;
+            height: 0.78em;
+            width: auto;
+            vertical-align: middle;
+            position: relative;
+            top: -0.06em;
+            margin-right: 3px;
+            opacity: 0.65;
+        }
+
         .asset-info-bar .asset-zoom {
+            margin-left: auto;
             background: rgba(0, 0, 0, 0.5);
             padding: 1px 6px;
             border-radius: 8px;
@@ -1045,10 +1064,16 @@
         /* Stack mode: traveling info bar is replaced by the fixed header strip */
         body:not(.grid-mode) .video-wrapper > .asset-info-bar { display: none !important; }
 
-        /* Header info strip — center column of the three-column header flex layout */
+        /* Header info strip — centred in the header, bounded so it never collides
+           with headerLeft or headerRight. flex: 1 1 0 fills the gap; max-width +
+           margin: 0 auto keeps it centred and capped. position: relative lets
+           .sih-zoom sit at the right edge without disturbing justify-content. */
         #stackInfoStrip {
             flex: 1 1 0;
             min-width: 0;
+            max-width: 680px;
+            margin: 0 auto;
+            position: relative;
             display: none; /* JS sets to flex when active */
             align-items: center;
             justify-content: center;
@@ -1072,9 +1097,20 @@
         #stackInfoStrip.sih-slot-original .sih-name { background: var(--slot-original-bg); color: var(--slot-original-txt); }
         #stackInfoStrip.sih-slot-editA    .sih-name { background: var(--slot-editA-bg);    color: var(--slot-editA-txt); }
         #stackInfoStrip.sih-slot-editB    .sih-name { background: var(--slot-editB-bg);    color: var(--slot-editB-txt); }
+        /* Slot-colored accent bar — absolutely positioned at top of header,
+           width/left set by JS to span from label pill to zoom pill */
+        #sihAccentBar {
+            position: absolute;
+            top: 0;
+            height: 2px;
+            pointer-events: none;
+            display: none;
+            z-index: 1;
+        }
         /* Zoom — pill with subtle background */
         #stackInfoStrip .sih-zoom {
-            flex: 0 0 auto;
+            position: absolute;
+            right: 0;
             background: rgba(255,255,255,0.15);
             padding: 2px 7px;
             border-radius: 8px;
@@ -1144,8 +1180,7 @@
         }
         #stackInfoStrip .sih-lufs,
         #stackInfoStrip .sih-lra,
-        #stackInfoStrip .sih-tp,
-        #stackInfoStrip .sih-plr {
+        #stackInfoStrip .sih-tp {
             font-size: 11px;
             padding: 1px 6px;
             border-radius: 3px;
@@ -1156,7 +1191,6 @@
         }
         #stackInfoStrip .sih-lra { color: #8cacef; }
         #stackInfoStrip .sih-tp  { color: #e0a0e0; }
-        #stackInfoStrip .sih-plr { color: #f0c06a; }
 
         /* Hover tooltip — matches UI font, two-column label/value layout */
         #sihTooltip {
@@ -1177,13 +1211,12 @@
         #sihTooltip .sih-td-lbl { color: rgba(255,255,255,0.35); min-width: 54px; text-align: right; flex-shrink: 0; }
         #sihTooltip .sih-td-val { color: rgba(255,255,255,0.82); }
 
-        .asset-info-bar .asset-filename { display: none; }
+
 
         /* EBU R128 metric pills in audio info bar */
         .asset-info-bar .asset-lufs,
         .asset-info-bar .asset-lra,
-        .asset-info-bar .asset-tp,
-        .asset-info-bar .asset-plr {
+        .asset-info-bar .asset-tp {
             font-size: 11px;
             padding: 1px 6px;
             border-radius: 3px;
@@ -1193,11 +1226,9 @@
         }
         .asset-info-bar .asset-lufs:empty,
         .asset-info-bar .asset-lra:empty,
-        .asset-info-bar .asset-tp:empty,
-        .asset-info-bar .asset-plr:empty { display: none; }
+        .asset-info-bar .asset-tp:empty { display: none; }
         .asset-info-bar .asset-lra  { color: #8cacef; }
         .asset-info-bar .asset-tp   { color: #e0a0e0; }
-        .asset-info-bar .asset-plr  { color: #f0c06a; }
 
 
         /* Active asset indicator - brighter info bar in overlay mode */
@@ -2426,6 +2457,7 @@
 <body>
     <div class="container">
         <div class="header">
+            <div id="sihAccentBar"></div>
             <div id="headerLeft" style="position: relative;">
                 <img src="WarpDiff_Logo_v1.png" alt="" style="width: 22px; height: 22px;"><span style="font-size: 16px; font-weight: 600;"><i>Warp</i>Diff</span><span id="appVersion" style="font-size: 11px; color: #888; font-weight: 400; letter-spacing: 0.03em; user-select: all; margin-left: 4px;"></span>
                 <button class="analysis-btn" onclick="document.getElementById('multiFileInput').click(); this.blur();" id="loadBtn" title="Load files (L)" style="margin-left: 12px;"></button>
@@ -2438,7 +2470,6 @@
             <!-- Active asset info strip — center column, shrinks gracefully before overlapping -->
             <div id="stackInfoStrip" onmouseenter="_sihTipShow(event)" onmousemove="_sihTipMove(event)" onmouseleave="_sihTipHide()">
                 <span class="sih-name"></span>
-                <span class="sih-zoom"></span>
                 <span class="sih-sep sih-sep-spatial" aria-hidden="true">·</span>
                 <span class="sih-group-spatial">
                     <span class="sih-resolution"></span>
@@ -2454,8 +2485,8 @@
                     <span class="sih-lufs"></span>
                     <span class="sih-lra"></span>
                     <span class="sih-tp"></span>
-                    <span class="sih-plr"></span>
                 </span>
+                <span class="sih-zoom"></span>
             </div>
             <div id="sihTooltip"></div>
             <div id="headerRight" style="display:none; align-items:center; gap:2px; margin-left:auto;">
@@ -2507,34 +2538,31 @@
                 <div class="asset-layer" id="layerOriginal">
                     <div class="asset-info-bar">
                         <span class="asset-name">Reference</span>
-                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
                         <span class="asset-duration"></span>
-                        <span class="asset-filename"></span>
+                        <span class="asset-zoom"></span>
                     </div>
                 </div>
                 <div class="asset-layer" id="layerEditA">
                     <div class="asset-info-bar">
                         <span class="asset-name">A</span>
-                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
                         <span class="asset-duration"></span>
-                        <span class="asset-filename"></span>
+                        <span class="asset-zoom"></span>
                     </div>
                 </div>
                 <div class="asset-layer" id="layerEditB">
                     <div class="asset-info-bar">
                         <span class="asset-name">B</span>
-                        <span class="asset-zoom"></span>
                         <span class="asset-resolution">-</span>
                         <span class="asset-aspect">-</span>
                         <span class="asset-fps"></span>
                         <span class="asset-duration"></span>
-                        <span class="asset-filename"></span>
+                        <span class="asset-zoom"></span>
                     </div>
                 </div>
                 
@@ -2646,7 +2674,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.8';
+        const APP_VERSION = '3.10.11';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3802,6 +3830,15 @@
         let magnifierLinked = _prefs.load('magnifierLinked', false); // Shift+Z toggle
         let spectrogramLogScale = _prefs.load('spectrogramLogScale', false);
         let _audioWaveMode = 0; // 0 = waveform only, 1 = waveform + LUFS overlay, 2 = LUFS only
+
+        // Inline SVG stopwatch icon — used as a prefix on all duration displays.
+        // No text nodes so .textContent on the parent span still returns just the time string.
+        const _STOPWATCH_SVG = '<svg class="dur-icon" viewBox="0 0 10 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">'
+            + '<rect x="3.5" y="0.5" width="3" height="1.5" rx="0.6" fill="currentColor"/>'
+            + '<circle cx="5" cy="7.5" r="4" fill="none" stroke="currentColor" stroke-width="1"/>'
+            + '<line x1="5" y1="7.5" x2="6.8" y2="5.4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>'
+            + '</svg>';
+
         let audioFileBuffers = {};     // { slot: ArrayBuffer } — raw file data for decoding
         // Smooth multiplicative zoom: each step multiplies/divides by ZOOM_STEP.
         // √2 ≈ 1.414 gives a classic "one stop" doubling every two steps.
@@ -4262,35 +4299,45 @@
             ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
             ctx.clearRect(0, 0, w, h);
 
+            // Mode 0 or 1: draw waveform
             const data = waveformData[slot];
-            if (!data || !data.L || data.L.length === 0) return;
-
-            if (data.R) {
-                const chH = h / 2;
-                drawWaveformChannelSmooth(ctx, data.L, w, 0, chH);
-                drawWaveformChannelSmooth(ctx, data.R, w, h / 2, chH);
-                drawWaveformDbGrid(ctx, w, 0, chH / 2);
-                drawWaveformDbGrid(ctx, w, h / 2, chH / 2);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.beginPath();
-                ctx.moveTo(0, h / 2);
-                ctx.lineTo(w, h / 2);
-                ctx.stroke();
-            } else {
-                drawWaveformChannelSmooth(ctx, data.L, w, 0, h);
-                drawWaveformDbGrid(ctx, w, 0, h / 2);
+            if (_audioWaveMode !== 2 && data && data.L && data.L.length > 0) {
+                if (data.R) {
+                    const chH = h / 2;
+                    drawWaveformChannelSmooth(ctx, data.L, w, 0, chH);
+                    drawWaveformChannelSmooth(ctx, data.R, w, h / 2, chH);
+                    drawWaveformDbGrid(ctx, w, 0, chH / 2);
+                    drawWaveformDbGrid(ctx, w, h / 2, chH / 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, h / 2);
+                    ctx.lineTo(w, h / 2);
+                    ctx.stroke();
+                } else {
+                    drawWaveformChannelSmooth(ctx, data.L, w, 0, h);
+                    drawWaveformDbGrid(ctx, w, 0, h / 2);
+                }
+                // Dim regions outside loop markers
+                if (_loopInPoint !== null && _loopOutPoint !== null) {
+                    const _as = currentAudioSource || assetOrder[currentAssetIndex];
+                    const _al = getLayer(_as);
+                    const media = _al ? (_al.querySelector('video') || _al.querySelector('audio')) : getAllPlayableMedia()[0];
+                    const dur = media ? _getEffectiveDuration(media) : 1;
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    const inX = (_loopInPoint / dur) * w;
+                    const outX = (_loopOutPoint / dur) * w;
+                    if (inX > 0) ctx.fillRect(0, 0, inX, h);
+                    if (outX < w) ctx.fillRect(outX, 0, w - outX, h);
+                }
             }
-            // Dim regions outside loop markers
-            if (_loopInPoint !== null && _loopOutPoint !== null) {
-                const _as = currentAudioSource || assetOrder[currentAssetIndex];
-                const _al = getLayer(_as);
-                const media = _al ? (_al.querySelector('video') || _al.querySelector('audio')) : getAllPlayableMedia()[0];
-                const dur = media ? _getEffectiveDuration(media) : 1;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                const inX = (_loopInPoint / dur) * w;
-                const outX = (_loopOutPoint / dur) * w;
-                if (inX > 0) ctx.fillRect(0, 0, inX, h);
-                if (outX < w) ctx.fillRect(outX, 0, w - outX, h);
+
+            // Mode 1 or 2: draw LUFS envelope overlay.
+            // ctx already has ctx.scale(dpr,dpr) applied, so pass dpr=1 to avoid
+            // double-scaling line widths inside drawLufsEnvelope.
+            const stBlks = audioMetrics[slot] && audioMetrics[slot].stBlks;
+            if (_audioWaveMode > 0 && stBlks && stBlks.length >= 2) {
+                const intLUFS = audioMetrics[slot].integratedLUFS;
+                drawLufsEnvelope(ctx, stBlks, intLUFS, 0, w, 0, h, 1);
             }
         }
 
@@ -5184,7 +5231,6 @@
             const lufsEl = infoBar.querySelector('.asset-lufs');
             const lraEl  = infoBar.querySelector('.asset-lra');
             const tpEl   = infoBar.querySelector('.asset-tp');
-            const plrEl  = infoBar.querySelector('.asset-plr');
             if (lufsEl) {
                 if (m && m.integratedLUFS !== null) {
                     lufsEl.textContent = m.integratedLUFS + ' LUFS';
@@ -5198,16 +5244,6 @@
             }
             if (lraEl) lraEl.textContent = (m && m.lra !== null) ? 'LRA ' + m.lra + ' LU' : '';
             if (tpEl)  tpEl.textContent  = (m && m.truePeakDBTP) ? 'TP '  + m.truePeakDBTP + ' dBTP' : '';
-            // PLR = True Peak (dBTP) − Integrated LUFS — reveals compression/limiting character.
-            // Low PLR (4–6 LU) = heavily limited; high PLR (12–18 LU) = dynamic/unprocessed.
-            if (plrEl) {
-                if (m && m.integratedLUFS !== null && m.truePeakDBTP !== null) {
-                    const plr = (parseFloat(m.truePeakDBTP) - parseFloat(m.integratedLUFS)).toFixed(1);
-                    plrEl.textContent = 'PLR ' + plr + ' LU';
-                } else {
-                    plrEl.textContent = '';
-                }
-            }
             // Keep Stack header strip in sync (reads from these same hidden spans)
             _updateStackInfoStrip();
         }
@@ -6669,8 +6705,6 @@
             if (!name) return;
             // Filename is hidden from the bar; store it on the bar itself for native tooltip
             infoBar.title = name;
-            const el = infoBar.querySelector('.asset-filename');
-            if (el) { el.title = name; el.textContent = name; }
         }
 
 
@@ -7030,22 +7064,18 @@
             <span class="asset-lufs"></span>
             <span class="asset-lra"></span>
             <span class="asset-tp"></span>
-            <span class="asset-plr"></span>
-            <span class="asset-filename"></span>
         `;
 
         const VIDEO_IMAGE_INFO_BAR_HTML = `
             <span class="asset-name"></span>
-            <span class="asset-zoom"></span>
             <span class="asset-resolution">-</span>
             <span class="asset-aspect">-</span>
-            <span class="asset-fps"></span>
+            <span class="asset-fps" data-placeholder>--fps</span>
+            <span class="asset-duration"></span>
             <span class="asset-lufs"></span>
             <span class="asset-lra"></span>
             <span class="asset-tp"></span>
-            <span class="asset-plr"></span>
-            <span class="asset-duration"></span>
-            <span class="asset-filename"></span>
+            <span class="asset-zoom"></span>
         `;
 
         function ensureInfoBar(layer, slot, template) {
@@ -7281,6 +7311,8 @@
             mediaContainer.appendChild(img);
 
             const infoBar = ensureInfoBar(layer, slot, VIDEO_IMAGE_INFO_BAR_HTML);
+            const fpsSpan = infoBar.querySelector('.asset-fps');
+            if (fpsSpan) fpsSpan.textContent = ''; // images have no fps
 
             // Build asset structure:
             //   media-container → video-wrapper → img + info-bar
@@ -7331,7 +7363,7 @@
 
         function updateDurationDisplay(slot, duration, fps) {
             if (!duration) return;
-            const durationStr = '⏱ ' + _formatTcForCopy(duration, fps || null);
+            const durationStr = _formatTcForCopy(duration, fps || null);
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
@@ -7346,7 +7378,7 @@
                 const media = layer.querySelector('video, audio');
                 if (!media || !media.duration) continue;
                 const fps = videoFrameRates[media.src] || null;
-                durEl.textContent = '⏱ ' + _formatTcForCopy(media.duration, fps);
+                durEl.innerHTML = _STOPWATCH_SVG + _formatTcForCopy(media.duration, fps);
             }
         }
 
@@ -7375,13 +7407,16 @@
             // Update fps
             if (data.fps !== undefined) {
                 const fpsElement = infoBar.querySelector('.asset-fps');
-                if (fpsElement) fpsElement.textContent = data.fps;
+                if (fpsElement) {
+                    fpsElement.textContent = data.fps;
+                    fpsElement.removeAttribute('data-placeholder');
+                }
             }
 
             // Update duration
             if (data.duration) {
                 const durationElement = infoBar.querySelector('.asset-duration');
-                if (durationElement) durationElement.textContent = data.duration;
+                if (durationElement) durationElement.innerHTML = _STOPWATCH_SVG + data.duration;
             }
 
             // Update filename
@@ -8707,22 +8742,52 @@
         // Mirrors the active asset's info bar content in the fixed header so it's
         // always visible regardless of zoom / pan state.
 
+        // Position and color the 2px accent bar at the top of the header.
+        // Spans from the left edge of the slot name pill to the right edge of the
+        // zoom pill (or strip right edge when zoom is hidden).
+        function _updateSihAccentBar(slot) {
+            const bar    = document.getElementById('sihAccentBar');
+            const strip  = document.getElementById('stackInfoStrip');
+            const header = document.querySelector('.header');
+            if (!bar || !strip || !header) return;
+            if (!slot || strip.style.display === 'none') { bar.style.display = 'none'; return; }
+
+            const nameEl = strip.querySelector('.sih-name');
+            if (!nameEl) { bar.style.display = 'none'; return; }
+
+            const headerRect = header.getBoundingClientRect();
+            const nameRect   = nameEl.getBoundingClientRect();
+            const zoomEl     = strip.querySelector('.sih-zoom');
+            const rightEdge  = (zoomEl && zoomEl.style.display !== 'none')
+                                   ? zoomEl.getBoundingClientRect().right
+                                   : strip.getBoundingClientRect().right;
+
+            const left  = nameRect.left  - headerRect.left;
+            const width = rightEdge - nameRect.left;
+
+            bar.style.left       = left + 'px';
+            bar.style.width      = width + 'px';
+            bar.style.background = _slotColors[slot] || 'transparent';
+            bar.style.display    = 'block';
+        }
+
         function _updateStackInfoStrip() {
             const strip = document.getElementById('stackInfoStrip');
             if (!strip) return;
 
             if (isGridMode || !getLoadedSlotCount()) {
                 strip.style.display = 'none';
+                _updateSihAccentBar(null);
                 return;
             }
 
             // Find the active layer and its slot
             const activeLayer = document.querySelector('.asset-layer.active');
-            if (!activeLayer) { strip.style.display = 'none'; return; }
+            if (!activeLayer) { strip.style.display = 'none'; _updateSihAccentBar(null); return; }
             const slot = activeLayer.id === 'layerOriginal' ? 'original'
                        : activeLayer.id === 'layerEditA'    ? 'editA'
                        : activeLayer.id === 'layerEditB'    ? 'editB' : null;
-            if (!slot || !mediaData[slot]) { strip.style.display = 'none'; return; }
+            if (!slot || !mediaData[slot]) { strip.style.display = 'none'; _updateSihAccentBar(null); return; }
 
             // Read from the hidden info bar spans — they're kept up to date by applyZoom()
             // and file-load handlers even though the bar itself isn't displayed in Stack mode.
@@ -8736,7 +8801,6 @@
             const lufs       = bar ? bar.querySelector('.asset-lufs')?.textContent       : '';
             const lra        = bar ? bar.querySelector('.asset-lra')?.textContent        : '';
             const tp         = bar ? bar.querySelector('.asset-tp')?.textContent         : '';
-            const plr        = bar ? bar.querySelector('.asset-plr')?.textContent        : '';
             const fullFilename = (mediaData[slot] && mediaData[slot].name) || '';
 
             // Duration: use the user's chosen TC format, same as the info bar.
@@ -8761,7 +8825,7 @@
 
             // Time group (duration + fps)
             const durEl = strip.querySelector('.sih-duration');
-            durEl.textContent = duration ? '⏱ ' + duration : '';
+            durEl.innerHTML = duration ? _STOPWATCH_SVG + duration : '';
             durEl.style.display = duration ? '' : 'none';
             const fpsEl = strip.querySelector('.sih-fps');
             fpsEl.textContent = fps || '';
@@ -8781,17 +8845,15 @@
             const lufsEl = strip.querySelector('.sih-lufs');
             const lraEl  = strip.querySelector('.sih-lra');
             const tpEl   = strip.querySelector('.sih-tp');
-            const plrEl  = strip.querySelector('.sih-plr');
             if (lufsEl) lufsEl.textContent = lufs || '';
             if (lraEl)  lraEl.textContent  = lra  || '';
             if (tpEl)   tpEl.textContent   = tp   || '';
-            if (plrEl)  plrEl.textContent  = plr  || '';
-            const hasMetrics = !!(lufs || lra || tp || plr);
+            const hasMetrics = !!(lufs || lra || tp);
             strip.querySelector('.sih-group-metrics').style.display = hasMetrics ? 'flex' : 'none';
 
             // Separator dots — shown only when there's content on both sides
-            // Order: name · zoom · [spatial] · [time] · [metrics]
-            const hasLeft = showName || !!zoom;
+            // Order: name · [spatial] · [time] · [metrics]  zoom→
+            const hasLeft = showName;
             const sepSpatial = strip.querySelector('.sih-sep-spatial');
             const sepTime    = strip.querySelector('.sih-sep-time');
             const sepMetrics = strip.querySelector('.sih-sep-metrics');
@@ -8816,10 +8878,11 @@
                 tipRow('LUFS',     lufs),
                 tipRow('LRA',      lra),
                 tipRow('True Peak',tp),
-                tipRow('PLR',      plr),
             ].filter(Boolean).join('');
 
             strip.style.display = 'flex';
+            // Accent bar position is measured after strip is visible
+            requestAnimationFrame(() => _updateSihAccentBar(slot));
         }
 
         // ── Stack info strip custom tooltip ───────────────────────────────────────
@@ -9292,11 +9355,9 @@
                     const res = infoBar.querySelector('.asset-resolution');
                     const asp = infoBar.querySelector('.asset-aspect');
                     const dur = infoBar.querySelector('.asset-duration');
-                    const fn = infoBar.querySelector('.asset-filename');
                     if (res) res.textContent = '-';
                     if (asp) asp.textContent = '-';
                     if (dur) dur.textContent = '';
-                    if (fn) fn.textContent = '';
                     const fps = infoBar.querySelector('.asset-fps');
                     if (fps) fps.textContent = '';
                 }
@@ -10367,6 +10428,8 @@
                     redrawAllAudioSlotCanvases();
                 });
             }
+            // Reposition accent bar — strip layout changes with viewport width
+            _updateStackInfoStrip();
         });
 
         const splitModeClasses = ['side-by-side', 'vertical-stack', 'offset', 'inline-cols', 'inline-rows', 'grid-mode', 'two-asset', 'zoom-100'];
@@ -11409,14 +11472,21 @@
               } },
             { id: 'audioEnvelope', defaultKey: 'e', label: 'Audio: cycle waveform / LUFS envelope', section: 'analysis',
               fn: () => {
-                  if (!hasAudios && !_noVideoMode) { showToast('No audio visualization active'); return; }
+                  const audioVizActive = hasAudios || _noVideoMode || (hasVideos && audioVizVisible);
+                  if (!audioVizActive) { showToast('No audio visualization active'); return; }
                   const modes = ['Waveform', 'Waveform + LUFS', 'LUFS envelope'];
                   _audioWaveMode = (_audioWaveMode + 1) % 3;
                   // Skip envelope modes when no LUFS data is available
-                  const hasEnvelope = assetOrder.some(s => _audioSlotVizData[s] && _audioSlotVizData[s].lufsEnvelope && _audioSlotVizData[s].lufsEnvelope.length >= 2);
+                  const hasEnvelope = hasVideos
+                      ? assetOrder.some(s => audioMetrics[s] && audioMetrics[s].stBlks && audioMetrics[s].stBlks.length >= 2)
+                      : assetOrder.some(s => _audioSlotVizData[s] && _audioSlotVizData[s].lufsEnvelope && _audioSlotVizData[s].lufsEnvelope.length >= 2);
                   if (_audioWaveMode > 0 && !hasEnvelope) { _audioWaveMode = 0; showToast('LUFS envelope not available (file too short)'); return; }
                   showToast('Audio: ' + modes[_audioWaveMode]);
                   redrawAudioSlotCanvases();
+                  if (hasVideos && audioVizVisible) {
+                      const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                      if (slot) drawWaveform(slot);
+                  }
               } },
             { id: 'noVideo', defaultKey: 'n', label: 'No video (audio focus)', section: 'analysis',
               fn: () => { if (hasVideos) toggleNoVideoMode(); else showToast('Load videos to use this mode'); } },
@@ -11942,6 +12012,13 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.11</h3>
+            <ul>
+                <li><strong>EBU R128 audio metrics</strong> — Integrated LUFS, LRA, and True Peak are now displayed in the info bar for every asset that carries audio — video and audio-only alike.</li>
+                <li><strong>LUFS envelope (<kbd>E</kbd>)</strong> — press E while the waveform panel is open to cycle through Waveform only / Waveform + LUFS / LUFS only. Short-term loudness is drawn as a stepped chart on a fixed −36 to 0 LUFS scale, with reference lines at −14 (streaming), −16 (podcast), and −23 (broadcast).</li>
+                <li><strong>Info bar redesign</strong> — fields reordered for clarity (Label · Resolution · AR · FPS · Duration · LUFS · LRA · TP · Zoom), Zoom right-aligned, stopwatch icon on duration, and a <em>--fps</em> placeholder while frame rate is being detected.</li>
+                <li><strong>Stack strip</strong> — centred with a maximum width; a slot-coloured 2 px accent bar spans the strip from the label pill to the zoom indicator.</li>
+            </ul>
             <h3>v3.10.6</h3>
             <ul>
                 <li><strong>Image rotation (⌥← / ⌥→ on Mac, Alt+← / Alt+→ on Windows)</strong> — rotate any asset 90° CW or CCW. Works in both Stack and Grid; the zoom loupe follows the rotation.</li>
