@@ -39,6 +39,7 @@
             border-bottom: 1px solid #111;
             display: flex;
             align-items: center;
+            gap: clamp(10px, 1.4vw, 20px); /* scales down on narrow viewports */
             position: relative;
             z-index: 100;
         }
@@ -1069,16 +1070,15 @@
            margin: 0 auto keeps it centred and capped. position: relative lets
            .sih-zoom sit at the right edge without disturbing justify-content. */
         #stackInfoStrip {
-            flex: 1 1 0;
+            flex: 1 1 0;      /* fill center between the header gaps */
             min-width: 0;
-            max-width: 680px;
-            margin: 0 auto;
             position: relative;
             display: none; /* JS sets to flex when active */
             align-items: center;
-            justify-content: center;
-            gap: 10px;
+            justify-content: flex-start; /* label pill always leftmost; clips from right */
+            gap: 7px;
             overflow: hidden;
+            padding-right: 52px; /* reserve room for abs-positioned zoom pill */
             pointer-events: auto; /* enables hover tooltip */
         }
         /* Slot name — colored pill, matches Grid mode asset-name pills */
@@ -1176,7 +1176,9 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            flex-shrink: 0;
+            flex-shrink: 1;
+            min-width: 0;
+            overflow: hidden;
         }
         #stackInfoStrip .sih-lufs { color: #4ade80; }
         #stackInfoStrip .sih-lufs,
@@ -1187,7 +1189,10 @@
             border-radius: 3px;
             background: rgba(0,0,0,0.35);
             color: #7de87d;
-            flex-shrink: 0;
+            flex-shrink: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
             white-space: nowrap;
         }
         #stackInfoStrip .sih-lra { color: #38b8ff; }
