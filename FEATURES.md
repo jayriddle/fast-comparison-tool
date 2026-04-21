@@ -64,9 +64,9 @@ Press `W` to toggle waveform and spectrogram views. Waveform uses dB color codin
 
 ## Audio file comparison
 
-Load 1–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, BPM, and EBU R128 metrics (integrated LUFS, LRA, true peak). Press `E` to cycle between waveform, waveform + LUFS envelope, and LUFS envelope only.
+Load 1–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, and EBU R128 metrics (integrated LUFS, LRA, true peak). Press `E` to cycle between waveform, waveform + LUFS envelope, and LUFS envelope only.
 
-Automatic BPM detection uses spectral flux onset analysis with autocorrelation, weighted toward musically common tempos. Spectrogram scale and palette controls (`Shift+W`, `Shift+C`) apply to all audio slots.
+Spectrogram scale and palette controls (`Shift+W`, `Shift+C`) apply to all audio slots.
 
 ## Keyboard-driven workflow
 

@@ -180,9 +180,7 @@ Click and drag on the waveform or spectrogram to scrub playback. Shift+drag to s
 
 Load 2–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each audio slot displays a waveform (top 40%) and spectrogram (bottom 60%) with frequency labels.
 
-**Info bar** shows audio metadata: sample rate (e.g. `48 kHz`), channels (`Mono` / `Stereo`), bit depth (e.g. `24-bit` for lossless, or codec name like `MP3` for lossy), file size, duration, and BPM.
-
-**BPM detection** runs automatically on load using spectral flux onset analysis with autocorrelation, weighted toward musically common tempos.
+**Info bar** shows audio metadata: sample rate (e.g. `48 kHz`), channels (`Mono` / `Stereo`), bit depth (e.g. `24-bit` for lossless, or codec name like `MP3` for lossy), file size, and duration.
 
 **Spectrogram controls** work in audio mode:
 - **Shift+W** toggles linear / log frequency scale
@@ -330,7 +328,7 @@ Each asset displays an info bar (Grid mode) or a header strip (Stack mode) showi
 - **Resolution** and **aspect ratio** — for images and video (e.g. `1920×1080`, `16:9`)
 - **EBU R128 metrics** — for any asset with audio: **LUFS** (integrated loudness, green), **LRA** (loudness range in LU, blue), **TP** (true peak in dBTP, purple)
 - **Zoom** — current scale percentage, right-aligned
-- For audio files: sample rate, channels, bit depth/codec, file size, BPM
+- For audio files: sample rate, channels, bit depth/codec, file size
 
 Field order and color hierarchy are consistent between Grid info bars and the Stack header strip.
 
