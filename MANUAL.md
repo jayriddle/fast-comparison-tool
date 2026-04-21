@@ -334,8 +334,6 @@ Field order and color hierarchy are consistent between Grid info bars and the St
 
 Video timecode displays as SS:FF or M:SS:FF. Audio timecode displays as S.cc or M:SS.cc (centiseconds). Press **T** to cycle timecode formats; press **C** to copy; **Shift+C** to open the format chooser.
 
-In Grid mode, the active asset is indicated with a cyan border and highlighted info bar.
-
 ---
 
 ## PWA & Offline
