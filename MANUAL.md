@@ -166,9 +166,11 @@ Press **W** to toggle the waveform and spectrogram panel below the video control
 
 Mono tracks display a single waveform with a MONO indicator. Stereo tracks show L and R channels.
 
+Press **E** to cycle through waveform display modes: Waveform only → Waveform + LUFS envelope → LUFS envelope only. The LUFS envelope shows short-term loudness as a stepped chart on a fixed −36 to 0 LUFS scale, with reference lines at −14 (streaming), −16 (podcast), and −23 (broadcast).
+
 **Spectrogram** shows frequency content over time:
 - **Shift+W** toggles between linear and log frequency scale
-- **Shift+C** cycles through color palettes (Viridis, Magma, Inferno, Plasma)
+- **P** cycles through color palettes (Viridis, Magma, Inferno, Plasma)
 
 Click and drag on the waveform or spectrogram to scrub playback. Shift+drag to set a loop region.
 
@@ -184,9 +186,23 @@ Load 2–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-
 
 **Spectrogram controls** work in audio mode:
 - **Shift+W** toggles linear / log frequency scale
-- **Shift+C** cycles color palettes
+- **P** cycles color palettes
 
 Audio files use the same synced playback controls as video: Space to play/pause, progress bar to seek, GT/A/B buttons to select which track to hear.
+
+---
+
+## Frame Gallery
+
+Press **Shift+G** to capture the current frame from the active video or image slot and pin it to a gallery strip above the transport controls.
+
+| Shortcut | Action |
+|----------|--------|
+| **Shift+G** | Grab current frame to gallery |
+| **{** (Shift+[) | Step to previous captured frame |
+| **}** (Shift+]) | Step to next captured frame |
+
+Each thumbnail shows the slot label and timecode. Click a thumbnail to seek all videos to that frame's timecode — the active frame is highlighted with a blue border and the strip scrolls to keep it visible. Click **×** on a thumbnail to remove it, or **Clear all** in the gallery header to remove all frames. The gallery closes and clears automatically when new media is loaded.
 
 ---
 
@@ -267,10 +283,22 @@ All hotkeys are customizable — press **H** to open the shortcuts panel, then c
 |-----|--------|
 | **V** | Toggle video scopes |
 | **W** | Toggle waveform / spectrogram |
+| **E** | Cycle waveform / LUFS envelope display |
 | **Shift+W** | Toggle linear / log frequency |
-| **Shift+C** | Cycle spectrogram color palette |
+| **P** | Cycle spectrogram color palette |
 | **D** | Toggle difference mode (Stack) |
 | **Shift+D** | Cycle diff pair |
+| **B** | Toggle black & white |
+| **N** | Toggle no-video mode (audio focus) |
+| **Shift+G** | Grab frame to gallery |
+| **{** / **}** | Gallery: previous / next frame |
+
+### Timecode
+| Key | Action |
+|-----|--------|
+| **T** | Cycle timecode format |
+| **C** | Copy timecode |
+| **Shift+C** | Open timecode format chooser |
 
 ### Panels
 | Key | Action |
@@ -295,14 +323,18 @@ The following settings are saved to your browser and persist across sessions and
 
 ## Info Bar
 
-Each asset displays an info bar showing:
-- Slot name — labeled by asset type (e.g. SOURCE / IMAGE EDIT A / IMAGE EDIT B, SOURCE VIDEO / VIDEO A / VIDEO B, GROUND-TRUTH AUDIO / AUDIO A / AUDIO B)
-- Resolution (e.g. `1920×1080`) and aspect ratio (e.g. `16:9`) for images/videos
-- Zoom level (e.g. `1.5×`)
+Each asset displays an info bar (Grid mode) or a header strip (Stack mode) showing:
+- **Slot label** — colored pill (green = GT/Ref, amber = A, magenta = B); hidden when only one file is loaded
+- **FPS** — frame rate, shown dimmed until detected; snaps to nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60)
+- **Duration** — video/audio length with a stopwatch icon; `—` for images
+- **Resolution** and **aspect ratio** — for images and video (e.g. `1920×1080`, `16:9`)
+- **EBU R128 metrics** — for any asset with audio: **LUFS** (integrated loudness, green), **LRA** (loudness range in LU, blue), **TP** (true peak in dBTP, purple)
+- **Zoom** — current scale percentage, right-aligned
 - For audio files: sample rate, channels, bit depth/codec, file size, BPM
-- Duration for videos and audio, or `—` for images
 
-The frame counter detects frame rate automatically and snaps to the nearest standard rate (23.976, 24, 25, 29.97, 30, 48, 59.94, 60). Video timecode displays as SS:FF or M:SS:FF. Audio timecode displays as S.cc or M:SS.cc (centiseconds).
+Field order and color hierarchy are consistent between Grid info bars and the Stack header strip.
+
+Video timecode displays as SS:FF or M:SS:FF. Audio timecode displays as S.cc or M:SS.cc (centiseconds). Press **T** to cycle timecode formats; press **C** to copy; **Shift+C** to open the format chooser.
 
 In Grid mode, the active asset is indicated with a cyan border and highlighted info bar.
 

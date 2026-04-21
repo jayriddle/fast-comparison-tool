@@ -32,6 +32,10 @@ Press `Z` for a circular zoom loupe that follows your cursor, showing magnified 
 - `[`/`]` resize the loupe (100–400px)
 - `Shift+Z` enables linked zoom — hover one asset, see the same spot magnified on all others (Grid modes)
 
+## Frame gallery
+
+Press `Shift+G` to grab the current frame from the active slot and pin it to a gallery strip above the transport controls. Use `{` / `}` (Shift+[ / Shift+]) to step through captured frames — all videos seek to that timecode. Click any thumbnail to seek, × to remove it. Gallery clears when new media is loaded.
+
 ## Synchronized video playback
 
 All videos play in sync with shared transport controls. Scrub, frame-step with `,`/`.`, and restart together. Per-source audio switching lets you listen to any asset's audio track independently.
@@ -60,7 +64,7 @@ Press `W` to toggle waveform and spectrogram views. Waveform uses dB color codin
 
 ## Audio file comparison
 
-Load 1–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, and BPM.
+Load 1–3 audio files (MP3, WAV, FLAC, AAC, OGG, etc.) to compare them side-by-side in Grid mode. Each slot shows a waveform (top) and spectrogram (bottom) with frequency labels. Info bars display sample rate, channels, bit depth (or codec name for lossy formats), file size, BPM, and EBU R128 metrics (integrated LUFS, LRA, true peak). Press `E` to cycle between waveform, waveform + LUFS envelope, and LUFS envelope only.
 
 Automatic BPM detection uses spectral flux onset analysis with autocorrelation, weighted toward musically common tempos. Spectrogram scale and palette controls (`Shift+W`, `Shift+C`) apply to all audio slots.
 
