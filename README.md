@@ -10,9 +10,7 @@ A browser-based tool for reviewing and comparing 1–3 images, videos, or audio 
 
 **View modes**
 - **Stack** (`S`) — flip between assets with arrow keys, same position/zoom
-- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout; `3` toggles inline / offset
-- Active asset highlighted with cyan border and info bar
-- Mixed orientations use equal-area layout so each asset has the same visual weight
+- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout; `3` toggles inline / offset- Mixed orientations use equal-area layout so each asset has the same visual weight
 
 **Zoom loupe** (`Z`)
 - Pixel-level inspection without changing your view
