@@ -28,13 +28,19 @@ A browser-based tool for reviewing and comparing 1–3 images, videos, or audio 
 
 **Audio file comparison**
 - Load 1–3 audio files (MP3, WAV, FLAC, etc.) for side-by-side waveform + spectrogram
-- Info bars show sample rate, channels, bit depth/codec, file size
+- Info bars show sample rate, channels, bit depth/codec, file size, and EBU R128 metrics (integrated LUFS, LRA, true peak)
+- `E` cycles waveform / waveform + LUFS envelope / LUFS envelope only
+
+**Frame gallery** (`Shift+G`)
+- Capture the current frame from any slot and pin it to a scrollable gallery strip
+- `{`/`}` step through captured frames — all videos seek to that timecode
+- Gallery clears when new media is loaded
 
 **Analysis**
 - `D` difference mode — pixel difference between two assets in Stack mode; arrow keys or `Shift+D` cycle pairs (Source–A, Source–B, A–B)
 - `V` video scopes — histogram (RGB / RGB+luma / CDF), waveform (luma / RGB parade / overlay), and vectorscope; click each scope to cycle modes
 - `W` audio waveform with dB color coding + spectrogram
-- `Shift+W` toggle linear/log frequency, `Shift+C` cycle spectrogram palettes
+- `Shift+W` toggle linear/log frequency, `P` cycle spectrogram palettes
 
 **Keyboard-first**
 - Every action has a hotkey — press `?` for help, `H` for all hotkeys
