@@ -28,8 +28,7 @@ A browser-based tool for reviewing and comparing 1–3 images, videos, or audio 
 
 **Audio file comparison**
 - Load 1–3 audio files (MP3, WAV, FLAC, etc.) for side-by-side waveform + spectrogram
-- Info bars show sample rate, channels, bit depth/codec, file size, BPM
-- Automatic BPM detection via spectral flux onset analysis
+- Info bars show sample rate, channels, bit depth/codec, file size
 
 **Analysis**
 - `D` difference mode — pixel difference between two assets in Stack mode; arrow keys or `Shift+D` cycle pairs (Source–A, Source–B, A–B)
