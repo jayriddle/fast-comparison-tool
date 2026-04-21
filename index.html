@@ -963,9 +963,14 @@
         #layerEditA.active-audio    .asset-info-bar .asset-name { background: var(--slot-editA-bg);    color: var(--slot-editA-txt); }
         #layerEditB.active-audio    .asset-info-bar .asset-name { background: var(--slot-editB-bg);    color: var(--slot-editB-txt); }
 
+        /* Per-field color hierarchy — matches Stack header strip opacity levels */
+        .asset-info-bar .asset-resolution { color: rgba(255,255,255,0.48); }
+        .asset-info-bar .asset-aspect     { color: rgba(255,255,255,0.30); }
+        .asset-info-bar .asset-fps        { color: rgba(255,255,255,0.38); }
+        .asset-info-bar .asset-duration   { color: rgba(255,255,255,0.82); }
         /* Dim the --fps placeholder until the real value is known */
         .asset-fps:not(:empty) { transition: color 0.2s; }
-        .asset-info-bar .asset-fps[data-placeholder] { color: rgba(187,187,187,0.35); }
+        .asset-info-bar .asset-fps[data-placeholder] { color: rgba(255,255,255,0.15); }
 
         /* Stopwatch icon prefix on duration spans */
         .asset-duration .dur-icon,
@@ -1774,6 +1779,133 @@
         #audioVizSplitter:hover::after { background: #555560; }
         .spectrogram-panel.active.no-audio-data #audioVizSplitter { visibility: hidden; }
 
+        /* ── Frame gallery panel ── */
+        .frame-gallery-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin: 0 -16px;
+            padding: 0 16px;
+            box-sizing: border-box;
+        }
+        .frame-gallery-panel.active {
+            max-height: 172px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+        .frame-gallery-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+        .frame-gallery-title {
+            font-size: 11px;
+            color: #888;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            flex: 1;
+        }
+        .frame-gallery-title span { color: #aaa; font-variant-numeric: tabular-nums; }
+        .frame-gallery-btn {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            letter-spacing: 0.03em;
+            line-height: 1.4;
+        }
+        .frame-gallery-btn:hover { color: #aaa; background: rgba(255,255,255,0.06); }
+        .frame-gallery-strip {
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 136px;
+            align-items: flex-start;
+            padding: 2px 0 4px;
+            scrollbar-width: thin;
+            scrollbar-color: #3a3a44 transparent;
+        }
+        .frame-gallery-strip::-webkit-scrollbar { height: 4px; }
+        .frame-gallery-strip::-webkit-scrollbar-track { background: transparent; }
+        .frame-gallery-strip::-webkit-scrollbar-thumb { background: #3a3a44; border-radius: 2px; }
+        .frame-gallery-card {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            flex-shrink: 0;
+            cursor: pointer;
+            position: relative;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #2a2a32;
+            transition: border-color 0.15s;
+            max-width: 160px;
+        }
+        .frame-gallery-card:hover { border-color: #555560; }
+        .frame-gallery-card img {
+            display: block;
+            max-width: 160px;
+            max-height: 90px;
+            width: auto;
+            height: auto;
+            background: #111;
+        }
+        .frame-gallery-card-footer {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 4px;
+            background: rgba(0,0,0,0.55);
+            min-height: 18px;
+        }
+        .frame-gallery-slot-pill {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            padding: 1px 4px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .frame-gallery-tc {
+            font-size: 9px;
+            color: #888;
+            font-family: monospace;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .frame-gallery-del {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 16px;
+            height: 16px;
+            background: rgba(0,0,0,0.65);
+            border: none;
+            border-radius: 50%;
+            color: #888;
+            font-size: 9px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.15s;
+            line-height: 1;
+            padding: 0;
+        }
+        .frame-gallery-card:hover .frame-gallery-del { opacity: 1; }
+        .frame-gallery-del:hover { color: #fff; background: rgba(180,40,40,0.85); }
+        .frame-gallery-card.fgc-active { border-color: #888aff; }
+
         .scopes-panel {
             max-height: 0;
             overflow: hidden;
@@ -2479,8 +2611,8 @@
                 </span>
                 <span class="sih-sep sih-sep-time" aria-hidden="true">·</span>
                 <span class="sih-group-time">
-                    <span class="sih-duration"></span>
                     <span class="sih-fps"></span>
+                    <span class="sih-duration"></span>
                 </span>
                 <span class="sih-sep sih-sep-metrics" aria-hidden="true">·</span>
                 <span class="sih-group-metrics">
@@ -2610,6 +2742,14 @@
                     </div>
                 </div>
             </div>
+            <div class="frame-gallery-panel" id="frameGalleryPanel">
+                <div class="frame-gallery-header">
+                    <span class="frame-gallery-title">Frames&nbsp;<span id="frameGalleryCount">0</span></span>
+                    <button class="frame-gallery-btn" onclick="_clearFrameGallery()" title="Remove all captured frames">Clear all</button>
+                    <button class="frame-gallery-btn" onclick="_toggleFrameGallery(false)" title="Close frame gallery">✕</button>
+                </div>
+                <div class="frame-gallery-strip" id="frameGalleryStrip"></div>
+            </div>
             <div class="spectrogram-panel" id="spectrogramPanel">
                 <div id="audioVizResizeHandle" title="Drag to resize audio panel"></div>
                 <div id="audioNoDataMsg">No audio for this asset</div>
@@ -2676,7 +2816,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.11';
+        const APP_VERSION = '3.10.12';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3812,6 +3952,10 @@
         let _noVideoMode = false;
         let _noVideoLayoutSnapshot = null; // { isGridMode, layoutMode } saved on entry
         let _noVideoHidWPanel = false;     // W panel was auto-closed when entering N mode
+        let _frameGallery = [];
+        let _frameGalleryVisible = false;
+        let _frameGalleryNextId = 0;
+        let _galleryIndex = -1;
         let _bwMode = false;
         let magnifierEnabled = false;   // Z key toggle (pixel magnifier)
         let videoScopesVisible = _prefs.load('videoScopesVisible', false); // V key toggle
@@ -6167,6 +6311,140 @@
             animateRelayout(350);
         }
 
+        // ── Frame gallery (Shift+G) ──
+        const _GALLERY_PILL_STYLE = {
+            original: 'background:#1a8844;color:#d4f5e0',
+            editA:    'background:#be7210;color:#fff0d4',
+            editB:    'background:#b0308a;color:#ffe0f4',
+        };
+
+        function _captureFrame() {
+            const slot = assetOrder[currentAssetIndex];
+            if (!slot) return;
+            const layer = getLayer(slot);
+            const video = layer && layer.querySelector('video');
+            const imgEl = layer && layer.querySelector('img');
+            const source = video || imgEl;
+            if (!source) { showToast('No media to capture'); return; }
+            const w = video ? video.videoWidth : source.naturalWidth;
+            const h = video ? video.videoHeight : source.naturalHeight;
+            if (!w || !h) { showToast('Media not ready'); return; }
+            // Thumbnail capped at 480×270 to keep memory reasonable
+            const scale = Math.min(480 / w, 270 / h, 1);
+            const tw = Math.round(w * scale), th = Math.round(h * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = tw; canvas.height = th;
+            canvas.getContext('2d').drawImage(source, 0, 0, tw, th);
+            const time = video ? video.currentTime : null;
+            _frameGallery.push({
+                id: _frameGalleryNextId++,
+                slot,
+                time,
+                tc: time !== null ? _fmtGalleryTime(time) : '',
+                dataURL: canvas.toDataURL('image/jpeg', 0.85),
+                label: slotLabel(slot),
+            });
+            _galleryIndex = _frameGallery.length - 1;
+            _renderFrameGallery();
+            if (!_frameGalleryVisible) _toggleFrameGallery(true);
+            showToast('Frame captured');
+        }
+
+        function _fmtGalleryTime(t) {
+            const m = Math.floor(t / 60), s = t % 60;
+            const ss = Math.floor(s), cs = Math.floor((s - ss) * 100);
+            return `${m}:${String(ss).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+        }
+
+        function _toggleFrameGallery(visible) {
+            _frameGalleryVisible = visible !== undefined ? visible : !_frameGalleryVisible;
+            const panel = document.getElementById('frameGalleryPanel');
+            if (panel) panel.classList.toggle('active', _frameGalleryVisible);
+            animateRelayout(350);
+        }
+
+        function _clearFrameGallery() {
+            _frameGallery = [];
+            _renderFrameGallery();
+            _toggleFrameGallery(false);
+        }
+
+        function _deleteGalleryFrame(id) {
+            _frameGallery = _frameGallery.filter(f => f.id !== id);
+            _renderFrameGallery();
+            if (_frameGallery.length === 0) _toggleFrameGallery(false);
+        }
+
+        function _gallerySeek(item, idx) {
+            if (idx !== undefined) {
+                _galleryIndex = idx;
+                _renderFrameGallery();
+            }
+            if (item.time === null) return;
+            const videos = getAllVideos();
+            videos.forEach(v => { if (!v.paused) v.pause(); });
+            videos.forEach(v => { v.currentTime = item.time; });
+            const primary = videos[0];
+            if (primary) updateVideoProgressFromTime(primary, item.time);
+            if (videoScopesVisible) requestAnimationFrame(() => updateVideoScopes());
+            if (_diffMode) requestAnimationFrame(() => drawDiffComposite());
+        }
+
+        function _galleryStep(dir) {
+            if (!_frameGallery.length) return;
+            _galleryIndex = (_galleryIndex + dir + _frameGallery.length) % _frameGallery.length;
+            const item = _frameGallery[_galleryIndex];
+            _renderFrameGallery();
+            _gallerySeek(item);
+        }
+
+        function _renderFrameGallery() {
+            const strip = document.getElementById('frameGalleryStrip');
+            const countEl = document.getElementById('frameGalleryCount');
+            if (!strip) return;
+            if (countEl) countEl.textContent = _frameGallery.length;
+            strip.innerHTML = '';
+            for (let i = 0; i < _frameGallery.length; i++) {
+                const item = _frameGallery[i];
+                const card = document.createElement('div');
+                card.className = 'frame-gallery-card' + (i === _galleryIndex ? ' fgc-active' : '');
+                card.title = item.tc ? `${item.label} @ ${item.tc} — click to seek` : item.label;
+                card.onclick = () => _gallerySeek(item, i);
+
+                const img = document.createElement('img');
+                img.src = item.dataURL;
+                img.draggable = false;
+                card.appendChild(img);
+
+                const footer = document.createElement('div');
+                footer.className = 'frame-gallery-card-footer';
+                const pill = document.createElement('span');
+                pill.className = 'frame-gallery-slot-pill';
+                pill.textContent = item.label;
+                pill.style.cssText = _GALLERY_PILL_STYLE[item.slot] || 'background:#444;color:#eee';
+                footer.appendChild(pill);
+                if (item.tc) {
+                    const tc = document.createElement('span');
+                    tc.className = 'frame-gallery-tc';
+                    tc.textContent = item.tc;
+                    footer.appendChild(tc);
+                }
+                card.appendChild(footer);
+
+                const del = document.createElement('button');
+                del.className = 'frame-gallery-del';
+                del.textContent = '✕';
+                del.title = 'Remove this frame';
+                del.onclick = e => { e.stopPropagation(); _deleteGalleryFrame(item.id); };
+                card.appendChild(del);
+
+                strip.appendChild(card);
+            }
+            // Scroll active card into view
+            const active = strip.querySelector('.fgc-active');
+            if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+
         // ── No-video mode (N key) ──
         // Hides video picture and shows per-slot waveform+spectrogram, like audio-only mode.
 
@@ -7423,6 +7701,8 @@
             // Update filename
             const md = mediaData[slot];
             if (md && md.name) setFilename(infoBar, md.name);
+
+            _updateStackInfoStrip();
         }
 
         // Global progress update loop (shared across all videos)
@@ -8759,12 +9039,15 @@
             const headerRect = header.getBoundingClientRect();
             const nameRect   = nameEl.getBoundingClientRect();
             const zoomEl     = strip.querySelector('.sih-zoom');
+            const stripRect  = strip.getBoundingClientRect();
             const rightEdge  = (zoomEl && zoomEl.style.display !== 'none')
                                    ? zoomEl.getBoundingClientRect().right
-                                   : strip.getBoundingClientRect().right;
+                                   : stripRect.right;
+            // When name pill is hidden (single asset), anchor to strip left edge
+            const leftAnchor = nameEl.style.display === 'none' ? stripRect.left : nameRect.left;
 
-            const left  = nameRect.left  - headerRect.left;
-            const width = rightEdge - nameRect.left;
+            const left  = leftAnchor - headerRect.left;
+            const width = rightEdge  - leftAnchor;
 
             bar.style.left       = left + 'px';
             bar.style.width      = width + 'px';
@@ -9391,6 +9674,18 @@
 
             // Reset file input
             document.getElementById('multiFileInput').value = '';
+
+            // Clear frame gallery — thumbnails reference the old media
+            _frameGallery = [];
+            _galleryIndex = -1;
+            _frameGalleryNextId = 0;
+            _frameGalleryVisible = false;
+            const fgPanel = document.getElementById('frameGalleryPanel');
+            if (fgPanel) fgPanel.classList.remove('active');
+            const fgStrip = document.getElementById('frameGalleryStrip');
+            if (fgStrip) fgStrip.innerHTML = '';
+            const fgCount = document.getElementById('frameGalleryCount');
+            if (fgCount) fgCount.textContent = '0';
         }
 
         function resetAll() {
@@ -11497,6 +11792,12 @@
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) toggleSpectrogramScale(); } },
             { id: 'spectroPalette', defaultKey: 'p', label: 'Cycle color palette', section: 'analysis',
               fn: () => { if ((hasVideos && audioVizVisible) || hasAudios) cycleSpectrogramPalette(); } },
+            { id: 'captureFrame', defaultKey: 'g', shift: true, label: 'Grab frame to gallery', section: 'analysis',
+              fn: () => { if (hasVideos || hasImages) _captureFrame(); else showToast('No video or images loaded'); } },
+            { id: 'galleryPrev', defaultKey: '{', label: 'Gallery: previous frame', section: 'analysis', paired: 'galleryStep',
+              fn: () => { if (_frameGallery.length) _galleryStep(-1); } },
+            { id: 'galleryNext', defaultKey: '}', label: 'Gallery: next frame', section: 'analysis', paired: 'galleryStep',
+              fn: () => { if (_frameGallery.length) _galleryStep(1); } },
 
             // ── Panels ──
             { id: 'help', defaultKey: '?', label: 'Help', section: 'panels', global: true, altKey: '/',
@@ -11855,8 +12156,9 @@
                 <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
                 <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
                 <tr><td><kbd>W</kbd></td><td>Toggle waveform / spectrogram</td></tr>
+                <tr><td><kbd>E</kbd></td><td>Cycle waveform / LUFS envelope display</td></tr>
                 <tr><td><kbd>Shift+W</kbd></td><td>Toggle linear / log frequency scale</td></tr>
-                <tr><td><kbd>Shift+C</kbd></td><td>Cycle spectrogram color palette</td></tr>
+                <tr><td><kbd>P</kbd></td><td>Cycle spectrogram color palette</td></tr>
             </table>
             <p>Only one audio track plays at a time. If the active source is muted, audio automatically switches to the next unmuted source.</p>
 
@@ -11873,7 +12175,7 @@
             <table>
                 <tr><th>Shortcut</th><th>Action</th></tr>
                 <tr><td><kbd>I</kbd></td><td>Set loop in-point at current time</td></tr>
-                <tr><td><kbd>P</kbd></td><td>Set loop out-point at current time</td></tr>
+                <tr><td><kbd>O</kbd></td><td>Set loop out-point at current time</td></tr>
                 <tr><td><kbd>Esc</kbd> <small>2×</small></td><td>Clear both loop markers (double-tap)</td></tr>
                 <tr><td><kbd>R</kbd></td><td>Restart at in-point (or beginning if no markers)</td></tr>
             </table>
@@ -11904,9 +12206,19 @@
                 <tr><td><kbd>Esc</kbd> <small>2×</small></td><td>Clear loop markers</td></tr>
                 <tr><td><kbd>,</kbd></td><td>Step back one frame</td></tr>
                 <tr><td><kbd>.</kbd></td><td>Step forward one frame</td></tr>
+                <tr><td><kbd>V</kbd></td><td>Toggle video scopes</td></tr>
                 <tr><td><kbd>W</kbd></td><td>Toggle waveform / spectrogram</td></tr>
+                <tr><td><kbd>E</kbd></td><td>Cycle waveform / LUFS envelope display</td></tr>
                 <tr><td><kbd>Shift+W</kbd></td><td>Toggle linear / log frequency scale</td></tr>
-                <tr><td><kbd>Shift+C</kbd></td><td>Cycle spectrogram color palette</td></tr>
+                <tr><td><kbd>P</kbd></td><td>Cycle spectrogram color palette</td></tr>
+                <tr><td><kbd>D</kbd></td><td>Toggle difference mode (Stack)</td></tr>
+                <tr><td><kbd>B</kbd></td><td>Toggle black &amp; white</td></tr>
+                <tr><td><kbd>N</kbd></td><td>Toggle no-video mode (audio focus)</td></tr>
+                <tr><td><kbd>T</kbd></td><td>Cycle timecode format</td></tr>
+                <tr><td><kbd>C</kbd></td><td>Copy timecode</td></tr>
+                <tr><td><kbd>Shift+C</kbd></td><td>Open timecode format chooser</td></tr>
+                <tr><td><kbd>Shift+G</kbd></td><td>Grab frame to gallery</td></tr>
+                <tr><td><kbd>{ }</kbd></td><td>Gallery: previous / next frame</td></tr>
                 <tr><td><kbd>H</kbd></td><td>Toggle shortcuts panel</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Dismiss loupe / close panel</td></tr>
             </table>
@@ -12013,6 +12325,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.12</h3>
+            <ul>
+                <li><strong>Frame gallery (<kbd>Shift+G</kbd>)</strong> — grab the current frame from the active slot and pin it to a gallery strip above the transport controls. Use <kbd>{</kbd> / <kbd>}</kbd> (Shift+[ / Shift+]) to step through captured frames — all videos seek to that timecode. Click a thumbnail to seek; × to remove it. Gallery clears automatically when new media is loaded.</li>
+            </ul>
             <h3>v3.10.11</h3>
             <ul>
                 <li><strong>EBU R128 audio metrics</strong> — Integrated LUFS, LRA, and True Peak are now displayed in the info bar for every asset that carries audio — video and audio-only alike.</li>

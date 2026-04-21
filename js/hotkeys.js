@@ -131,6 +131,7 @@ const _pairedLabels = {
     loopPoints:    'Loop in / out point',
     copyTc:        'Timecode: Copy / Format',
     rotate:        'Rotate CW / CCW',
+    galleryStep:   'Gallery: previous / next frame',
 };
 
 // Which sections go in which column, with display headers
