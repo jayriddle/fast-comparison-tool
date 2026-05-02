@@ -3122,7 +3122,11 @@
                 }
                 showToast('Out: ' + formatLoopTime(t));
             }
-            if (_loopInPoint !== null && _loopOutPoint !== null) setNativeLoop(false);
+            if (_loopInPoint !== null && _loopOutPoint !== null) {
+                setNativeLoop(false);
+                // Start frame-accurate RVFC loop detection if a video is already playing
+                if (primaryVideoRef && !primaryVideoRef.paused) _startLoopRvfc(primaryVideoRef);
+            }
             updateLoopMarkerUI();
             redrawAudioSlotCanvases();
         }
@@ -7775,7 +7779,12 @@
                     // In/out point loop enforcement
                     if (_loopInPoint !== null && _loopOutPoint !== null) {
                         const t = primary.currentTime;
-                        if (t >= _loopOutPoint || t < _loopInPoint - 0.05) {
+                        // Stack mode: _startLoopRvfc handles out-point detection at frame
+                        // presentation time. Fall back to rAF for Grid mode and browsers
+                        // without requestVideoFrameCallback support.
+                        const rvfcHandling = !isGridMode &&
+                            typeof primary.requestVideoFrameCallback === 'function';
+                        if (!rvfcHandling && (t >= _loopOutPoint || t < _loopInPoint - 0.05)) {
                             getAllPlayableMedia().forEach(m => { m.currentTime = _loopInPoint; });
                             // Restart sync audio at loop point
                             if (_opusSyncActive) {
@@ -7829,6 +7838,41 @@
                 cancelAnimationFrame(globalAnimationId);
                 globalAnimationId = null;
             }
+        }
+
+        // Frame-accurate loop-point enforcement via requestVideoFrameCallback.
+        // Replaces the rAF-based out-point check in updateLoop for Stack mode so the
+        // seek-back fires at the exact frame presentation time instead of up to 16ms late.
+        function _startLoopRvfc(video) {
+            if (isGridMode) return;
+            if (typeof video.requestVideoFrameCallback !== 'function') return;
+            if (video.paused || video.ended) return;
+            if (_loopInPoint === null || _loopOutPoint === null) return;
+
+            function onFrame(now, metadata) {
+                if (_loopInPoint === null || _loopOutPoint === null) return; // loop cleared; chain ends
+                if (isGridMode) return;                                      // mode switched; chain ends
+                if (video !== primaryVideoRef) return;                       // no longer primary; chain ends
+                if (isDragging) { video.requestVideoFrameCallback(onFrame); return; }
+
+                const t = metadata.mediaTime;
+                if (t >= _loopOutPoint || t < _loopInPoint - 0.05) {
+                    getAllPlayableMedia().forEach(m => { m.currentTime = _loopInPoint; });
+                    if (_opusSyncActive) {
+                        for (const s of assetOrder) {
+                            if (_opusSyncSlots[s]) _startOpusSyncAudio(s, _loopInPoint);
+                        }
+                    }
+                    // Resume RVFC chain once the seek completes and playback restarts
+                    video.addEventListener('playing', function reregister() {
+                        video.removeEventListener('playing', reregister);
+                        _startLoopRvfc(video);
+                    }, { once: true });
+                } else {
+                    video.requestVideoFrameCallback(onFrame);
+                }
+            }
+            video.requestVideoFrameCallback(onFrame);
         }
 
         // Passive fps detection — collects frame timestamps during normal playback
@@ -7904,6 +7948,9 @@
 
                 // Start global progress update loop (only once)
                 startProgressUpdateLoop();
+
+                // Frame-accurate loop enforcement (Stack mode only; RVFC not available in Grid)
+                if (_loopInPoint !== null && _loopOutPoint !== null) _startLoopRvfc(video);
             });
 
             video.addEventListener('pause', function() {
