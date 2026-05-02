@@ -8361,9 +8361,7 @@
                     _scrubNextTime = t;
                     if (!_scrubSeekPending) {
                         _scrubSeekPending = true;
-                        // fastSeek snaps to the nearest keyframe — instant decode, smooth scrub.
-                        // Precise frame is sought on mouseup via currentTime.
-                        if (video.fastSeek) video.fastSeek(t); else video.currentTime = t;
+                        video.currentTime = t;
                         _scrubNextTime = null;
                     }
                 } else {
@@ -8435,7 +8433,7 @@
                     _scrubNextTime = t;
                     if (!_scrubSeekPending) {
                         _scrubSeekPending = true;
-                        if (media.fastSeek) media.fastSeek(t); else media.currentTime = t;
+                        media.currentTime = t;
                         _scrubNextTime = null;
                     }
                 } else {
