@@ -1649,6 +1649,11 @@
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease;
+        }
+        .spectrogram-panel.dragging {
+            transition: none; /* suppress during resize drag so offsetHeight reads are accurate */
+        }
+        .spectrogram-panel {
             display: flex;
             flex-direction: column;
             border-radius: 6px 6px 0 0;
@@ -6160,8 +6165,13 @@
         function animateRelayout(durationMs) {
             _relayoutEndTime = performance.now() + durationMs;
             function tick() {
-                if (isGridMode) positionLabelsToMedia();
-                else applyZoom();
+                // Skip layout during scrub drag — applyZoom reads offsetHeight which forces a
+                // layout flush every frame, competing with Chrome's video frame decode.
+                // mouseup calls applyZoom() once to finalize position after drag ends.
+                if (!isDragging) {
+                    if (isGridMode) positionLabelsToMedia();
+                    else applyZoom();
+                }
                 if (performance.now() < _relayoutEndTime) requestAnimationFrame(tick);
             }
             requestAnimationFrame(tick);
@@ -6217,6 +6227,8 @@
                 e.preventDefault();
                 const startY  = e.clientY;
                 const startH  = _audioVizHeight;
+                const panel = document.getElementById('spectrogramPanel');
+                if (panel) panel.classList.add('dragging');
 
                 const onMove = ev => {
                     const delta = startY - ev.clientY; // drag up = positive = grow
@@ -6227,6 +6239,7 @@
                 const onUp = () => {
                     document.removeEventListener('mousemove', onMove);
                     document.removeEventListener('mouseup', onUp);
+                    if (panel) panel.classList.remove('dragging');
                     _prefs.save('audioVizHeight', _audioVizHeight);
                     _applyAudioVizLayout(true);
                     animateRelayout(0);
@@ -6241,6 +6254,8 @@
                 const startY    = e.clientY;
                 const availH    = _audioVizHeight - _AUDIO_VIZ_SPLITTER_H;
                 const startWaveH = Math.max(_AUDIO_VIZ_MIN_ROW, Math.round(availH * _audioVizSplit));
+                const panel = document.getElementById('spectrogramPanel');
+                if (panel) panel.classList.add('dragging');
 
                 const onMove = ev => {
                     const delta    = ev.clientY - startY; // drag down = waveform grows
@@ -6252,6 +6267,7 @@
                 const onUp = () => {
                     document.removeEventListener('mousemove', onMove);
                     document.removeEventListener('mouseup', onUp);
+                    if (panel) panel.classList.remove('dragging');
                     _prefs.save('audioVizSplit', _audioVizSplit);
                     _applyAudioVizLayout(true);
                 };
@@ -8451,11 +8467,14 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
-                // Muted state is restored on mouseup; no audio plays because videos are paused.
+                // Mute all videos during scrub so _frameKick can do a silent play→pause to
+                // force Chrome to decode and display the frame at each new currentTime.
+                // Unmuting alone is not enough — Chrome on macOS requires a play event to
+                // trigger the compositor to paint the decoded frame on a paused video.
+                // Muted state is restored on mouseup.
                 if (_scrubAllVideos) {
                     _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
-                    _scrubAllVideos.forEach(v => { v.muted = false; });
+                    _scrubAllVideos.forEach(v => { v.muted = true; });
                 }
 
                 if (e.shiftKey) {
@@ -8509,11 +8528,14 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
-                // Muted state is restored on mouseup; no audio plays because videos are paused.
+                // Mute all videos during scrub so _frameKick can do a silent play→pause to
+                // force Chrome to decode and display the frame at each new currentTime.
+                // Unmuting alone is not enough — Chrome on macOS requires a play event to
+                // trigger the compositor to paint the decoded frame on a paused video.
+                // Muted state is restored on mouseup.
                 if (_scrubAllVideos) {
                     _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
-                    _scrubAllVideos.forEach(v => { v.muted = false; });
+                    _scrubAllVideos.forEach(v => { v.muted = true; });
                 }
 
                 if (e.shiftKey) {
@@ -8626,6 +8648,9 @@
                     _lastPrimaryAudioTime = 0;
 
                     stopScrubSnippet();
+                    // Re-apply layout once — animateRelayout skips applyZoom during drag
+                    // so wrappers may be slightly off if the panel was animating during scrub.
+                    if (!isGridMode) applyZoom();
                     if (wasPlaying && !_scrubAtEnd) {
                         // Defer play by one frame so the browser finalizes the seek
                         // before resuming — prevents stale-position race on quick taps
@@ -9109,7 +9134,10 @@
 
             // Time group (duration + fps)
             const durEl = strip.querySelector('.sih-duration');
-            durEl.innerHTML = duration ? _STOPWATCH_SVG + duration : '';
+            if (durEl.dataset.cachedDur !== (duration || '')) {
+                durEl.dataset.cachedDur = duration || '';
+                durEl.innerHTML = duration ? _STOPWATCH_SVG + duration : '';
+            }
             durEl.style.display = duration ? '' : 'none';
             const fpsEl = strip.querySelector('.sih-fps');
             fpsEl.textContent = fps || '';
@@ -9165,8 +9193,14 @@
             ].filter(Boolean).join('');
 
             strip.style.display = 'flex';
-            // Accent bar position is measured after strip is visible
-            requestAnimationFrame(() => _updateSihAccentBar(slot));
+            // Accent bar: at most one pending rAF; last slot wins if called rapidly.
+            _sihAccentBarSlot = slot;
+            if (!_sihAccentBarRaf) {
+                _sihAccentBarRaf = requestAnimationFrame(() => {
+                    _sihAccentBarRaf = null;
+                    _updateSihAccentBar(_sihAccentBarSlot);
+                });
+            }
         }
 
         // ── Stack info strip custom tooltip ───────────────────────────────────────
@@ -10690,6 +10724,9 @@
         // Call positioning on resize
         let _audioResizeRaf = null;
         let _layoutResizeRaf = null;
+        let _audioVizResizeRaf = null; // dedup updateAudioVisForSlot on window resize
+        let _sihAccentBarRaf = null;   // dedup _updateSihAccentBar scheduling
+        let _sihAccentBarSlot = null;  // slot for pending accent bar update
         window.addEventListener('resize', () => {
             if (isGridMode) {
                 positionLabelsToMediaRaf();
@@ -10714,9 +10751,12 @@
             } else {
                 applyZoomRaf();
             }
-            if (audioVizVisible) {
-                const slot = currentAudioSource || assetOrder[currentAssetIndex];
-                updateAudioVisForSlot(slot);
+            if (audioVizVisible && !_audioVizResizeRaf) {
+                _audioVizResizeRaf = requestAnimationFrame(() => {
+                    _audioVizResizeRaf = null;
+                    const slot = currentAudioSource || assetOrder[currentAssetIndex];
+                    updateAudioVisForSlot(slot);
+                });
             }
             if (hasAudios && !_audioResizeRaf) {
                 _audioResizeRaf = requestAnimationFrame(() => {
