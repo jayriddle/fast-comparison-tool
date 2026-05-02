@@ -3907,6 +3907,10 @@
         let _lastEscTime = 0;     // timestamp of last Esc press for double-tap detection
         let isDragging = false;   // true during progress bar or canvas scrub
         let _frameKicking = false; // true while _frameKick's async play/pause cycle is in flight
+        let _scrubCachedHeaderH  = null; // headerH cached at drag-start to avoid offsetHeight reads per-frame
+        let _scrubCachedControlsH = null; // controlsH cached at drag-start
+        let _scrubSeekPending = false;   // true while a reactive seek is in flight (Stack mode drag)
+        let _scrubNextTime    = null;    // latest queued seek target while _scrubSeekPending
         let isPanning = false;
         let expectedFileCount = 0; // set by handleMultipleFiles; checkAllLoaded waits for this many
         let panStartX = 0;
@@ -6165,13 +6169,8 @@
         function animateRelayout(durationMs) {
             _relayoutEndTime = performance.now() + durationMs;
             function tick() {
-                // Skip layout during scrub drag — applyZoom reads offsetHeight which forces a
-                // layout flush every frame, competing with Chrome's video frame decode.
-                // mouseup calls applyZoom() once to finalize position after drag ends.
-                if (!isDragging) {
-                    if (isGridMode) positionLabelsToMedia();
-                    else applyZoom();
-                }
+                if (isGridMode) positionLabelsToMedia();
+                else applyZoom();
                 if (performance.now() < _relayoutEndTime) requestAnimationFrame(tick);
             }
             requestAnimationFrame(tick);
@@ -7914,7 +7913,24 @@
             });
             
             video.addEventListener('seeked', function() {
-                if (isDragging) return; // scrub handler manages its own progress updates
+                if (isDragging && !isGridMode) {
+                    // Reactive seek: previous decode finished.
+                    // Wait one rAF so the compositor can display this frame before we
+                    // issue the next seek — issuing immediately can clear the AVFoundation
+                    // buffer before the frame ever appears on screen.
+                    _scrubSeekPending = false;
+                    requestAnimationFrame(() => {
+                        if (!isDragging || isGridMode) return;
+                        if (_scrubNextTime !== null && !isNaN(video.duration)) {
+                            _scrubSeekPending = true;
+                            const _nt = _scrubNextTime;
+                            _scrubNextTime = null;
+                            video.currentTime = _nt;
+                        }
+                    });
+                    return;
+                }
+                if (isDragging) return; // grid scrub manages its own progress updates
                 // Only the active video updates progress — prevents duration cycling
                 // when scrub seeks all videos and their seeked events fire asynchronously
                 const activeSlot = currentAudioSource || assetOrder[currentAssetIndex];
@@ -8287,6 +8303,23 @@
             let _scrubMutedStates = null; // saved muted flags, restored on mouseup
             let _activeLastSeekTime = 0;   // last time the active video was seeked (drag throttle)
             let _inactiveLastSeekTime = 0; // last time inactive videos were seeked (grid throttle)
+            let _scrubRelayoutRaf = null;  // rAF handle for the 60fps compositor paint loop during drag
+
+            // Run applyZoom() at 60fps while dragging to keep Chrome's compositor
+            // painting new decoded frames as they arrive. Uses cached header/controls
+            // heights so the loop is pure style writes with no layout reads.
+            function _startScrubPaintLoop() {
+                if (_scrubRelayoutRaf || isGridMode) return;
+                function tick() {
+                    if (isDragging && !isGridMode) {
+                        applyZoom();
+                        _scrubRelayoutRaf = requestAnimationFrame(tick);
+                    } else {
+                        _scrubRelayoutRaf = null;
+                    }
+                }
+                _scrubRelayoutRaf = requestAnimationFrame(tick);
+            }
 
             // Force Chrome to render a frame on a muted+paused video by briefly
             // playing then immediately pausing. Without this, Chrome skips frame
@@ -8319,14 +8352,28 @@
                 const fps = videoFrameRates[video.src] || 30;
                 const endGuard = 0.5 / fps; // half a frame
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
-                // Throttle active video to ~33ms during drag so Chrome's decode queue
-                // doesn't back up. mouseup always seeks precisely (isDragging is false).
+                // Stack mode drag: reactive seek — only issue next seek after previous decode
+                // completes (via 'seeked' event). Fixes scrubbing for videos with infrequent
+                // keyframes where decode takes longer than a fixed throttle interval.
+                // Grid mode and mouseup use the fixed-throttle path for multi-video sync.
                 const now = performance.now();
-                const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
-                if (seekActive) {
-                    if (isDragging) _activeLastSeekTime = now;
-                    video.currentTime = t;
-                    _frameKick(video);
+                if (!isGridMode && isDragging) {
+                    _scrubNextTime = t;
+                    if (!_scrubSeekPending) {
+                        _scrubSeekPending = true;
+                        // fastSeek snaps to the nearest keyframe — instant decode, smooth scrub.
+                        // Precise frame is sought on mouseup via currentTime.
+                        if (video.fastSeek) video.fastSeek(t); else video.currentTime = t;
+                        _scrubNextTime = null;
+                    }
+                } else {
+                    const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
+                    if (seekActive) {
+                        if (isDragging) _activeLastSeekTime = now;
+                        video.currentTime = t;
+                        _frameKick(video);
+                        if (!isGridMode) applyZoom();
+                    }
                 }
                 if (_scrubAllVideos) {
                     // Stack mode: inactive videos are hidden — skip their seeks during drag.
@@ -8384,11 +8431,21 @@
                 const endGuard = 0.5 / fps;
                 const t = Math.min(pct * seekDur, seekDur - endGuard);
                 const now = performance.now();
-                const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
-                if (seekActive) {
-                    if (isDragging) _activeLastSeekTime = now;
-                    media.currentTime = t;
-                    _frameKick(media);
+                if (!isGridMode && isDragging) {
+                    _scrubNextTime = t;
+                    if (!_scrubSeekPending) {
+                        _scrubSeekPending = true;
+                        if (media.fastSeek) media.fastSeek(t); else media.currentTime = t;
+                        _scrubNextTime = null;
+                    }
+                } else {
+                    const seekActive = !isDragging || now - _activeLastSeekTime >= 100;
+                    if (seekActive) {
+                        if (isDragging) _activeLastSeekTime = now;
+                        media.currentTime = t;
+                        _frameKick(media);
+                        if (!isGridMode) applyZoom();
+                    }
                 }
                 if (_scrubAllVideos) {
                     const seekInactive = !isDragging ||
@@ -8442,6 +8499,14 @@
                 _activeLastSeekTime = 0;
                 _inactiveLastSeekTime = 0;
 
+                if (!isGridMode) {
+                    const _ctrlEl = document.getElementById('videoControls');
+                    _scrubCachedHeaderH  = getHeaderHeight();
+                    _scrubCachedControlsH = (_ctrlEl && _ctrlEl.classList.contains('active'))
+                        ? _ctrlEl.offsetHeight : 0;
+                }
+                _startScrubPaintLoop();
+
                 if (globalAnimationId !== null) {
                     cancelAnimationFrame(globalAnimationId);
                     globalAnimationId = null;
@@ -8467,14 +8532,11 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                // Mute all videos during scrub so _frameKick can do a silent play→pause to
-                // force Chrome to decode and display the frame at each new currentTime.
-                // Unmuting alone is not enough — Chrome on macOS requires a play event to
-                // trigger the compositor to paint the decoded frame on a paused video.
-                // Muted state is restored on mouseup.
+                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
+                // Muted state is restored on mouseup; no audio plays because videos are paused.
                 if (_scrubAllVideos) {
                     _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
-                    _scrubAllVideos.forEach(v => { v.muted = true; });
+                    _scrubAllVideos.forEach(v => { v.muted = false; });
                 }
 
                 if (e.shiftKey) {
@@ -8503,6 +8565,16 @@
                 _activeLastSeekTime = 0;
                 _inactiveLastSeekTime = 0;
 
+                // Cache layout reads once at drag-start so applyZoom() called on each
+                // throttled seek is pure style-writes — no offsetHeight layout flushes.
+                if (!isGridMode) {
+                    const _ctrlEl = document.getElementById('videoControls');
+                    _scrubCachedHeaderH  = getHeaderHeight();
+                    _scrubCachedControlsH = (_ctrlEl && _ctrlEl.classList.contains('active'))
+                        ? _ctrlEl.offsetHeight : 0;
+                }
+                _startScrubPaintLoop();
+
                 // Cancel any pending progress-loop frame so it can't override the bar during drag
                 if (globalAnimationId !== null) {
                     cancelAnimationFrame(globalAnimationId);
@@ -8528,14 +8600,11 @@
                 // Disable loop during scrub so seeking near the end can't wrap to 0.
                 // Loop is restored by playAllMedia() when playback resumes.
                 if (_scrubAllVideos) _scrubAllVideos.forEach(v => v.loop = false);
-                // Mute all videos during scrub so _frameKick can do a silent play→pause to
-                // force Chrome to decode and display the frame at each new currentTime.
-                // Unmuting alone is not enough — Chrome on macOS requires a play event to
-                // trigger the compositor to paint the decoded frame on a paused video.
-                // Muted state is restored on mouseup.
+                // Unmute videos during scrub — Chrome skips frame decode for muted+paused video.
+                // Muted state is restored on mouseup; no audio plays because videos are paused.
                 if (_scrubAllVideos) {
                     _scrubMutedStates = _scrubAllVideos.map(v => v.muted);
-                    _scrubAllVideos.forEach(v => { v.muted = true; });
+                    _scrubAllVideos.forEach(v => { v.muted = false; });
                 }
 
                 if (e.shiftKey) {
@@ -8626,9 +8695,15 @@
                         _regionSelectStart = null;
                         _scrubCanvas = null;
                     } else if (_scrubCanvas) {
+                        // Clear reactive seek state so the final mouseup seek fires immediately
+                        _scrubSeekPending = false;
+                        _scrubNextTime = null;
                         canvasScrubToPosition(e, _scrubCanvas);
                         _scrubCanvas = null;
                     } else if (_scrubContainerRect) {
+                        // Clear reactive seek state so the final mouseup seek fires immediately
+                        _scrubSeekPending = false;
+                        _scrubNextTime = null;
                         scrubToPosition(e);
                     }
 
@@ -8643,14 +8718,15 @@
                     _scrubAllVideos = null;
                     _scrubContainerRect = null;
                     _scrubMutedStates = null;
+                    _scrubCachedHeaderH = null;
+                    _scrubCachedControlsH = null;
+                    _scrubSeekPending = false;
+                    _scrubNextTime = null;
 
                     // Reset so the RAF loop doesn't misinterpret the seek as a backward jump
                     _lastPrimaryAudioTime = 0;
 
                     stopScrubSnippet();
-                    // Re-apply layout once — animateRelayout skips applyZoom during drag
-                    // so wrappers may be slightly off if the panel was animating during scrub.
-                    if (!isGridMode) applyZoom();
                     if (wasPlaying && !_scrubAtEnd) {
                         // Defer play by one frame so the browser finalizes the seek
                         // before resuming — prevents stale-position race on quick taps
@@ -8723,9 +8799,13 @@
         function applyZoom() {
             if (isGridMode) return; // zoom/pan only applies in overlay mode
 
-            const headerH = getHeaderHeight();
+            // Use cached layout reads during scrub so applyZoom() stays cheap enough to
+            // call on every throttled seek (the style writes are what trigger the compositor
+            // to repaint the decoded video frame).
+            const headerH = _scrubCachedHeaderH !== null ? _scrubCachedHeaderH : getHeaderHeight();
             const controlsEl = document.getElementById('videoControls');
-            const controlsH = (controlsEl && controlsEl.classList.contains('active')) ? controlsEl.offsetHeight : 0;
+            const controlsH = _scrubCachedControlsH !== null ? _scrubCachedControlsH
+                : ((controlsEl && controlsEl.classList.contains('active')) ? controlsEl.offsetHeight : 0);
 
             // Per-asset fit scales: each asset independently sized to fill the viewport.
             // In Stack mode only one asset is visible at a time, so coupling asset sizes
@@ -9052,6 +9132,7 @@
         // Spans from the left edge of the slot name pill to the right edge of the
         // zoom pill (or strip right edge when zoom is hidden).
         function _updateSihAccentBar(slot) {
+            if (isDragging) return; // accent bar doesn't change during scrub; skip getBoundingClientRect reads
             const bar    = document.getElementById('sihAccentBar');
             const strip  = document.getElementById('stackInfoStrip');
             const header = document.querySelector('.header');
