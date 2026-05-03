@@ -1714,6 +1714,7 @@
 
         .waveform-row {
             height: 80px; /* overridden by JS _applyAudioVizLayout */
+            flex-shrink: 0;
         }
 
         .waveform-row .audio-viz-canvas-wrap {
@@ -1722,6 +1723,7 @@
 
         .spectrogram-row {
             height: 120px; /* overridden by JS _applyAudioVizLayout */
+            flex-shrink: 0;
         }
 
         .spectrogram-row .audio-viz-canvas-wrap {
@@ -4455,7 +4457,8 @@
             canvas.style.width = w + 'px';
             canvas.style.height = h + 'px';
             const ctx = canvas.getContext('2d');
-            ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+            const dpr = window.devicePixelRatio || 1;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, w, h);
 
             // Mode 0 or 1: draw waveform
@@ -11453,6 +11456,10 @@
 
                 function startFadeIn() {
                     hideLoading();
+                    // Apply saved audio viz row heights before decode starts so that if
+                    // decode completes before the setTimeout(100) panel-open path fires,
+                    // drawWaveformToCanvas reads the correct container height.
+                    if (audioVizVisible && hasVideos) _applyAudioVizLayout(false);
                     // Eagerly decode audio for all slots so scrub snippet audio works
                     // without requiring the user to open the waveform panel first.
                     _ensureAudioVizDecoded();
