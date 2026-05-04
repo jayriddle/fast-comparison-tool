@@ -847,8 +847,277 @@ test.describe('Mixed Orientation Offset Layout', () => {
   });
 });
 
-// Additional describes to be filled in next iteration:
-// - Edge Cases & PWA
+// ===========================================================================
+// Phase 1 specs (2026-04-12 audit) — loop in/out, diff w/ video, pan bounds,
+// hotkey reassignment, grid resize. Each group requires the matching __testAPI
+// getter (see index.html:12215) and the gitignored mp4/wav fixtures generated
+// by tests/fixtures/generate.sh.
+// ===========================================================================
+
+/** Set currentTime on every loaded <video> and resolve once each has seeked. */
+async function seekVideos(page: Page, time: number) {
+  await page.evaluate(async (t) => {
+    const videos = Array.from(document.querySelectorAll('video')) as HTMLVideoElement[];
+    await Promise.all(videos.map(v => new Promise<void>(resolve => {
+      if (Math.abs(v.currentTime - t) < 0.005) { resolve(); return; }
+      const onSeeked = () => { v.removeEventListener('seeked', onSeeked); resolve(); };
+      v.addEventListener('seeked', onSeeked);
+      v.currentTime = t;
+    })));
+  }, time);
+}
+
+test.describe('Loop in/out points', () => {
+  test('start clean: both points are null', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    expect(await getVar(page, '_loopInPoint')).toBeNull();
+    expect(await getVar(page, '_loopOutPoint')).toBeNull();
+  });
+
+  test('I sets in-point at currentTime, O sets out-point at currentTime', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    await seekVideos(page, 0.5);
+    await page.keyboard.press('i');
+    expect(await getVar(page, '_loopInPoint')).toBeCloseTo(0.5, 1);
+    await seekVideos(page, 2.0);
+    await page.keyboard.press('o');
+    expect(await getVar(page, '_loopOutPoint')).toBeCloseTo(2.0, 1);
+    expect(await getVar(page, '_loopInPoint')).toBeCloseTo(0.5, 1);
+  });
+
+  test('out-before-in then in-after-out auto-swaps to keep in < out', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    // Press O first at 1.0s (out-point captured at 1.0)
+    await seekVideos(page, 1.0);
+    await page.keyboard.press('o');
+    // Then press I at 2.0s — in > out, should swap so in becomes 1.0 and out becomes 2.0
+    await seekVideos(page, 2.0);
+    await page.keyboard.press('i');
+    const inT  = await getVar(page, '_loopInPoint');
+    const outT = await getVar(page, '_loopOutPoint');
+    expect(inT).not.toBeNull();
+    expect(outT).not.toBeNull();
+    expect(inT).toBeLessThan(outT);
+    expect(inT).toBeCloseTo(1.0, 1);
+    expect(outT).toBeCloseTo(2.0, 1);
+  });
+
+  test('loop region marker is rendered when both points are set', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    await seekVideos(page, 0.5);
+    await page.keyboard.press('i');
+    await seekVideos(page, 2.0);
+    await page.keyboard.press('o');
+    // updateLoopMarkerUI sizes #loopRegion when both points are set
+    const region = page.locator('#loopRegion');
+    await expect(region).toBeVisible();
+    const widthPct = await region.evaluate(el => parseFloat((el as HTMLElement).style.width));
+    expect(widthPct).toBeGreaterThan(0);
+  });
+
+  test('double-Escape clears both loop points', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4']);
+    await seekVideos(page, 0.5);
+    await page.keyboard.press('i');
+    await seekVideos(page, 2.0);
+    await page.keyboard.press('o');
+    expect(await getVar(page, '_loopInPoint')).not.toBeNull();
+    // Double-Escape within 400 ms clears markers
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    expect(await getVar(page, '_loopInPoint')).toBeNull();
+    expect(await getVar(page, '_loopOutPoint')).toBeNull();
+  });
+});
+
+test.describe('Difference mode (video)', () => {
+  /** Switch to Stack mode and wait for it to settle. Required before diff toggle. */
+  async function enterStack(page: Page) {
+    await page.keyboard.press('s');
+    await page.waitForFunction(() => (window as any).__testAPI?.isGridMode === false,
+      {}, { timeout: 5000 });
+  }
+
+  test('D enters diff mode in Stack with 3 videos; _diffPair is the first pair', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await enterStack(page);
+    expect(await getVar(page, 'diffMode')).toBeFalsy();
+    await page.keyboard.press('d');
+    expect(await getVar(page, 'diffMode')).toBe(true);
+    const pair = await getVar(page, '_diffPair');
+    expect(pair).toEqual(['original', 'editA']);
+  });
+
+  test('Shift+D cycles _diffPair through all 3 pairs and wraps', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await enterStack(page);
+    await page.keyboard.press('d'); // enter diff
+    expect(await getVar(page, '_diffPair')).toEqual(['original', 'editA']);
+    await page.keyboard.press('Shift+D');
+    expect(await getVar(page, '_diffPair')).toEqual(['original', 'editB']);
+    await page.keyboard.press('Shift+D');
+    expect(await getVar(page, '_diffPair')).toEqual(['editA', 'editB']);
+    await page.keyboard.press('Shift+D'); // wrap
+    expect(await getVar(page, '_diffPair')).toEqual(['original', 'editA']);
+  });
+
+  test('exiting diff hides #diffOverlay and restores the slot label', async ({ page }) => {
+    await page.goto('/');
+    await loadMedia(page, ['landscape_a.mp4', 'landscape_b.mp4', 'portrait.mp4']);
+    await enterStack(page);
+    await page.keyboard.press('d');
+    const overlay = page.locator('#diffOverlay');
+    await expect(overlay).toBeAttached();
+    expect(await overlay.evaluate(el => (el as HTMLCanvasElement).style.display)).toBe('block');
+    // Active slot's name should be prefixed with "DIFF: " while diff is on
+    const activeName = page.locator('.asset-layer.active .asset-info-bar .asset-name');
+    await expect(activeName).toContainText(/DIFF:/i);
+    // Toggle off — overlay hidden, label restored
+    await page.keyboard.press('d');
+    expect(await getVar(page, 'diffMode')).toBeFalsy();
+    expect(await overlay.evaluate(el => (el as HTMLCanvasElement).style.display)).toBe('none');
+    await expect(activeName).not.toContainText(/DIFF:/i);
+  });
+});
+
+test.describe('Pan bounds', () => {
+  test('image fitting in viewport gives zero pan bounds in both axes', async ({ page }) => {
+    await page.goto('/');
+    await loadAndEnterStack(page, ['red.png', 'green.png']);
+    // At fit zoom a 200×150 image easily fits the viewport — nothing to pan.
+    expect(await getVar(page, '_panBoundsXMin')).toBe(0);
+    expect(await getVar(page, '_panBoundsXMax')).toBe(0);
+    expect(await getVar(page, '_panBoundsYMin')).toBe(0);
+    expect(await getVar(page, '_panBoundsYMax')).toBe(0);
+  });
+
+  test('zoom-in expands pan bounds; min ≤ 0 ≤ max invariant holds', async ({ page }) => {
+    await page.goto('/');
+    await loadAndEnterStack(page, ['red.png', 'green.png']);
+    // 1 sets zoom to 100% native pixels — at 200×150 that still fits, so push further.
+    await page.keyboard.press('1');
+    for (let i = 0; i < 6; i++) await page.keyboard.press('+');
+    await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    const xMin = await getVar(page, '_panBoundsXMin');
+    const xMax = await getVar(page, '_panBoundsXMax');
+    const yMin = await getVar(page, '_panBoundsYMin');
+    const yMax = await getVar(page, '_panBoundsYMax');
+    expect(xMin).toBeLessThanOrEqual(0);
+    expect(xMax).toBeGreaterThanOrEqual(0);
+    expect(yMin).toBeLessThanOrEqual(0);
+    expect(yMax).toBeGreaterThanOrEqual(0);
+    // At least one axis must overflow after 6 zoom-in steps from 100%.
+    expect((xMax - xMin) + (yMax - yMin)).toBeGreaterThan(0);
+  });
+
+  test('Balance mode captures _savedFitPanX/Y and restores them on toggle back', async ({ page }) => {
+    await page.goto('/');
+    // Mixed orientations make Balance materially different from Fit.
+    await loadAndEnterStack(page, ['wide.png', 'tall.png']);
+    // Zoom in so we have a non-zero pan offset to save.
+    await page.keyboard.press('1');
+    for (let i = 0; i < 4; i++) await page.keyboard.press('+');
+    await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    const fitPanX = await getVar(page, 'panOffsetX');
+    const fitPanY = await getVar(page, 'panOffsetY');
+    // Toggle Fit → Balance. _savedFitPanX/Y should snapshot the Fit-mode pan.
+    await page.keyboard.press('\\');
+    expect(await getVar(page, '_savedFitPanX')).toBe(fitPanX);
+    expect(await getVar(page, '_savedFitPanY')).toBe(fitPanY);
+    // Toggle back → pan offsets restored
+    await page.keyboard.press('\\');
+    expect(await getVar(page, 'panOffsetX')).toBe(fitPanX);
+    expect(await getVar(page, 'panOffsetY')).toBe(fitPanY);
+  });
+});
+
+test.describe('Hotkey reassignment via localStorage.customHotkeys', () => {
+  test('custom mapping in localStorage is applied at init: _customKeys + _keymap reflect it', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('customHotkeys', JSON.stringify({ mute: 'y' }));
+    });
+    await page.goto('/');
+    const customKeys = await getVar(page, '_customKeys');
+    expect(customKeys).toEqual({ mute: 'y' });
+    const keymap = await getVar(page, '_keymap');
+    expect(keymap['y']).toBe('mute');
+    // Default 'm' slot is freed since the only owner moved off it
+    expect(keymap['m']).toBeUndefined();
+  });
+
+  test('reassigned key triggers the action; default key is inert', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('customHotkeys', JSON.stringify({ mute: 'y' }));
+    });
+    await page.goto('/');
+    await loadImages(page, ['red.png', 'green.png']);
+    const muteBtn = page.locator('#muteBtn');
+    const before = await muteBtn.innerHTML();
+    // Custom key fires
+    await page.keyboard.press('y');
+    const afterCustom = await muteBtn.innerHTML();
+    expect(afterCustom).not.toBe(before);
+    // Default 'm' is no longer bound to mute — pressing it shouldn't toggle the icon
+    await page.keyboard.press('m');
+    const afterDefault = await muteBtn.innerHTML();
+    expect(afterDefault).toBe(afterCustom);
+  });
+
+  test('a fresh context (no override) gets the default _keymap', async ({ browser }) => {
+    // First context: install override and confirm it took effect.
+    // addInitScript re-runs on every navigation, so we can't reuse this context
+    // to verify the "default" state — we'd just re-install the override on reload.
+    const ctxOverride = await browser.newContext();
+    await ctxOverride.addInitScript(() => {
+      localStorage.setItem('customHotkeys', JSON.stringify({ mute: 'y' }));
+    });
+    const pageOverride = await ctxOverride.newPage();
+    await pageOverride.goto('/');
+    expect((await getVar(pageOverride, '_keymap'))['y']).toBe('mute');
+    await ctxOverride.close();
+
+    // Fresh context: empty localStorage → defaults restored.
+    const ctxClean = await browser.newContext();
+    const pageClean = await ctxClean.newPage();
+    await pageClean.goto('/');
+    const keymap = await getVar(pageClean, '_keymap');
+    expect(keymap['m']).toBe('mute');
+    expect(keymap['y']).not.toBe('mute');
+    expect(await getVar(pageClean, '_customKeys')).toEqual({});
+    await ctxClean.close();
+  });
+});
+
+test.describe('Grid layout recalculation on window resize', () => {
+  test('two wide images: layout flips between viewports as resize handler re-evaluates', async ({ page }) => {
+    // Start at a wide-and-short viewport where horizontal (side-by-side) wins for AR=2 images.
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await page.goto('/');
+    await loadImages(page, ['wide.png', 'wide.png']);
+    await page.waitForFunction(() => {
+      const api = (window as any).__testAPI;
+      return api?.isGridMode === true && api?.layoutMode !== undefined;
+    }, {}, { timeout: 5000 });
+    expect(await getVar(page, 'layoutMode')).toBe('horizontal');
+    // Resize to narrow-and-tall — vertical (stacked) now wins.
+    await page.setViewportSize({ width: 400, height: 1280 });
+    await page.waitForFunction(() => (window as any).__testAPI?.layoutMode === 'vertical',
+      {}, { timeout: 3000 });
+    expect(await getVar(page, 'layoutMode')).toBe('vertical');
+    // And back: horizontal again.
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await page.waitForFunction(() => (window as any).__testAPI?.layoutMode === 'horizontal',
+      {}, { timeout: 3000 });
+    expect(await getVar(page, 'layoutMode')).toBe('horizontal');
+  });
+});
 
 test.afterEach(async ({ page }) => {
   // Clean up any open popups or state
