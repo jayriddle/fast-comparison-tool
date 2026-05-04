@@ -12234,6 +12234,20 @@
             get spectrogramLogScale() { return spectrogramLogScale; },
             get audioMetrics() { return audioMetrics; },
             get timecopyFmt() { return _prefs.load('timecopyFmt', 'hms'); },
+            get _loopInPoint() { return _loopInPoint; },
+            get _loopOutPoint() { return _loopOutPoint; },
+            get _diffPair() {
+                const pairs = _getDiffPairs();
+                return pairs.length === 0 ? null : pairs[_diffPairIndex % pairs.length];
+            },
+            get _panBoundsXMin() { return _panBoundsXMin; },
+            get _panBoundsXMax() { return _panBoundsXMax; },
+            get _panBoundsYMin() { return _panBoundsYMin; },
+            get _panBoundsYMax() { return _panBoundsYMax; },
+            get _savedFitPanX() { return _savedFitPanX; },
+            get _savedFitPanY() { return _savedFitPanY; },
+            get _customKeys() { return _customKeys; },
+            get _keymap() { return _keymap; },
         };
 
     </script>
