@@ -4,13 +4,26 @@ A browser-based tool for reviewing and comparing 1–3 images, videos, or audio 
 
 **[Open WarpDiff →](https://jayriddle.github.io/warpdiff/)**
 
+**Current version:** 3.10.12
+
+---
+
+## Why
+
+Comparing two versions of an image, video, or audio file shouldn't require flipping between tabs, exporting screenshots, or piecing together a custom diff in Photoshop. Existing tools either don't handle all three media types, can't align frames precisely, or don't surface the technical signals — color, audio levels, frame timing — that determine whether a change is actually correct.
+
+WarpDiff is an opinionated answer to that problem: load 2 or 3 assets in any combination of image / video / audio, align them frame-accurately, and have the scopes and metrics you actually need (waveform, vectorscope, histogram, EBU R128, LUFS) one keystroke away.
+
+It started as a personal tool for my own review workflow. Other reviewers asked to use it. Many releases later, here we are.
+
 ---
 
 ## Features
 
 **View modes**
 - **Stack** (`S`) — flip between assets with arrow keys, same position/zoom
-- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout; `3` toggles inline / offset- Mixed orientations use equal-area layout so each asset has the same visual weight
+- **Grid** (`G`) — side-by-side (2 files) or all three in a row/column (3 files), auto-picks layout; `3` toggles inline / offset
+- Mixed orientations use equal-area layout so each asset has the same visual weight
 
 **Zoom loupe** (`Z`)
 - Pixel-level inspection without changing your view
@@ -59,6 +72,52 @@ A browser-based tool for reviewing and comparing 1–3 images, videos, or audio 
 
 Files auto-sort oldest → newest by timestamp. See [MANUAL.md](MANUAL.md) for full documentation.
 
+---
+
+## For Engineers
+
+### Architecture
+
+- **Single-file app** — all UI, logic, and styling in `index.html` (~12,600 lines). No build step, no framework, no runtime dependencies.
+- **PWA** — `manifest.json` + `sw.js` provide install + offline support. `CACHE_NAME` is kept in sync with `APP_VERSION` on every release.
+- **Scopes module** — `js/scopes.js` handles waveform monitor, vectorscope, and histogram. Hot path uses cached typed-array buffers and `putImageData` to keep rendering off the GC.
+- **Tests** — Playwright suite covering loop in/out, diff modes, pan bounds, hotkey reassignment, grid resize, and other regression-prone areas.
+
+### Design principles
+
+- **No build, no runtime dependencies.** Vanilla HTML / CSS / JS in the app itself. Playwright is the only npm dependency, and only for tests.
+- **Memory-aware by default.** Typed arrays for bulk data, cached buffers reused across frames, blob URLs over base64, audio downsampled for scrub but kept full-quality where sync matters.
+- **Frame-accurate where it matters.** Midpoint seeking `(frame + 0.5) / fps` to avoid IEEE 754 boundary issues; epsilon-based timecode display; `requestVideoFrameCallback` for loop-point detection.
+- **Color-correct by default.** Magnifier uses cloned `<video>` elements to stay on the hardware compositor path, because `drawImage(video, canvas)` produces incorrect colors on macOS P3 displays.
+
+### Going deeper
+
+- **[CLAUDE.md](CLAUDE.md)** — project conventions, architecture patterns, naming, and the specific technical decisions worth knowing about (frame stepping math, Stack zoom modes, equal-area grid layout, scope rendering strategy).
+- **[memory.md](memory.md)** — memory-management patterns: buffer caching, audio downsampling, AudioContext lifecycle, stale-decode guards, magnifier clone handling, and GC pressure avoidance.
+
+These are the right starting points if you want to understand how the project is structured.
+
+### Running tests
+
+```bash
+npm install
+npx playwright test
+```
+
+---
+
+## Status
+
+Actively maintained. Releases follow semantic-ish versioning with a "What's New" entry on each release. See commit history for the detailed changelog.
+
 ## Bugs & Feature Requests
 
 Found a bug or have an idea? [Open an issue](https://github.com/jayriddle/warpdiff/issues/new/choose) — use the version number shown in the top-left corner of the app when reporting bugs.
+
+## License
+
+Not currently licensed for redistribution or derivative use. Reach out if you're interested in using or building on this.
+
+## Contact
+
+Jay Riddle — [GitHub](https://github.com/jayriddle)
