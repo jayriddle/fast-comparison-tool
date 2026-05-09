@@ -2823,7 +2823,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.12';
+        const APP_VERSION = '3.10.13';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -12547,6 +12547,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.13</h3>
+            <ul>
+                <li><strong>Bug fixes related to looping.</strong></li>
+            </ul>
             <h3>v3.10.12</h3>
             <ul>
                 <li><strong>Frame gallery (<kbd>Shift+G</kbd>)</strong> — grab the current frame from the active slot and pin it to a gallery strip above the transport controls. Use <kbd>{</kbd> / <kbd>}</kbd> (Shift+[ / Shift+]) to step through captured frames — all videos seek to that timecode. Click a thumbnail to seek; × to remove it. Gallery clears automatically when new media is loaded.</li>
