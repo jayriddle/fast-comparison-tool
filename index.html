@@ -2823,7 +2823,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.13';
+        const APP_VERSION = '3.10.14';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -3110,7 +3110,12 @@
         function setLoopPoint(type) {
             const media = getAllPlayableMedia()[0];
             if (!media) return;
-            const t = media.currentTime;
+            // Clamp to the effective duration — raw video.currentTime can sit past
+            // _opusSyncDuration[slot] for Opus videos (container duration > decoded
+            // audio duration), which makes loop markers overflow the timeline and
+            // prevents the RVFC out-point check from ever firing.
+            const effDur = _getEffectiveDuration(media);
+            const t = (effDur && isFinite(effDur)) ? Math.min(media.currentTime, effDur) : media.currentTime;
             if (type === 'in') {
                 _loopInPoint = t;
                 if (_loopOutPoint !== null && _loopOutPoint < _loopInPoint) {
@@ -4732,14 +4737,20 @@
         // Called when both decodeAudioData and WebCodecs have failed for a slot.
         // Use the byte-scanned codec if available, otherwise 'unknown' — ffmpeg
         // identifies the actual codec from the bitstream regardless.
-        function _onAllDecodeFailed(slot) {
+        // `audioConfirmed` — true when the demuxer already extracted audio packets
+        // (we know there IS audio, the codec is just undecodable in-browser).
+        function _onAllDecodeFailed(slot, audioConfirmed) {
             if (_ffmpegCommands[slot]) return; // already registered
             const filename = mediaData[slot] && mediaData[slot].name;
             if (!filename) return;
             const codec = _byteScannedCodec[slot] || 'unknown';
-            // For video files with no detected unsupported codec, decode failure means
-            // the file has no audio track — not a codec problem. Skip ffmpeg.
-            if (mediaData[slot] && mediaData[slot].type === 'video' && codec === 'unknown') {
+            // For video files with no detected unsupported codec AND no demuxed
+            // audio packets, decode failure means there's actually no audio track.
+            // If audioConfirmed is true (WebCodecs got packets but couldn't decode
+            // them — e.g. AAC with malformed AudioSpecificConfig, weird HE-AAC
+            // variant, or corrupt frames), fall through to transcode — ffmpeg
+            // routinely handles streams that WebCodecs rejects.
+            if (mediaData[slot] && mediaData[slot].type === 'video' && codec === 'unknown' && !audioConfirmed) {
                 _markSlotNoAudio(slot);
                 return;
             }
@@ -4753,7 +4764,7 @@
             const codecLabel = _UNSUPPORTED_CODEC_LABELS[codec] || 'Unsupported audio codec';
             const ext  = (filename.match(/(\.[^.]+)$/) || ['', '.mp4'])[1];
             const base = filename.slice(0, filename.length - ext.length);
-            const cmd  = 'ffmpeg -i "' + filename + '" -c:v copy -c:a aac "' + base + '_aac' + ext + '"';
+            const cmd  = 'ffmpeg -ignore_editlist 0 -fflags +bitexact -i "' + filename + '" -map 0:v:0 -map 0:a:0 -c:v copy -c:a aac -ac 2 -ar 48000 -b:a 192k -shortest -movflags +faststart "' + base + '_aac' + ext + '"';
             _ffmpegCommands[slot] = { filename, codec, codecLabel, cmd };
             _transcodeSlot(slot); // auto-start
         }
@@ -5195,7 +5206,12 @@
             }
 
             const transcodeStart = performance.now();
-            ff.setLogger(({ message }) => {
+            const _ffStderr = []; // accumulated for post-failure diagnosis
+            ff.setLogger((entry) => {
+                // Capture ALL ffmpeg output for post-mortem — type names vary across
+                // ffmpeg.wasm versions, so don't filter on type.
+                const message = (entry && entry.message) || '';
+                if (message) _ffStderr.push((entry.type || '?') + ': ' + message);
                 const m = message.match(/time=(\d+):(\d+):(\d+\.\d+)/);
                 if (!m || duration <= 0) return;
                 const t   = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
@@ -5226,8 +5242,42 @@
                 // fires in the next task cycle. The compositor is showing the pulsing
                 // "Transcoding audio…" bar before ff.run() takes over the main thread.
                 await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-                // Match the CLI command exactly — no extra flags
-                await ff.run('-i', inputName, '-c:v', 'copy', '-c:a', 'aac', outputName);
+                // Transcode flags (defensive against DTS-HD MA 5.1 / Blu-ray-rip quirks
+                // such as the stsd entry lying with `mp4a` fourcc while the bitstream is
+                // actually DTS):
+                //   -ignore_editlist 0 (input)  → APPLY the input elst when decoding. The
+                //                                  DTS-HD MA audio carries an elst that
+                //                                  skips ~344 ms of encoder priming silence
+                //                                  at the start; if we ignored it (as in
+                //                                  prior iterations), that priming silence
+                //                                  ends up in the decoded PCM and the
+                //                                  re-encoded AAC plays ~344 ms late vs
+                //                                  the video. ffmpeg's mov demuxer applies
+                //                                  elst when this is 0.
+                //   -fflags +bitexact (input)   → don't write encoder version/identifying
+                //                                  metadata that triggers some demuxers.
+                //   -ac 2 -ar 48000             → explicit stereo at 48 kHz (defeats
+                //                                  channel-layout / sample-rate edge cases
+                //                                  and 5.1 AAC playback flakiness).
+                //   -shortest                   → trim output to shortest stream (= video).
+                //                                  Without this, ffmpeg outputs full audio
+                //                                  (~0.3 s longer than video), which the
+                //                                  browser interprets as A/V duration drift.
+                //   -movflags +faststart        → moov atom at the front for fast load.
+                const ffArgs = [
+                    '-ignore_editlist', '0',
+                    '-fflags', '+bitexact',
+                    '-i', inputName,
+                    '-map', '0:v:0', '-map', '0:a:0',
+                    '-c:v', 'copy',
+                    '-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '192k',
+                    '-shortest',
+                    '-movflags', '+faststart',
+                    outputName
+                ];
+                console.warn('[ffmpeg]', slot, 'run:', ffArgs.join(' '));
+                await ff.run(...ffArgs);
+                console.warn('[ffmpeg]', slot, 'stderr (' + _ffStderr.length + ' lines):\n' + _ffStderr.join('\n'));
                 const outData = ff.FS('readFile', outputName);
                 try { ff.FS('unlink', inputName);  } catch (_) {}
                 try { ff.FS('unlink', outputName); } catch (_) {}
@@ -5488,6 +5538,9 @@
                 const layer = getLayer(slot);
                 const video = layer && layer.querySelector('video');
                 if (video) video.muted = true;
+                // Refresh the info bar duration — it was rendered with the inflated
+                // raw video.duration at load time, before _opusSyncDuration was known.
+                updateDurationDisplay(slot, _opusSyncDuration[slot], videoFrameRates[video && video.src] || null);
                 // If video is already playing, start sync audio immediately
                 if (video && !video.paused) _startOpusSyncAudio(slot, video.currentTime);
             }
@@ -5659,11 +5712,18 @@
             let _stscEntries = [];
             let _lastElstMediaTime = -1; // elst from current trak, resolved after hdlr
             let _lastElstSegDuration = -1;
+            let _lastMdhdTimescale = 0;  // mdhd from current trak; promoted to `timescale`
+                                         // only when hdlr confirms this trak is audio.
+                                         // Without per-track scoping, the data/subtitle
+                                         // track's mdhd (often 1000) overwrites the audio
+                                         // track's mdhd (usually = sample rate, e.g. 48000)
+                                         // and corrupts the elst skipSamples calculation.
 
             function parseTkhd(start, end) {
                 if (end - start < 8) return;
                 _lastElstMediaTime = -1; // reset for each new trak
                 _lastElstSegDuration = -1;
+                _lastMdhdTimescale = 0; // also reset per-track — see parseMdhd
                 _currentTrackIsAudio = false;
                 const version = data[start];
                 audioTrackId = version === 1
@@ -5710,10 +5770,12 @@
             function parseMdhd(start, end) {
                 if (end - start < 4) return;
                 const version = data[start];
+                // Store the timescale locally; promote to the audio-track-scoped
+                // `timescale` only when parseHdlr confirms this trak is audio.
                 if (version === 1 && end - start >= 28) {
-                    timescale = view.getUint32(start + 20);
+                    _lastMdhdTimescale = view.getUint32(start + 20);
                 } else if (end - start >= 16) {
-                    timescale = view.getUint32(start + 12);
+                    _lastMdhdTimescale = view.getUint32(start + 12);
                 }
             }
 
@@ -5722,9 +5784,17 @@
                 if (end - start < 12) return;
                 const handlerType = readStr(start + 8, 4);
                 _currentTrackIsAudio = (handlerType === 'soun');
-                if (_currentTrackIsAudio && _lastElstMediaTime >= 0) {
-                    mediaStartTime = _lastElstMediaTime;
-                    segmentDuration = _lastElstSegDuration;
+                if (_currentTrackIsAudio) {
+                    // Promote this trak's mdhd timescale to the demuxer-wide variable.
+                    // Previously the global `timescale` was overwritten by every track,
+                    // so a data/subtitle track parsed after the audio track (with
+                    // timescale=1000) would corrupt the audio elst calculation, making
+                    // 16512-sample (=344ms) priming offsets look like 16.5-second skips.
+                    if (_lastMdhdTimescale > 0) timescale = _lastMdhdTimescale;
+                    if (_lastElstMediaTime >= 0) {
+                        mediaStartTime = _lastElstMediaTime;
+                        segmentDuration = _lastElstSegDuration;
+                    }
                 }
             }
 
@@ -6102,7 +6172,7 @@
                 decoder.configure(config);
             } catch (err) {
                 console.warn('AudioDecoder configure failed for', slot, err);
-                _onAllDecodeFailed(slot);
+                _onAllDecodeFailed(slot, true); // audio packets were already demuxed
                 _webcodecsFinished();
                 return;
             }
@@ -6123,7 +6193,7 @@
                     // If some chunks decoded before the error, use what we have
                     if (decodedChunks.length === 0) {
                         console.warn('WebCodecs decode produced no output for', slot);
-                        _onAllDecodeFailed(slot);
+                        _onAllDecodeFailed(slot, true); // audio packets were demuxed
                         _webcodecsFinished();
                         return;
                     }
@@ -6169,7 +6239,7 @@
             }).catch(err => {
                 console.warn('AudioDecoder flush failed for', slot, err);
                 try { decoder.close(); } catch (_) {}
-                if (decodedChunks.length === 0) _onAllDecodeFailed(slot);
+                if (decodedChunks.length === 0) _onAllDecodeFailed(slot, true); // audio packets were demuxed
                 // If some chunks decoded before the error, use what we got
                 if (decodedChunks.length > 0) {
                     // Re-enter the success path with partial data
@@ -7696,7 +7766,10 @@
 
         function updateDurationDisplay(slot, duration, fps) {
             if (!duration) return;
-            const durationStr = _formatTcForCopy(duration, fps || null);
+            // Prefer the Opus-corrected duration when available — raw video.duration
+            // reflects container metadata which can extend past the actual audio end.
+            const effective = _opusSyncDuration[slot] || duration;
+            const durationStr = _formatTcForCopy(effective, fps || null);
             updateAssetInfoBar(slot, { duration: durationStr });
         }
 
@@ -7711,7 +7784,8 @@
                 const media = layer.querySelector('video, audio');
                 if (!media || !media.duration) continue;
                 const fps = videoFrameRates[media.src] || null;
-                durEl.innerHTML = _STOPWATCH_SVG + _formatTcForCopy(media.duration, fps);
+                const effective = _opusSyncDuration[slot] || media.duration;
+                durEl.innerHTML = _STOPWATCH_SVG + _formatTcForCopy(effective, fps);
             }
         }
 
@@ -7992,6 +8066,26 @@
                 if (_bulkSyncActive) return;
                 // Sync pause to all other videos
                 syncVideos(video, v => { if (!v.paused) v.pause(); });
+            });
+
+            video.addEventListener('ended', function() {
+                // When custom loop points are active we set m.loop = false (so the
+                // native end-of-video restart from 0 doesn't fight our RVFC seek-back).
+                // The RVFC out-point check fires on mediaTime >= _loopOutPoint, but
+                // the last frame's mediaTime is typically one frame short of duration
+                // — so when _loopOutPoint sits at the video's effective end, the check
+                // never trips and the video ends instead. Handle that here.
+                if (isGridMode) return;
+                if (_loopInPoint === null || _loopOutPoint === null) return;
+                getAllPlayableMedia().forEach(m => {
+                    m.currentTime = _loopInPoint;
+                    m.play().catch(() => {});
+                });
+                if (_opusSyncActive) {
+                    for (const s of assetOrder) {
+                        if (_opusSyncSlots[s]) _startOpusSyncAudio(s, _loopInPoint);
+                    }
+                }
             });
             
             video.addEventListener('seeked', function() {
@@ -9277,7 +9371,10 @@
             const media    = activeLayer.querySelector('video') || activeLayer.querySelector('audio');
             const mediaFps = (media && media.tagName === 'VIDEO') ? (videoFrameRates[media.src] || 0) : 0;
             const rawDur   = media && !isNaN(media.duration) && media.duration > 0 ? media.duration : 0;
-            const duration = rawDur > 0 ? _formatTcForCopy(rawDur, mediaFps) : '';
+            // Prefer the Opus-corrected duration when available (raw video.duration
+            // reflects container metadata that can extend past the actual audio end).
+            const effDur   = _opusSyncDuration[slot] || rawDur;
+            const duration = effDur > 0 ? _formatTcForCopy(effDur, mediaFps) : '';
 
             // Slot-color class on strip root (drives CSS-colored name pill)
             strip.className = slot ? 'sih-slot-' + slot : '';
@@ -12547,6 +12644,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.14</h3>
+            <ul>
+                <li><strong>Bug fixes related to looping and audio decoding (Dolby/DTS-HD MA).</strong></li>
+            </ul>
             <h3>v3.10.13</h3>
             <ul>
                 <li><strong>Bug fixes related to looping.</strong></li>
