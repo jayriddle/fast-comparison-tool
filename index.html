@@ -2823,7 +2823,7 @@
     <script src="js/scopes.js"></script>
     <script src="js/hotkeys.js"></script>
     <script>
-        const APP_VERSION = '3.10.14';
+        const APP_VERSION = '3.10.15';
         const _inIframe = window !== window.top;
         if (_inIframe) document.getElementById('landingCta').classList.add('in-iframe');
         if (!localStorage.getItem('starfieldOn')) document.querySelector('.landing-dropzone').classList.add('starfield-off');
@@ -5327,6 +5327,12 @@
         const _OPUS_FADE = 0.015; // 15ms fade to avoid clicks on start/stop
 
         function _startOpusSyncAudio(slot, fromTime) {
+            // Was a source already playing? If so, we'll defer the new source's start
+            // until the old one has finished fading out — overlapping the two creates
+            // a linear crossfade between uncorrelated audio chunks (different points
+            // in the buffer), which sums to audible phase artifacts especially on
+            // loud sections at loop wraps. Brief silence is preferable to a click.
+            const hadPrevious = !!_opusSyncSources[slot];
             _stopOpusSyncAudio(slot);
             const buf = _videoAudioBuffers[slot];
             if (!buf) return;
@@ -5337,9 +5343,14 @@
             const isCurrent = slot === (currentAudioSource || assetOrder[currentAssetIndex]);
             const vol = isCurrent && !audioMuteStates[slot]
                 ? (_prefs.load('volume', 100) / 100) : 0;
-            // Fade in to avoid click
-            gain.gain.setValueAtTime(0, ctx.currentTime);
-            gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + _OPUS_FADE);
+            // Schedule the new source to begin after the previous one has finished
+            // fading out — gap is _OPUS_FADE (15 ms), below the perceptual threshold
+            // for audio gaps but above the crossfade-artifact threshold for loud,
+            // uncorrelated waveforms.
+            const startTime = ctx.currentTime + (hadPrevious ? _OPUS_FADE : 0);
+            // Fade in from 0 to vol over _OPUS_FADE, starting at startTime
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(vol, startTime + _OPUS_FADE);
             source.buffer = buf;
             // Match the video element's playback rate so audio runs in sync at non-1× speeds
             const layer = getLayer(slot);
@@ -5349,10 +5360,12 @@
             source.connect(gain);
             gain.connect(ctx.destination);
             const offset = Math.max(0, Math.min(fromTime, buf.duration - 0.001));
-            source.start(0, offset);
+            source.start(startTime, offset);
             _opusSyncSources[slot] = source;
             _opusSyncGains[slot] = gain;
-            _opusSyncStartCtx[slot] = ctx.currentTime;
+            // Anchor drift math at the actual start moment — _syncOpusAudioToVideo
+            // computes expectedVideoTime = startVideo + (ctx.currentTime - startCtx) * rate.
+            _opusSyncStartCtx[slot] = startTime;
             _opusSyncStartVideo[slot] = offset;
             _opusSyncRate[slot] = rate;
             source.onended = () => {
@@ -12644,6 +12657,10 @@
             <button class="quick-start-close" onclick="dismissChangelog()">✕</button>
         </div>
         <div class="quick-start-body">
+            <h3>v3.10.15</h3>
+            <ul>
+                <li><strong>Bug fix: audio crackling at loop wrap points (Opus videos).</strong></li>
+            </ul>
             <h3>v3.10.14</h3>
             <ul>
                 <li><strong>Bug fixes related to looping and audio decoding (Dolby/DTS-HD MA).</strong></li>
